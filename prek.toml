@@ -58,6 +58,18 @@ files = "^(AGENTS|CLAUDE)\\.md$"
 pass_filenames = false
 stages = ["pre-commit"]
 
+# actionlint —— 校验 GitHub Actions workflow 语法/语义。check-yaml 只验证
+# “是否合法 YAML”，抓不到 paths-ignore 放错位置这类“合法 YAML 但非法 workflow”
+# 的错误（曾导致 4 个 workflow 0s 全挂）。需本地安装 actionlint（go install）。
+[[repos.hooks]]
+id = "actionlint"
+name = "actionlint (workflows)"
+language = "system"
+entry = "actionlint"
+files = "^\\.github/workflows/.*\\.(yml|yaml)$"
+pass_filenames = false
+stages = ["pre-commit"]
+
 # ---- pre-push: 无 DB 依赖测试 ----
 [[repos.hooks]]
 id = "backend-unit-test"

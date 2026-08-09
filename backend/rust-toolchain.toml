@@ -1,0 +1,5 @@
+# 工具链单一真源 —— 本地、CI、wakewake-agent 全部自动对齐到这个版本。
+# workflow 里的 dtolnay/rust-toolchain 不再显式 toolchain，会读取本文件。
+# Cargo.toml 的 rust-version 仍保留（MSRV 元数据，cargo 拒绝更低版本编译）。
+[toolchain]
+channel = "1.95"

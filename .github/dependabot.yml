@@ -1,0 +1,19 @@
+# Dependabot —— 与 workflow 里的 action SHA 锁定策略配套。
+# SHA 锁定防止供应链篡改，但锁了不更新会腐烂（安全/bug 修不回来）；
+# dependabot 每周开 PR 把 SHA bump 到最新 patch，人工 review 合并。
+# group 把所有 github-actions 更新合并成一个 PR，减少噪音。
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: ci
+      include: scope
