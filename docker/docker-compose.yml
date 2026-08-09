@@ -1,0 +1,73 @@
+# Wakewake — Docker Compose self-deploy (HTTP).
+#
+# Mirrors the topology used in remote dev / production: a single wakewake
+# container (Caddy + Rust backend via s6-overlay) plus a sibling postgres
+# reached over a shared Unix-socket volume. The app connects to postgres
+# via /var/run/postgresql — postgres is never published on the host.
+#
+#   1. cp .env.example .env && edit secrets
+#   2. docker compose up -d
+#   3. open http://<your-ip>:8443
+
+services:
+  wakewake:
+    image: 192.168.5.50:5000/wakewake:dev
+    container_name: wakewake
+    ports:
+      - "8443:8443"
+    volumes:
+      # s6 caddy run 脚本固定读 /app/Caddyfile。
+      - ./Caddyfile:/app/Caddyfile:ro
+      - ./data:/app/data
+      - postgres-socket:/var/run/postgresql
+    environment:
+      # JWT signing keys (change these!)
+      - WAKEWAKE_JWT__SIGNING_KEY=${WAKEWAKE_JWT__SIGNING_KEY:-change-me-min-32-bytes-padding!!}
+      - WAKEWAKE_JWT__REFRESH_SIGNING_KEY=${WAKEWAKE_JWT__REFRESH_SIGNING_KEY:-change-me-min-32-bytes-padding!!}
+      # Password reset HMAC secret
+      - WAKEWAKE_PASSWORD_RESET__SECRET=${WAKEWAKE_PASSWORD_RESET__SECRET:-change-me-min-32-bytes-padding!!}
+      # PostgreSQL DSN over the shared Unix-socket volume (password must match POSTGRES_PASSWORD below).
+      - WAKEWAKE_DATABASE__DSN=postgres:///${POSTGRES_DB:-wakewake}?host=/var/run/postgresql&user=${POSTGRES_USER:-wakewake}&password=${POSTGRES_PASSWORD:-change-me}&sslmode=disable
+      # Optional: timezone (read by s6 cont-init.d/01-setup.sh)
+      - TZ=${TZ:-UTC}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8443/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: wakewake-postgres
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-wakewake}
+      - POSTGRES_USER=${POSTGRES_USER:-wakewake}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - postgres-socket:/var/run/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h /var/run/postgresql -U ${POSTGRES_USER:-wakewake}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  postgres-socket:

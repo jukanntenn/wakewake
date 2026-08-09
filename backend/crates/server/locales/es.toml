@@ -1,0 +1,16 @@
+# es.toml
+_version = 1
+
+"email.password_reset_subject" = "Restablezca su contraseña de WakeWake"
+"email.password_reset_body" = "Haga clic en el enlace para restablecer su contraseña: %{reset_url}\n\nSi no solicitó esto, ignore este correo."
+"email.password_reset_heading" = "Restablezca su contraseña"
+"email.password_reset_html_body" = "Haga clic en el botón de abajo para restablecer su contraseña. Si no solicitó esto, puede ignorar este correo con seguridad."
+"email.password_reset_button" = "Restablecer contraseña"
+"email.password_changed_subject" = "Su contraseña de WakeWake fue cambiada"
+"email.password_changed_body" = "Su contraseña fue cambiada. Si no fue usted, restablézcala inmediatamente."
+
+"email.email_verification_subject" = "Verifique su correo electrónico para WakeWake"
+"email.email_verification_body" = "Haga clic en el enlace para verificar su correo electrónico: %{verify_url}\n\nSi no creó una cuenta, ignore este correo."
+"email.email_verification_heading" = "Verifique su correo electrónico"
+"email.email_verification_html_body" = "Haga clic en el botón de abajo para verificar su correo electrónico y activar su cuenta. Si no creó una cuenta, puede ignorar este correo con seguridad."
+"email.email_verification_button" = "Verificar correo"

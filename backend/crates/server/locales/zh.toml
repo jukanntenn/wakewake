@@ -1,0 +1,16 @@
+# zh.toml（简体中文，backend/i18n.md §3）。
+_version = 1
+
+"email.password_reset_subject" = "重置您的 WakeWake 密码"
+"email.password_reset_body" = "点击链接重置密码：%{reset_url}\n\n若非本人操作，请忽略此邮件。"
+"email.password_reset_heading" = "重置您的密码"
+"email.password_reset_html_body" = "点击下方按钮重置您的密码。若非本人操作，请忽略此邮件。"
+"email.password_reset_button" = "重置密码"
+"email.password_changed_subject" = "您的 WakeWake 密码已更改"
+"email.password_changed_body" = "您的密码已更改。若非本人操作，请立即重置。"
+
+"email.email_verification_subject" = "验证您的 WakeWake 邮箱"
+"email.email_verification_body" = "点击链接验证您的邮箱：%{verify_url}\n\n若非本人操作，请忽略此邮件。"
+"email.email_verification_heading" = "验证您的邮箱"
+"email.email_verification_html_body" = "点击下方按钮验证您的邮箱地址并激活账户。若非本人操作，请忽略此邮件。"
+"email.email_verification_button" = "验证邮箱"

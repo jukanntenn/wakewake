@@ -1,0 +1,16 @@
+# en.toml（基准 fallback，backend/i18n.md §4）。扁平 key，%{name} 插值。
+_version = 1
+
+"email.password_reset_subject" = "Reset your WakeWake password"
+"email.password_reset_body" = "Click the link to reset your password: %{reset_url}\n\nIf you didn't request this, please ignore this email."
+"email.password_reset_heading" = "Reset your password"
+"email.password_reset_html_body" = "Click the button below to reset your password. If you didn't request this, you can safely ignore this email."
+"email.password_reset_button" = "Reset password"
+"email.password_changed_subject" = "Your WakeWake password was changed"
+"email.password_changed_body" = "Your password was changed. If this wasn't you, please reset it immediately."
+
+"email.email_verification_subject" = "Verify your email for WakeWake"
+"email.email_verification_body" = "Click the link to verify your email: %{verify_url}\n\nIf you didn't create an account, please ignore this email."
+"email.email_verification_heading" = "Verify your email"
+"email.email_verification_html_body" = "Click the button below to verify your email address and activate your account. If you didn't create an account, you can safely ignore this email."
+"email.email_verification_button" = "Verify email"

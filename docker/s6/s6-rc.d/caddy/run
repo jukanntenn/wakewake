@@ -1,0 +1,15 @@
+#!/bin/sh
+# Caddy longrun（e2e.md §2.2）。
+# Caddy 终结 TLS（tls internal 自签名）+ h2c 反代 backend + 静态前端托管。
+#
+# s6 longrun 默认无 HOME（tls internal CA 存储需 HOME），显式设 /root。
+# 同 backend run：source 容器 env（/run/s6/container_environment/）。
+for f in /run/s6/container_environment/*; do
+  [ -f "$f" ] || continue
+  key=$(basename "$f")
+  val=$(cat "$f")
+  export "$key=$val"
+done
+export HOME=/root
+cd /app
+exec caddy run --config /app/Caddyfile

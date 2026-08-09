@@ -1,0 +1,73 @@
+# {{ ansible_managed }}
+# wakewake Caddyfile（dev）。
+#
+# HTTPS via Caddy 内部 CA（tls internal）：自签证书，自动签发+轮换。
+# 浏览器访问会弹证书警告（自签 CA 非公网信任），点"继续"即可。
+# 这让前端 crypto.subtle / navigator.clipboard 等 secure-only API 在内网可用。
+# agent 需编译带 --features danger-insecure-tls 才能信任此自签证书。
+#
+# fallback_sni：浏览器直接用 IP 访问时 TLS ClientHello 不带 SNI（RFC 6066
+# 规定 IP 不放 ServerName），Caddy 匹配不到证书会返 "internal error"。
+# fallback_sni 让无 SNI 的连接回退到该名字匹配证书（experimental，但对
+# 内网 IP 场景必需）。站点地址必须含该 host 才会预签发证书。
+#
+# Caddy 终结 TLS（:{{ caddy_port }}）+ h2c 反代 backend + 静态前端托管。
+# 容器内布局：Caddy :{{ caddy_port }}，wakewake-server 127.0.0.1:{{ backend_port }}。
+
+{
+	fallback_sni {{ tls_host }}
+}
+
+https://{{ tls_host }}:{{ caddy_port }} {
+	tls internal
+
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	encode zstd gzip
+
+	# API（非 SSE）
+	@api path /api/*
+	handle @api {
+		reverse_proxy 127.0.0.1:{{ backend_port }} {
+			transport http {
+				versions h2c
+			}
+			flush_interval -1
+			health_uri /api/v1/health
+			health_interval 10s
+		}
+	}
+
+	# SSE（独立 handle，禁缓冲）
+	@sse path /api/v1/agents/self/events
+	handle @sse {
+		reverse_proxy 127.0.0.1:{{ backend_port }} {
+			transport http {
+				versions h2c
+			}
+			flush_interval -1
+			header_up X-Accel-Buffering no
+		}
+	}
+
+	# 静态前端（Next.js out/）
+	handle {
+		root * /app/frontend/out
+
+		@immutable path /_next/static/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+		try_files {path} {path}.html {path}/index.html /index.html
+		file_server {
+			precompressed gzip
+		}
+	}
+
+	log {
+		output stderr
+		format console
+	}
+}

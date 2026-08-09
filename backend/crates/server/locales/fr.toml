@@ -1,0 +1,16 @@
+# fr.toml
+_version = 1
+
+"email.password_reset_subject" = "Réinitialisez votre mot de passe WakeWake"
+"email.password_reset_body" = "Cliquez sur le lien pour réinitialiser votre mot de passe : %{reset_url}\n\nSi vous n'avez pas demandé cette réinitialisation, ignorez cet e-mail."
+"email.password_reset_heading" = "Réinitialisez votre mot de passe"
+"email.password_reset_html_body" = "Cliquez sur le bouton ci-dessous pour réinitialiser votre mot de passe. Si vous n'avez pas demandé cette réinitialisation, vous pouvez ignorer cet e-mail en toute sécurité."
+"email.password_reset_button" = "Réinitialiser le mot de passe"
+"email.password_changed_subject" = "Votre mot de passe WakeWake a été modifié"
+"email.password_changed_body" = "Votre mot de passe a été modifié. Si ce n'était pas vous, réinitialisez-le immédiatement."
+
+"email.email_verification_subject" = "Vérifiez votre e-mail pour WakeWake"
+"email.email_verification_body" = "Cliquez sur le lien pour vérifier votre e-mail : %{verify_url}\n\nSi vous n'avez pas créé de compte, ignorez cet e-mail."
+"email.email_verification_heading" = "Vérifiez votre e-mail"
+"email.email_verification_html_body" = "Cliquez sur le bouton ci-dessous pour vérifier votre adresse e-mail et activer votre compte. Si vous n'avez pas créé de compte, vous pouvez ignorer cet e-mail en toute sécurité."
+"email.email_verification_button" = "Vérifier l'e-mail"

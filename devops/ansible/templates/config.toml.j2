@@ -1,0 +1,35 @@
+# {{ ansible_managed }}
+# wakewake config（为 {{ env }} 渲染）。
+# 完整字段见 backend/config.example.toml；此处只含跨环境固定 + 从 vault 注入的项。
+# DSN 走 Unix socket（与 docker-compose.yml.j2 一致），不落 TCP。
+
+[app]
+public_url = "{{ public_url }}"
+
+[server]
+host = "127.0.0.1"
+port = {{ backend_port }}
+
+[database]
+dsn = "postgres:///{{ postgres_db }}?host=/var/run/postgresql&user={{ postgres_user }}&password={{ db_password }}&sslmode=disable"
+
+[jwt]
+signing_key = "{{ jwt_signing_key }}"
+refresh_signing_key = "{{ jwt_refresh_signing_key }}"
+
+[password_reset]
+secret = "{{ password_reset_secret }}"
+
+[rate_limit]
+disabled = {{ rate_limit_disabled | default(false) | lower }}
+
+{% if mailer_enabled | default(false) | bool %}
+[mailer]
+enabled = true
+smtp_host = "{{ mailer_smtp_host }}"
+smtp_port = {{ mailer_smtp_port }}
+smtp_username = "{{ mailer_smtp_username }}"
+smtp_password = "{{ mailer_smtp_password }}"
+from_address = "{{ mailer_from_address }}"
+from_name = "{{ mailer_from_name | default('WakeWake') }}"
+{% endif %}

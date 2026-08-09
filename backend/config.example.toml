@@ -1,0 +1,150 @@
+# wakewake-server 配置示例（configuration.md §7）。
+# 主要用户文档。生产用环境变量注入（12-factor），不挂载此文件。
+# 三层覆盖（优先级高→低）：CLI 参数 > 环境变量 > 本文件 > 内置默认值。
+
+# ============================================================
+# App（应用对外公网地址）
+# ============================================================
+# [REQUIRED] 应用对外公网地址（含 scheme+host[+port]）
+# 用于拼接邮件验证/重置链接、agent 文档示例地址。
+# 必须是可信的固定绝对 URL——不从请求 Host 推导（反代场景 Host 可伪造）。
+# 缺失则启动失败（fail-fast）。
+# Env: WAKEWAKE_APP__PUBLIC_URL
+# ⚠️ 必须与实际对外访问地址一致，否则邮件链接不可点击
+[app]
+public_url = "https://wakewake.app"
+
+# ============================================================
+# Server
+# ============================================================
+# [OPTIONAL] 监听地址
+# Env: WAKEWAKE_SERVER__HOST
+# Default: 0.0.0.0
+# [server]
+# host = "0.0.0.0"
+
+# [OPTIONAL] 监听端口
+# Env: WAKEWAKE_SERVER__PORT
+# Default: 8080
+# [server]
+# port = 8080
+
+# ============================================================
+# Database
+# ============================================================
+# [REQUIRED] PostgreSQL 连接串
+# Env: WAKEWAKE_DATABASE__DSN
+# ⚠️ 生产环境必须用强密码，不提交到版本控制
+[database]
+dsn = "postgres://wakewake:CHANGE_ME@localhost:5432/wakewake"
+
+# ============================================================
+# JWT
+# ============================================================
+# [REQUIRED] Access token HMAC 签名密钥（≥32 字节）
+# 生成命令：openssl rand -base64 32
+# Env: WAKEWAKE_JWT__SIGNING_KEY
+# ⚠️ 绝不能为默认值，必须替换
+[jwt]
+signing_key = "CHANGE_ME_openssl_rand_base64_32_padding"
+
+# [REQUIRED] Refresh token HMAC 签名密钥（≥32 字节，与 access 独立）
+# 生成命令：openssl rand -base64 32
+# Env: WAKEWAKE_JWT__REFRESH_SIGNING_KEY
+refresh_signing_key = "CHANGE_ME_openssl_rand_base64_32_padding"
+
+# [OPTIONAL] Access token 有效期
+# Env: WAKEWAKE_JWT__ACCESS_EXPIRE
+# Default: 15m
+# [jwt]
+# access_expire = "15m"
+
+# [OPTIONAL] Refresh token 有效期
+# Env: WAKEWAKE_JWT__REFRESH_EXPIRE
+# Default: 720h
+# [jwt]
+# refresh_expire = "720h"
+
+# ============================================================
+# Password Reset
+# ============================================================
+# [REQUIRED] 无状态 reset token HMAC 密钥
+# Env: WAKEWAKE_PASSWORD_RESET__SECRET
+[password_reset]
+secret = "CHANGE_ME_openssl_rand_base64_32_padding"
+
+# [OPTIONAL] reset token TTL
+# Env: WAKEWAKE_PASSWORD_RESET__EXPIRE
+# Default: 1h
+# [password_reset]
+# expire = "1h"
+
+# ============================================================
+# PoW
+# ============================================================
+# [OPTIONAL] 前导零个数（authentication.md §六）
+# Env: WAKEWAKE_POW__DIFFICULTY
+# Default: 4
+# [pow]
+# difficulty = 4
+# [OPTIONAL] challenge 有效期
+# Env: WAKEWAKE_POW__CHALLENGE_TTL
+# Default: 10m
+# [pow]
+# challenge_ttl = "10m"
+
+# ============================================================
+# Mailer（密码重置；enabled=false 时该端点返 503）
+# ============================================================
+# Env: WAKEWAKE_MAILER__ENABLED
+# Default: false
+# [mailer]
+# enabled = false
+# smtp_host = "smtp.example.com"
+# smtp_port = 587
+# smtp_username = ""
+# smtp_password = ""
+# from_address = "noreply@wakewake.app"
+# from_name = "WakeWake"
+
+# ============================================================
+# Security（默认 admin 账户 bootstrap）
+# ============================================================
+# 启动时幂等创建：账户不存在则建（is_superuser=true, email_verified=true），
+# 已存在则跳过（不覆盖密码/状态）。类比 Grafana 默认 admin/admin。
+# ⚠️ 生产环境务必改默认值！通过环境变量或本文件覆盖。
+# Env: WAKEWAKE_SECURITY__BOOTSTRAP_ADMIN_EMAIL
+# Env: WAKEWAKE_SECURITY__BOOTSTRAP_ADMIN_PASSWORD
+# Default: admin@wakewake.local / wakewake123
+# [security]
+# bootstrap_admin_email = "admin@wakewake.local"
+# bootstrap_admin_password = "wakewake123"
+
+# ============================================================
+# Log（tracing-appender 文件轮转 + OTel）
+# ============================================================
+# [OPTIONAL] 日志级别
+# Env: WAKEWAKE_LOG__LEVEL（或 RUST_LOG）
+# Default: info
+# [log]
+# level = "info"
+# [OPTIONAL] 日志目录（daily rolling 写入，4 文件：app/traces/metrics/logs）
+# Docker 环境 ./data:/app/data 已挂载，默认 data/logs 即持久化到宿主。
+# Env: WAKEWAKE_LOG__DIR
+# Default: data/logs
+# [log]
+# dir = "data/logs"
+# [OPTIONAL] OTel 远程导出（设了走 OTLP collector；不设走本地文件 exporter）
+# Env: OTEL_EXPORTER_OTLP_ENDPOINT
+# Default: 未设置（本地文件）
+
+# ============================================================
+# Rate Limit（e2e.md §2.5/§4.6 + load.md §9.2）
+# ============================================================
+# [OPTIONAL] 旁路 axum-governor 速率限制（per-IP/per-user 频率）。
+# 仅旁路速率限制，不旁路业务配额（MAX_DEVICES_PER_USER 等硬编码 const）。
+# 生产保持 false；E2E/压测环境设 true 避免速率限制干扰测试。
+# Env: WAKEWAKE_RATE_LIMIT__DISABLED
+# Default: false
+# [rate_limit]
+# disabled = false

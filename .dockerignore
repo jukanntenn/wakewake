@@ -1,0 +1,60 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+
+# Docker files (build scripts/configs 不进镜像上下文；Dockerfile 本身由 -f 读取，不在此排除)
+docker/build.py
+docker/__pycache__/
+docker/docker-compose.yml
+docker/docker-compose.local.yml
+docker/.env.example
+docker/.env
+.dockerignore
+
+# Data files
+data/
+*.sqlite3
+*.db
+
+# Binaries
+wakewake-server
+
+# Development files
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+node_modules/
+wakewake.toml
+
+# Build artifacts + 大目录（加速 docker build context 传输，load.md/.local 1.3GB+）
+backend/target/
+backend/.sqlx/
+.local/
+.fa/
+.iflow/
+.kilocode/
+.opencode/
+.claude/
+.zcode/
+.playwright/
+.playwright-cli/
+.tasks/
+e2e/node_modules/
+e2e/.auth/
+e2e/playwright-report/
+e2e/test-results/
+tests/load/results/
+tests/load/pairing_codes.txt
+tests/load/metrics-samples.csv
+**/.next/
+**/out/

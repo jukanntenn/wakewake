@@ -1,0 +1,5 @@
+[program:wakewake-agent]
+directory={{ app_path }}
+command={{ agent_binary_dest }}
+environment=WAKEWAKE_HOME="{{ app_path }}"
+user={{ user }}

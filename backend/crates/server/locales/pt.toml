@@ -1,0 +1,16 @@
+# pt.toml
+_version = 1
+
+"email.password_reset_subject" = "Redefina sua senha do WakeWake"
+"email.password_reset_body" = "Clique no link para redefinir sua senha: %{reset_url}\n\nSe você não solicitou isso, ignore este e-mail."
+"email.password_reset_heading" = "Redefina sua senha"
+"email.password_reset_html_body" = "Clique no botão abaixo para redefinir sua senha. Se você não solicitou isso, pode ignorar este e-mail com segurança."
+"email.password_reset_button" = "Redefinir senha"
+"email.password_changed_subject" = "Sua senha do WakeWake foi alterada"
+"email.password_changed_body" = "Sua senha foi alterada. não foi você, redefina-a imediatamente."
+
+"email.email_verification_subject" = "Verifique seu e-mail para o WakeWake"
+"email.email_verification_body" = "Clique no link para verificar seu e-mail: %{verify_url}\n\nSe você não criou uma conta, ignore este e-mail."
+"email.email_verification_heading" = "Verifique seu e-mail"
+"email.email_verification_html_body" = "Clique no botão abaixo para verificar seu endereço de e-mail e ativar sua conta. Se você não criou uma conta, pode ignorar este e-mail com segurança."
+"email.email_verification_button" = "Verificar e-mail"

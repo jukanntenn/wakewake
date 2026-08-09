@@ -1,0 +1,15 @@
+#!/bin/sh
+# wakewake-server longrun（e2e.md §2.2）。
+# s6 要求前台运行 + exec 替换 shell。
+#
+# s6-overlay v3 longrun 默认不继承容器 env（最小化环境）。
+# 容器 env 导出到 /run/s6/container_environment/，需显式 source。
+# （或用 s6-overlay 的 with-contenv 包装，但 source 更直观可控）
+for f in /run/s6/container_environment/*; do
+  [ -f "$f" ] || continue
+  key=$(basename "$f")
+  val=$(cat "$f")
+  export "$key=$val"
+done
+cd /app
+exec ./wakewake-server

@@ -1,0 +1,21 @@
+{
+  "name": "wakewake-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "WakeWake E2E tests (Playwright + ky + Docker Compose, specs/testing/e2e.md)",
+  "scripts": {
+    "pretest": "docker compose -f docker-compose.e2e.yml --profile mail --profile bemfa up -d --build && docker compose -f docker-compose.e2e.yml --profile agent build agent && until curl -sfk https://localhost:8443/api/v1/health; do sleep 2; done",
+    "test": "playwright test",
+    "posttest": "docker compose -f docker-compose.e2e.yml down -v",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.0",
+    "@types/node": "^22.0.0",
+    "ky": "^2.0.2",
+    "typescript": "^5.6.0"
+  }
+}

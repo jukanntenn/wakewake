@@ -1,0 +1,27 @@
+# S6 10万绝对值分布式压测骨架（load.md §4.2）—— 未来增强，本次不实现。
+# K8s + k6-operator（grafana/k6cloud/k6-operator），parallelism 分片每 pod 1 万连接。
+#
+# 部署：
+#   kubectl apply -f k6-test.yaml
+# 状态：未来增强（load.md §11.4），本次规范只记骨架。
+apiVersion: k6.io/v1alpha1
+kind: K6
+metadata:
+  name: wakewake-load-test
+  namespace: load-test
+spec:
+  parallelism: 10 # 10 pod × 1 万连接 = 10 万
+  script:
+    configMap:
+      name: k6-script
+      file: sse-connections.js
+  runner:
+    env:
+      - name: BASE_URL
+        value: https://wakewake.app
+      - name: PAIRING_CODES_FILE
+        value: /scripts/pairing_codes_shard.txt
+    resources:
+      limits:
+        memory: 4Gi
+        cpu: '2'

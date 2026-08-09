@@ -1,0 +1,37 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start All",
+      "detail": "devops/dev.py start — backend (Docker Compose) + frontend (pnpm dev) + health checks",
+      "type": "shell",
+      "command": "python3",
+      "args": ["devops/dev.py", "start"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false
+      },
+      "problemMatcher": [],
+      "isBackground": true,
+      "icon": { "id": "rocket", "color": "terminal.ansiBlue" }
+    },
+    {
+      "label": "Stop All",
+      "detail": "devops/dev.py stop",
+      "type": "shell",
+      "command": "python3",
+      "args": ["devops/dev.py", "stop"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared",
+        "focus": false,
+        "close": true
+      },
+      "problemMatcher": [],
+      "icon": { "id": "stop", "color": "terminal.ansiRed" }
+    }
+  ]
+}

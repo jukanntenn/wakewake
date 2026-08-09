@@ -1,0 +1,175 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/protocol",
+    "crates/server",
+    "crates/agent",
+    "crates/seed",
+]
+
+# 集中版本管理（onion-architecture: workspace 统一版本，避免漂移）。
+# 所有 feature flag 经源码核对（specs/new-design.md §0 + .local/contexts 验证）。
+[workspace.package]
+edition = "2021"
+rust-version = "1.95"
+license = "AGPL-3.0"
+repository = "https://github.com/jukanntenn/wakewake"
+readme = "README.md"
+keywords = ["wol", "wake-on-lan", "iot", "smart-home"]
+categories = ["network-programming", "web-programming"]
+
+# 集中 lint 配置（Cargo 1.74+ workspace lint 继承）。
+# clippy 达到 clippy 官方自 lint 级别：all + pedantic + cargo。
+# nursery 保持关闭（实验性 lint），restriction 整组关闭（官方反对整组开启，按需挑个别 deny）。
+# 命令：cargo clippy --all-targets --all-features -- -D warnings
+# （-D warnings 把 warn 提为 error；clippy.toml 不能设 lint 级别，只能设阈值）。
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+nursery = { level = "allow", priority = -1 }
+restriction = { level = "allow", priority = -1 }
+# 允许过于严格的文档 lint（108+ 警告来自存量代码，不影响正确性）
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+# 允许依赖版本冲突（上游依赖问题，非代码质量）
+multiple_crate_versions = "allow"
+# 允许类型转换警告（精度损失是可接受的）
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+cast_precision_loss = "allow"
+# 允许过于严格的 pedantic lint
+trivially_copy_pass_by_ref = "allow"
+# 允许格式化字符串追加（性能影响小）
+format_push_string = "allow"
+# 允许 let...else 风格（代码风格偏好）
+manual_let_else = "allow"
+# 允许 match 通配符（扩展性考虑）
+match_wildcard_for_single_variants = "allow"
+match_same_arms = "allow"
+# 允许 items after statements（代码组织偏好）
+items_after_statements = "allow"
+# 允许 used underscore binding（代码风格偏好）
+used_underscore_binding = "allow"
+# 允许 doc 链接格式（不影响功能）
+doc_markdown = "allow"
+doc_link_with_quotes = "allow"
+doc_lazy_continuation = "allow"
+# 允许 unused async（可能有 future 用途）
+unused_async = "allow"
+# 允许 pass by value（API 设计偏好）
+needless_pass_by_value = "allow"
+
+[workspace.dependencies]
+# --- 协议共享 crate ---
+wakewake-protocol = { path = "crates/protocol" }
+
+# --- 序列化 / 工具 ---
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+# time 取代 chrono（specs §0.5：#![no_std] 更轻，sqlx 原生支持）。
+# JSON 字段需显式 #[serde(with = "time::serde::rfc3339")]（默认序列化为元组）。
+time = { version = "0.3", features = ["serde", "formatting", "parsing", "macros"] }
+# 安全随机（pairing code / reset token），仅需原始字节→hex（§0.5）。
+getrandom = "0.3"
+# 非密码学哈希：ETag / moka hasher / 限流 key（§4.6）。
+xxhash-rust = { version = "0.8", features = ["xxh3", "xxh64", "const_xxh64"] }
+
+# --- 错误 / 应用 ---
+thiserror = "2"
+anyhow = "1"
+
+# --- 配置 ---
+# config-rs 取代 figment（§0.5）。default-features=false 只启用 toml。
+config = { version = "0.15", default-features = false, features = ["toml"] }
+clap = { version = "4", features = ["derive", "env"] }
+
+# --- 日志 / 可观测性 ---
+# 文件轮转（tracing-appender daily rolling）+ OTel 双模式（OTLP 远程 / 本地 file exporter）。
+# 版本组合对齐 grill-me-sleek（已验证 OTel 0.32 + tracing-opentelemetry 0.33 互通）。
+tracing = { version = "0.1", features = ["attributes"] }
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter", "fmt"] }
+tracing-appender = "0.2"
+opentelemetry = "0.32"
+opentelemetry_sdk = { version = "0.32", features = ["metrics", "trace", "rt-tokio"] }
+opentelemetry-otlp = { version = "0.32", features = ["grpc-tonic"] }
+tracing-opentelemetry = "0.33"
+opentelemetry-appender-tracing = "0.32"
+# 后端 i18n（仅邮件模板，backend/i18n.md）。编译期加载 locales/*.toml，运行时 t! 查表。
+rust-i18n = "4"
+
+# === Server 依赖 ===
+# Web 栈——h2c 必须显式启 http2 feature（非默认，§0.1）。
+axum = { version = "0.8", features = ["http2", "macros", "json", "tokio"] }
+hyper = { version = "1", features = ["http2"] }
+hyper-util = { version = "0.1", features = ["server-auto", "http2", "tokio"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "compression-gzip", "trace", "request-id"] }
+tokio = { version = "1", features = ["full"] }
+futures-util = "0.3"
+tokio-stream = "0.1"
+
+# DB——sqlx 0.9（.local/contexts 验证最新），用 time（非 chrono）。
+# 0.9 拆分了 runtime+tls feature：runtime-tokio + tls-rustls（=tls-rustls-ring，向后兼容别名）。
+sqlx = { version = "0.9", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "json", "time", "macros", "migrate"] }
+
+# 加密——rsa 0.10 当前为 rc（crates.io 无稳定 0.10）。OAEP+SHA-256 端到端加密。
+# rsa 0.10：无 pem feature（PEM 编解码在默认 encoding feature 里）；sha2 是 optional feature
+# 且重导出 sha2 0.11（pub use sha2; → rsa::sha2::Sha256）。用法：Oaep::<Sha256>::new()。
+rsa = { version = "=0.10.0-rc.18", features = ["sha2"] }
+# sha2 0.11 与 rsa 重导出版本对齐（HMAC token / 哈希用）。
+sha2 = "0.11"
+
+# Auth——jsonwebtoken 10 需 rust_crypto feature（§0.1）。
+# 必须恰好启用一个 crypto backend，否则运行时 panic（.local/contexts 验证）。
+jsonwebtoken = { version = "10", features = ["rust_crypto", "use_pem"] }
+bcrypt = "0.19"  # 显式传 cost=10（DEFAULT_COST=12 太重，§0.2）
+
+# 缓存/限流
+# moka 的 hasher 用 xxhash（Xxh3DefaultBuilder，比默认 SipHash 快）。
+moka = { version = "0.12", features = ["future"] }
+# 并发 map（Hub 内 agents/commands map）。
+dashmap = "6"
+# axum-governor 封装 governor GCRA 为 tower Layer（§4.3）。
+axum-governor = "2"
+
+# 校验——双层：garde 校验编译期已知 DTO 外层，jsonschema 校验 provider 动态 config（§4.4）。
+# garde 规则名 pattern（feature 是 regex，非 pattern；pattern("<regex>") 引号字符串）。
+# url feature 启用 #[garde(url)] 规则（校验 AppSettings.public_url）。
+garde = { version = "0.23", features = ["derive", "email", "regex", "url"] }
+# jsonschema 关闭默认 feature（默认拉 reqwest/rustls 解析外部 $ref，本场景不需要）。
+jsonschema = { version = "0.47", default-features = false }
+
+# 邮件——密码重置低频，需选 TLS feature。
+lettre = { version = "0.11", default-features = false, features = ["builder", "tokio1-rustls-tls", "smtp-transport"] }
+
+# hex 编码（HMAC token / token hash）。
+hex = "0.4"
+# HMAC（无状态密码重置 token），0.13 对齐 sha2 0.11/digest 0.11。
+hmac = "0.13"
+# base64
+base64 = "0.22"
+# humantime（配置时间字段解析）。
+humantime = "2"
+
+# === Agent 依赖 ===
+# SSE 流式需 stream feature（非默认，§0.1）。http2 默认，default-features=false 后需显式加。
+reqwest = { version = "0.12", default-features = false, features = ["stream", "json", "rustls-tls", "http2"] }
+# 巴法 MQTT——AsyncClient 无 connect()，由 eventloop.poll() 隐式连接（§0.2）。
+rumqttc = "0.24"
+
+# === 测试 / 基准 ===
+proptest = "1"
+# async benchmark 需 async_tokio feature（§0.1）。
+criterion = { version = "0.5", features = ["async_tokio"] }
+wiremock = "0.6"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+
+# 测试用低 cost bcrypt 加速（testing/strategy.md §8）。
+[profile.dev.package.bcrypt]
+opt-level = 2

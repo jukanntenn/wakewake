@@ -1,0 +1,51 @@
+# Caddyfile（deployment/topology.md §3）。
+# 公网入口 + TLS 终结（ACME）+ 静态前端托管 + API/SSE h2c 反代。
+# transport http { versions h2c } 是核心：SSE 多路复用到少量 TCP。
+
+{
+	admin off
+	auto_https disable_redirects
+	persist_config off
+	log {
+		output file /data/access.log { roll_size 10mb; roll_keep 3 }
+		format json
+		level INFO
+	}
+}
+
+wakewake.app, www.wakewake.app {
+	# API（非 SSE）
+	@api path /api/*
+	handle @api {
+		reverse_proxy h2c://backend:8080 {
+			transport http { versions h2c }
+			flush_interval -1
+			health_uri /api/v1/health
+			health_interval 10s
+			lb_try_duration 5s
+		}
+	}
+
+	# SSE（/agents/self/events）—— 独立 handle，禁缓冲（flush_interval -1）
+	@sse path /api/v1/agents/self/events
+	handle @sse {
+		reverse_proxy h2c://backend:8080 {
+			transport http { versions h2c }
+			flush_interval -1
+			header_up X-Accel-Buffering no
+		}
+	}
+
+	# 静态前端（Next.js out/）
+	handle {
+		root * /srv/frontend
+		encode gzip zstd
+		try_files {path} /index.html
+		file_server { precompressed gzip }
+		@assets path /_next/static/* /favicon.ico
+		handle @assets {
+			header Cache-Control "public, max-age=31536000, immutable"
+		}
+		header /index.html Cache-Control "no-cache"
+	}
+}

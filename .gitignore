@@ -1,0 +1,97 @@
+# If you prefer the allow list template instead of the deny list, see community template:
+# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
+#
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Code coverage profiles and other test artifacts
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# env file
+.env
+
+# OS
+.DS_Store
+
+# Editor/IDE
+# .idea/
+# .vscode/
+
+.zcode/plans/
+
+# Multi-agent orchestration tooling (per-developer; not shared)
+task.py
+acc_*.yaml
+policy/
+
+*.db
+backend/bin/
+
+.next
+
+# Next.js static export (pnpm build → frontend/out/)
+out/
+frontend/out/
+
+# Next.js + TypeScript auto-generated
+frontend/next-env.d.ts
+*.tsbuildinfo
+
+data/
+backend/tmp/
+backend/wakewake.toml
+
+__pycache__/
+
+devops/frontend.pid
+devops/frontend.log
+
+# Playwright CLI cache
+.playwright-cli/
+
+# Compiled binaries
+backend/server
+
+# Rust build artifacts
+backend/target/
+backend/.cargo/config.toml
+**/*.rs.bk
+Cargo.lock.bak
+
+# sqlx 离线缓存（仅 query! 宏需要；本项目用动态查询 sqlx::query/query_as，不适用）。
+backend/.sqlx/
+
+# Screenshots
+/*.png
+
+# Local clone cache for design verification
+.local/
+
+# E2E test artifacts（e2e.md §11.1）
+e2e/.auth/
+e2e/playwright-report/
+e2e/test-results/
+e2e/node_modules/
+
+# 压测 artifacts（load.md §11.1 安全约束：pairing_codes 不入 git）
+tests/load/pairing_codes.txt
+tests/load/results/
+tests/load/metrics-samples.csv
+tests/load/node_modules/

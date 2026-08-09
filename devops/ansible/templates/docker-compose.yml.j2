@@ -1,0 +1,86 @@
+# {{ ansible_managed }}
+# wakewake docker-compose（为 {{ env }} 渲染）。
+#
+# 拓扑在所有环境一致：wakewake 容器（Caddy + Rust backend via s6-overlay）
+# 加一个通过共享 Unix-socket 卷连接的兄弟 postgres。每环境的差异仅限于
+# 对外 host 端口。app data 目录（日志）每环境都绑定挂载。
+#
+# Postgres 永不对外发布——仅通过共享 postgres-socket 卷从 app 容器可达。
+
+services:
+  wakewake:
+    image: {{ image }}
+    container_name: {{ app_name }}
+    ports:
+      - "{{ host_port }}:{{ caddy_port }}"
+    volumes:
+      - {{ config_file }}:/app/config.toml:ro
+      - {{ app_path }}/data:/app/data
+      # s6 caddy run 脚本硬编码读 /app/Caddyfile（docker/s6/s6-rc.d/caddy/run），
+      # 挂载点必须与之一致，否则 Caddy 起不来。
+      - {{ caddyfile }}:/app/Caddyfile:ro
+      - postgres-socket:/var/run/postgresql
+      # Caddy 内部 CA 存储持久化（s6 caddy run 设 HOME=/root，故 CA 在
+      # /root/.local/share/caddy）。否则容器重建 → CA 重新生成 → 已信任的
+      # agent/浏览器全部失效。tls internal 场景必须持久化。
+      - caddy-data:/root/.local/share/caddy
+    environment:
+      - WAKEWAKE_DATABASE__DSN=postgres:///{{ postgres_db }}?host=/var/run/postgresql&user={{ postgres_user }}&password={{ db_password }}&sslmode=disable
+      - TZ={{ tz | default("UTC") }}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # Caddy 终结 TLS（tls internal 自签），healthcheck 用 https + -k 跳过证书校验。
+      test: ["CMD", "curl", "-fk", "https://127.0.0.1:{{ caddy_port }}/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: always
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: {{ app_name }}-postgres
+    environment:
+      - POSTGRES_DB={{ postgres_db }}
+      - POSTGRES_USER={{ postgres_user }}
+      - POSTGRES_PASSWORD={{ db_password }}
+    # 5 个调优 GUC 叠加在镜像默认 postgresql.conf 之上。socket 目录保持镜像默认
+    # /var/run/postgresql（entrypoint 拥有权限）；app 通过共享卷连接。
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - max_connections=50
+      - -c
+      - effective_cache_size=1GB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - synchronous_commit=off
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - postgres-socket:/var/run/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h /var/run/postgresql -U {{ postgres_user }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: always
+
+volumes:
+  pgdata:
+  postgres-socket:
+  caddy-data:

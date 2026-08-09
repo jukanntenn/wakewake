@@ -1,0 +1,89 @@
+# Lint workflow —— 双层路径过滤（paths-ignore 拦噪音 + dorny/paths-filter 精确路由）。
+# 触发：push 到 main + PR 到 main。改纯 markdown/docs 不触发。
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 纯噪音路径：整个 workflow 跳过（对 tag push / workflow_dispatch 不生效）。
+paths-ignore:
+  - '**/*.md'
+  - 'docs/**'
+  - 'specs/**'
+  - '.gitignore'
+  - 'LICENSE'
+  - '.vscode/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.f.outputs.backend }}
+      frontend: ${{ steps.f.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: f
+        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'backend/Cargo.toml'
+              - 'backend/Cargo.lock'
+              - 'backend/rustfmt.toml'
+            frontend:
+              - 'frontend/**'
+
+  lint-backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: '1.95'
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
+        with:
+          workspaces: backend
+      - name: cargo fmt --check
+        working-directory: backend
+        run: cargo fmt --check
+      # NOTE: -D warnings 暂未启用（pedantic 配置开启后有 ~70 存量 warning，待清后加回）。
+      - name: cargo clippy
+        working-directory: backend
+        run: cargo clippy --all-targets --all-features
+
+  lint-frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
+        with:
+          version: 11
+          run_install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: ESLint
+        working-directory: frontend
+        run: pnpm lint
+      - name: Prettier check
+        working-directory: frontend
+        run: pnpm format:check

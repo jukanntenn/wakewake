@@ -1,0 +1,42 @@
+---
+# dev（fn @ 192.168.5.200）—— 远程快速迭代环境。自托管，尽可能镜像生产拓扑，
+# 但无 Cloudflare。Caddy 用 tls internal 自签证书服务 HTTPS（让 secure-only Web API
+# 在内网可用）。崩了无所谓。
+
+env: dev
+image_tag: dev
+registry: "192.168.5.50:5000"
+image: "{{ registry }}/wakewake:{{ image_tag }}"
+
+# 容器侧端口是共享的 caddy_port；host_port 对外固定（反代/书签兼容）。
+host_port: 8449
+
+# dev 是 LAN-only HTTPS（Caddy tls internal 自签证书；浏览器会弹证书警告）。
+public_url: "https://192.168.5.200:8449"
+
+# TLS 证书绑定的 host（从 public_url 派生；Caddy 为此 host 预签发自签证书，
+# 同时作为 fallback_sni ——浏览器用 IP 直连时 ClientHello 不带 SNI，靠它回退匹配）。
+tls_host: "192.168.5.200"
+
+# 渲染 Caddyfile 的 TLS profile：https = Caddy tls internal 自签证书。
+tls_profile: https
+
+# Caddyfile 的模板源（静态文件；生产才是需 cloudflare_cidrs 插值的 .j2）。
+caddyfile_template: Caddyfile.dev
+
+debug: true
+
+# 远端要创建的目录。dev 的 postgres 数据放命名卷 pgdata；无需宿主机绑定挂载 app data 目录，
+# 但仍创建以便日志/配置落地。
+app_dirs:
+  - "{{ app_path }}"
+  - "{{ app_path }}/data"
+
+mailer_enabled: true
+mailer_smtp_host: "192.168.5.50"
+mailer_smtp_port: 1025
+mailer_smtp_username: "wakewake.dev@example.com"
+mailer_smtp_password: "wakewake.dev.password"
+mailer_from_address: "wakewake.dev@example.com"
+mailer_from_name: "WakeWake"
+mailer_smtp_starttls: false

@@ -1,0 +1,19 @@
+# rustfmt 配置 —— stable 工具链下能生效的全部严格项（经 rust-lang/rustfmt 源码核对 stable=true）。
+# 更严格的选项（imports_granularity / group_imports / wrap_comments / format_strings /
+# error_on_line_overflow 等）是 nightly-only，stable 上静默忽略，故不分裂工具链。
+style_edition = "2024"
+edition = "2021"
+
+# 统一换行符（Auto 会放过混合/CRLF 文件）。
+newline_style = "Unix"
+
+# 显式 pin 默认值，防止未来 rustfmt 放宽格式。
+reorder_imports = true
+reorder_modules = true
+merge_derives = true
+remove_nested_parens = true
+
+# 默认 false 的项显式开启，让格式化更有主张（会改写源码，超出空白层面）。
+use_field_init_shorthand = true
+use_try_shorthand = true
+match_block_trailing_comma = true

@@ -1,0 +1,108 @@
+# 本地验收 docker-compose（自签名 HTTPS）。
+#
+# 镜像生产拓扑（单容器 Caddy+backend via s6 + 兄弟 PG 走 Unix socket），
+# 但从本地源码树 build 镜像，用 Caddy 内置 CA（自签名）替代真实证书，
+# 在 release 前手动验收生产形态的配置确实能起、能服务。
+#
+#   docker compose -f docker/docker-compose.local.yml up -d --build
+#   curl -k https://localhost:8443/api/v1/health
+#   docker compose -f docker/docker-compose.local.yml down -v
+#
+# 与生产的差异（均为有意，已记录）：
+#   - build 本地源码树  vs.  image <registry>/wakewake:<tag>
+#   - public_url https://localhost:8443  vs.  真实域名
+#   - Caddy tls internal（自签名）  vs.  真实证书
+# 其余（PG 兄弟容器、Unix-socket 连接、GUC 调优、healthcheck）与生产完全一致。
+#
+# 类似 e2e，本地验收不持久化数据：app data 目录和 PG 数据全在 ephemeral
+# 容器内，down -v 即得干净环境。仅 postgres-socket IPC 卷在服务间共享。
+#
+# 配置走文件挂载（../.local/config.acceptance.toml），对齐 markpost 的验收路径。
+# 密码重置验收用 mailpit（profile mail）；bemfa mock 用 mosquitto（profile bemfa）：
+#   docker compose -f docker/docker-compose.local.yml --profile mail up -d --build
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: wakewake-acceptance
+    ports:
+      - "8443:8443"
+    volumes:
+      - ../.local/config.acceptance.toml:/app/config.toml:ro
+      # s6 caddy run 脚本固定读 /app/Caddyfile。
+      - ./Caddyfile.local:/app/Caddyfile:ro
+      - postgres-socket:/var/run/postgresql
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:8443/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: wakewake-acceptance-postgres
+    environment:
+      - POSTGRES_DB=wakewake_acceptance
+      - POSTGRES_USER=wakewake
+      - POSTGRES_PASSWORD=test
+    # 与生产一致的 5 个 GUC 覆盖，作 -c 旗标施加（不动镜像默认 postgresql.conf）。
+    # socket 目录保持镜像默认 /var/run/postgresql（entrypoint 拥有权限）。
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - max_connections=50
+      - -c
+      - effective_cache_size=1GB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - synchronous_commit=off
+    volumes:
+      - postgres-socket:/var/run/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h /var/run/postgresql -U wakewake"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+  # mailpit：密码重置验收（profiles: [mail]）。
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025" # API（取邮件用）
+    profiles:
+      - mail
+
+  # mosquitto：bemfa MQTT mock（profiles: [bemfa]）。
+  # mosquitto 2.x 默认 deny anonymous，需 allow_anonymous true + listener 1883。
+  mosquitto:
+    image: eclipse-mosquitto:2
+    entrypoint: /bin/sh
+    command: ["-c", "printf 'allow_anonymous true\nlistener 1883\n' > /tmp/m.conf && exec mosquitto -c /tmp/m.conf -v"]
+    ports:
+      - "1884:1883"
+    profiles:
+      - bemfa
+
+volumes:
+  postgres-socket:

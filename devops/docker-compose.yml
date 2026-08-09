@@ -1,0 +1,70 @@
+# docker-compose（deployment/topology.md §5）。
+# 网络：internal（PG↔backend）、edge（Caddy↔backend）。PG 不在 edge。
+# 内存硬限：PG 400M / backend 1200M / Caddy 60M。
+# MVP 可观测性本地文件（不接 cloud，§9）——无 OTel Collector。
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks: [internal]
+    deploy:
+      resources:
+        limits: { memory: 400M }
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../docker/backend.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      WAKEWAKE_DATABASE__DSN: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}"
+      WAKEWAKE_APP__PUBLIC_URL: ${WAKEWAKE_APP__PUBLIC_URL:-http://localhost:${FRONTEND_PORT:-3034}}
+      WAKEWAKE_JWT__SIGNING_KEY: ${JWT_SIGNING_KEY}
+      WAKEWAKE_JWT__REFRESH_SIGNING_KEY: ${JWT_REFRESH_SIGNING_KEY}
+      WAKEWAKE_PASSWORD_RESET__SECRET: ${PASSWORD_RESET_SECRET}
+      WAKEWAKE_MAILER__ENABLED: ${MAILER_ENABLED:-false}
+      RUST_LOG: info
+    networks: [internal, edge]
+    deploy:
+      resources:
+        limits: { memory: 1200M }
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - ../frontend/out:/srv/frontend:ro
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+    networks: [edge]
+    deploy:
+      resources:
+        limits: { memory: 60M }
+
+volumes:
+  pg_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+  edge:

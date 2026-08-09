@@ -1,0 +1,42 @@
+[package]
+name = "wakewake-seed"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "WakeWake 压测 seed crate（DB 直灌 10万 users+agents，load.md §5）"
+
+[[bin]]
+name = "wakewake-seed"
+path = "src/main.rs"
+
+# 继承 workspace lint 配置（clippy all/pedantic/cargo，见根 Cargo.toml [workspace.lints.clippy]）。
+[lints]
+workspace = true
+
+[dependencies]
+# 复用 wakewake_server lib（generate_pairing_code + BCRYPT_COST，零漂移，load.md §5.2）
+wakewake-server = { path = "../server" }
+
+# DB
+sqlx = { workspace = true }
+
+# Runtime
+tokio = { workspace = true }
+
+# CLI
+clap = { workspace = true }
+
+# 序列化 / 工具
+uuid = { workspace = true }
+time = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# bcrypt（固定预计算 hash，所有压测用户共用 TestPass123!）
+bcrypt = { workspace = true }

@@ -1,0 +1,77 @@
+@import 'tailwindcss';
+
+/*
+ * DESIGN.md 完整 token 全集（Vercel 风格，OKLCH）。
+ * 黑墨单色骨架 + 单一电光绿强调（success 仅用于唤醒按钮/在线状态点/成功反馈）。
+ * Typography 用 Geist（--font-sans，next/font 自托管）；display 负字间距。
+ * Spacing 4px 基准；Rounded 阶梯；Elevation 细微堆叠（不用重投影）。
+ */
+@theme {
+  /* ===== Surface 阶梯（四步灰度） ===== */
+  --color-canvas: oklch(100% 0 0);
+  --color-surface-1: oklch(98% 0 0);
+  --color-surface-2: oklch(96% 0 0);
+  --color-surface-3: oklch(92% 0 0);
+
+  /* ===== 文字（灰度阶梯） ===== */
+  --color-ink: oklch(14.9% 0.024 285.8);
+  --color-ink-muted: oklch(55% 0.015 285.8);
+  --color-ink-subtle: oklch(45% 0.01 285.8);
+
+  /* ===== 边框（细网格） ===== */
+  --color-hairline: oklch(92% 0 0);
+
+  /* ===== 语义色 ===== */
+  --color-primary: oklch(14.9% 0.024 285.8);
+  --color-on-primary: oklch(100% 0 0);
+  --color-destructive: oklch(58% 0.22 27);
+  --color-on-destructive: oklch(100% 0 0);
+  --color-success: oklch(76% 0.16 165);
+  --color-warning: oklch(80% 0.15 75);
+
+  /* ===== Elevation（细微堆叠，不用重投影，DESIGN.md Elevation） =====
+   * 注意：--spacing-* / --text-* / --radius-* 不可在此覆盖，否则会替换
+   * Tailwind v4 默认命名空间 scale（导致 max-w-sm=12px、space-y-* 失效等）。
+   * 组件统一使用默认 utility（max-w-sm、rounded-lg、text-sm、space-y-*）。
+   */
+  --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.05), 0 2px 2px rgba(0, 0, 0, 0.04);
+  --shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.06), 0 4px 8px rgba(0, 0, 0, 0.04);
+  --shadow-modal: 0 24px 48px rgba(0, 0, 0, 0.12);
+}
+
+.dark {
+  --color-canvas: oklch(14.9% 0.024 285.8);
+  --color-surface-1: oklch(18% 0.02 285.8);
+  --color-surface-2: oklch(21% 0.02 285.8);
+  --color-surface-3: oklch(24% 0.02 285.8);
+
+  --color-ink: oklch(97% 0.005 285.8);
+  --color-ink-muted: oklch(72% 0.01 285.8);
+  --color-ink-subtle: oklch(60% 0.01 285.8);
+
+  --color-hairline: oklch(28% 0.01 285.8);
+
+  --color-primary: oklch(97% 0.005 285.8);
+  --color-on-primary: oklch(14.9% 0.024 285.8);
+  --color-destructive: oklch(62% 0.22 27);
+}
+
+@layer base {
+  body {
+    @apply bg-canvas text-ink;
+    font-family:
+      var(--font-sans),
+      Inter,
+      system-ui,
+      -apple-system,
+      sans-serif;
+  }
+
+  /* display 标题用负字间距（DESIGN.md Typography）。 */
+  h1 {
+    letter-spacing: -0.96px;
+  }
+  h2 {
+    letter-spacing: -0.6px;
+  }
+}

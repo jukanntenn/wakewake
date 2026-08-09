@@ -1,0 +1,91 @@
+[package]
+name = "wakewake-server"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "WakeWake backend server (axum + sqlx)"
+
+[[bin]]
+name = "wakewake-server"
+path = "src/main.rs"
+
+[lib]
+name = "wakewake_server"
+path = "src/lib.rs"
+
+# 继承 workspace lint 配置（clippy all/pedantic/cargo，见根 Cargo.toml [workspace.lints.clippy]）。
+[lints]
+workspace = true
+
+[dependencies]
+wakewake-protocol = { workspace = true }
+
+# Web 栈
+axum = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tokio = { workspace = true }
+futures-util = { workspace = true }
+tokio-stream = { workspace = true }
+
+# DB
+sqlx = { workspace = true }
+
+# 加密 / Auth
+rsa = { workspace = true }
+sha2 = { workspace = true }
+jsonwebtoken = { workspace = true }
+bcrypt = { workspace = true }
+hex = { workspace = true }
+base64 = { workspace = true }
+humantime = { workspace = true }
+
+# 缓存 / 限流 / 校验
+moka = { workspace = true }
+dashmap = { workspace = true }
+axum-governor = { workspace = true }
+garde = { workspace = true }
+jsonschema = { workspace = true }
+xxhash-rust = { workspace = true }
+
+# 邮件
+lettre = { workspace = true }
+
+# 序列化 / 工具
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+time = { workspace = true }
+getrandom = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+# management CLI 交互式密码输入（admin create）
+rpassword = "7"
+
+# 配置 / 日志 / 可观测性
+config = { workspace = true }
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-appender = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+opentelemetry-otlp = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+opentelemetry-appender-tracing = { workspace = true }
+rust-i18n = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+tower = { workspace = true, features = ["util"] }
+time = { workspace = true }
+uuid = { workspace = true }
+sqlx = { workspace = true }
+reqwest.workspace = true

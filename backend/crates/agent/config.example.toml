@@ -1,0 +1,70 @@
+# wakewake-agent 配置示例（configuration.md §4）。
+# 主要用户文档。agent 的三种配置方式（优先级高→低）：
+#   1. CLI 参数：--server / --pairing-code / --config
+#   2. 环境变量：WAKEWAKE_SERVER_URL / WAKEWAKE_PAIRING_CODE / WAKEWAKE_HOME
+#   3. 本文件（搜索路径见下方）
+#   4. 内置默认值（仅 [wol] / [log] 有默认）
+#
+# 配置文件搜索路径（按顺序，后者覆盖前者）：
+#   - $WAKEWAKE_HOME/config.toml（默认 $HOME/.wakewake/config.toml）
+#   - ./wakewake.toml（当前工作目录）
+#   - --config <路径> 显式指定（指定时必须存在，跳过上面两个）
+
+# ============================================================
+# 连接配置（必填）
+# ============================================================
+# [REQUIRED] Server URL（如 https://wakewake.app）
+# 内网自托管（Caddy tls internal 自签证书）需编译带 --features danger-insecure-tls
+# Env: WAKEWAKE_SERVER_URL
+server_url = "https://wakewake.app"
+
+# [REQUIRED] Pairing code（16 位十六进制，从 agents 页获取）
+# Env: WAKEWAKE_PAIRING_CODE
+pairing_code = "CHANGE_ME_a1b2c3d4e5f60718"
+
+# ============================================================
+# Home 目录（存 config.toml + key.pem）
+# ============================================================
+# [OPTIONAL] Agent home 目录
+# 默认：$WAKEWAKE_HOME > $HOME/.wakewake > ./.wakewake
+# Docker 场景：/data（卷 agent_data:/data）
+# Env: WAKEWAKE_HOME
+# home_dir = "/home/user/.wakewake"
+
+# ============================================================
+# WoL（magic packet 发送参数）
+# ============================================================
+# [OPTIONAL] 广播地址
+# Env: WAKEWAKE_WOL__BROADCAST_ADDR
+# Default: 255.255.255.255:9
+# [wol]
+# broadcast_addr = "255.255.255.255:9"
+
+# [OPTIONAL] 每次 wake 发送的 magic packet 数量
+# Env: WAKEWAKE_WOL__PACKET_COUNT
+# Default: 3
+# [wol]
+# packet_count = 3
+
+# [OPTIONAL] 连续 packet 之间的延迟（毫秒）
+# Env: WAKEWAKE_WOL__PACKET_DELAY_MS
+# Default: 50
+# [wol]
+# packet_delay_ms = 50
+
+# ============================================================
+# 日志
+# ============================================================
+# [OPTIONAL] 日志级别
+# Env: WAKEWAKE_LOG__LEVEL（或 RUST_LOG）
+# Default: info
+# [log]
+# level = "info"
+
+# [OPTIONAL] 输出格式（pretty / json）
+# pretty：人类可读（交互式终端默认）
+# json：结构化（容器化场景推荐）
+# Env: WAKEWAKE_LOG__FORMAT
+# Default: pretty
+# [log]
+# format = "pretty"

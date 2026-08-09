@@ -1,0 +1,15 @@
+# E2E 短 TTL override（e2e.md §5.2）。
+# 仅"access 过期自动 refresh"这 1 个用例用：override WAKEWAKE_JWT__ACCESS_EXPIRE=10s 隔离跑。
+#
+# 用法：
+#   docker compose -f docker-compose.e2e.yml -f docker-compose.short-ttl.yml up -d
+#
+# 决策理由（避免重放检测连锁崩溃）：
+# 短 TTL(10s) 下，浏览器和 ky 各自独立 refresh rotation，新 refresh_token 不回写 storageState
+# → 浏览器后续用旧 refresh → 触发重放检测 → 该用户所有 refresh 被吊销 → 套件雪崩。
+# 生产 TTL(15min) 下，单测试几秒完成，token 不过期，无 rotation，无冲突。
+# 短 TTL 只影响 1 个用例，隔离 compose 环境跑，不污染主套件。
+services:
+  app:
+    environment:
+      WAKEWAKE_JWT__ACCESS_EXPIRE: "10s"

@@ -1,0 +1,19 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - heading "404" [level=1] [ref=e4]
+    - heading "This page could not be found." [level=2] [ref=e6]
+  - region "Notifications alt+T"
+  - generic [ref=e11] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=e12]:
+      - img [ref=e13]
+    - generic [ref=e16]:
+      - button "Open issues overlay" [ref=e17]:
+        - generic [ref=e18]:
+          - generic [ref=e19]: "1"
+          - generic [ref=e20]: "2"
+        - generic [ref=e21]:
+          - text: Issue
+          - generic [ref=e22]: s
+      - button "Collapse issues badge" [ref=e23]:
+        - img [ref=e24]
+  - alert [ref=e26]

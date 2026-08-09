@@ -1,0 +1,12 @@
+[
+  {
+    "key": "alt+r",
+    "command": "workbench.action.tasks.runTask",
+    "args": "Start All"
+  },
+  {
+    "key": "alt+shift+r",
+    "command": "workbench.action.tasks.runTask",
+    "args": "Stop All"
+  }
+]

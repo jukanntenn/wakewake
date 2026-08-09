@@ -1,0 +1,21 @@
+# 压测 override（load.md §9.2）。
+# 复用 e2e compose 基础 + 覆盖：
+#   - rate_limit disabled（压测高频请求不触发限流）
+#   - postgres max_connections=200 + shared_buffers=512MB（支持 5k SSE 并发）
+#   - app ulimits nofile 1M（5k 连接 FD）
+#   - postgres 端口映射到宿主（seed crate + k6 从宿主连）
+#
+# 用法：
+#   docker compose -f ../../e2e/docker-compose.e2e.yml -f docker-compose.load.yml up -d --build
+services:
+  app:
+    environment:
+      - WAKEWAKE_RATE_LIMIT__DISABLED=true
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+  postgres:
+    command: postgres -c max_connections=200 -c shared_buffers=512MB
+    ports:
+      - "5432:5432"

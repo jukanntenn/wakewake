@@ -1,0 +1,63 @@
+[package]
+name = "wakewake-agent"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+description = "WakeWake agent (SSE client + RSA + WoL + Bemfa MQTT)"
+
+[[bin]]
+name = "wakewake-agent"
+path = "src/main.rs"
+
+[lib]
+name = "wakewake_agent"
+path = "src/lib.rs"
+
+[features]
+# E2E 专用：启用 reqwest danger_accept_invalid_certs(true)，信任 Caddy tls internal 自签名证书。
+# 生产 agent 绝不带此 feature（e2e.md §6.2 安全防护：feature 名刺眼 + CI 发布校验）。
+default = []
+danger-insecure-tls = []
+
+# 继承 workspace lint 配置（clippy all/pedantic/cargo，见根 Cargo.toml [workspace.lints.clippy]）。
+[lints]
+workspace = true
+
+[dependencies]
+wakewake-protocol = { workspace = true }
+
+tokio = { workspace = true }
+reqwest = { workspace = true }
+futures-util = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# OAEP+SHA-256（与前端 Web Crypto 一致），非旧 PKCS#1 v1.5。
+rsa = { workspace = true }
+base64 = { workspace = true }
+getrandom = { workspace = true }
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-appender = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+# device-sync-v3 §6.1：topic 命名 k4 = base36(u64::from_be_bytes(sha256(aid_simple)[..8]))[..4]。
+sha2 = { workspace = true }
+# AsyncClient 无 connect()，由 eventloop.poll() 隐式连接，auto-reconnect 内建。
+rumqttc = { workspace = true }
+# 与 server 统一：config-rs + clap 三层覆盖。
+config = { workspace = true }
+time = { workspace = true }
+rand = "0.10"
+
+[dev-dependencies]
+proptest = { workspace = true }
+wiremock = { workspace = true }
+rand = "0.10"
+base64 = { workspace = true }
+tempfile = "3.27.0"

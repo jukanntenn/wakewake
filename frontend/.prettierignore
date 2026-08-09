@@ -1,0 +1,12 @@
+# 产物目录（不格式化）。
+.next/
+out/
+dist/
+build/
+node_modules/
+coverage/
+
+# 第三方生成。
+pnpm-lock.yaml
+next-env.d.ts
+tsconfig.tsbuildinfo

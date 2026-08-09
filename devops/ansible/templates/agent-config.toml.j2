@@ -1,0 +1,8 @@
+# wakewake-agent 配置（ansible 渲染，{{ env | default('dev') }} 环境）。
+# 勿手改——重新跑 deploy-agent.yml 会覆盖。
+
+server_url = "{{ agent_server_url }}"
+pairing_code = "{{ agent_pairing_code }}"
+
+[log]
+format = "json"

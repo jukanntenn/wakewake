@@ -1,0 +1,88 @@
+# prek configuration — see https://prek.j178.dev
+# Install:  prek install
+# Run all:  prek run --all-files
+#
+# 三层门禁：
+#   pre-commit  —— 格式/同步检查（快，不修改，失败提示手动修）
+#   pre-push    —— 无 DB 依赖的测试（后端单元 + 前端全量；后端集成测试需 PG，留 CI）
+#   commit-msg  —— Conventional Commits 格式
+
+default_install_hook_types = ["pre-commit", "pre-push", "commit-msg"]
+
+# 产物目录全局排除（不喂给任何 hook）。
+exclude = """^(backend/target/|frontend/node_modules/|frontend/.next/|frontend/out/|.local/|acceptance/)"""
+
+# ---- Generic checks (prek builtin: 零依赖 Rust 原生 hook) ----
+[[repos]]
+repo = "builtin"
+hooks = [
+  { id = "trailing-whitespace" },
+  { id = "end-of-file-fixer" },
+  { id = "check-yaml" },
+  { id = "check-toml" },
+  { id = "check-json" },
+  { id = "check-merge-conflict" },
+  { id = "check-added-large-files", args = ["--maxkb=1024"] },
+  { id = "detect-private-key", exclude = "backend/crates/agent/src/crypto\\.rs" },
+  { id = "mixed-line-ending", args = ["--fix=lf"] },
+]
+
+# ---- pre-commit: 格式检查（--check，不修改） + AGENTS 同步 ----
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "cargo-fmt-check"
+name = "cargo fmt --check (backend)"
+language = "system"
+entry = "bash -c 'cd backend && cargo fmt --check'"
+files = "^backend/.*\\.rs$"
+pass_filenames = false
+stages = ["pre-commit"]
+
+[[repos.hooks]]
+id = "prettier-check"
+name = "prettier --check (frontend)"
+language = "system"
+entry = "bash -c 'cd frontend && pnpm exec prettier --check .'"
+files = "^frontend/.*\\.(ts|tsx|js|jsx|json|css|md)$"
+pass_filenames = false
+stages = ["pre-commit"]
+
+[[repos.hooks]]
+id = "agents-sync"
+name = "AGENTS.md == CLAUDE.md"
+language = "system"
+entry = "python3 scripts/sync_agents.py --check"
+files = "^(AGENTS|CLAUDE)\\.md$"
+pass_filenames = false
+stages = ["pre-commit"]
+
+# ---- pre-push: 无 DB 依赖测试 ----
+[[repos.hooks]]
+id = "backend-unit-test"
+name = "cargo test --lib (backend unit, no DB)"
+language = "system"
+entry = "cargo test --lib --manifest-path backend/Cargo.toml"
+files = "^backend/.*\\.rs$"
+pass_filenames = false
+stages = ["pre-push"]
+
+[[repos.hooks]]
+id = "frontend-test"
+name = "vitest run (frontend)"
+language = "system"
+entry = "bash -c 'cd frontend && pnpm test:run'"
+files = "^frontend/"
+pass_filenames = false
+stages = ["pre-push"]
+
+# ---- commit-msg: Conventional Commits ----
+[[repos.hooks]]
+id = "conventional-commits"
+name = "commit message format"
+language = "system"
+entry = "python3 scripts/check_commit_msg.py"
+# commit-msg stage 传 Git message 文件路径作为 $1，必须接收文件名参数。
+pass_filenames = true
+stages = ["commit-msg"]

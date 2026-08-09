@@ -1,0 +1,50 @@
+# E2E 测试用 Caddy 配置（自签名 TLS，e2e.md §2.4）。
+# 与生产 devops/Caddyfile 的关键差异：
+#   - 监听 :8443（0.0.0.0）而非 wakewake.app:443——agent 容器通过 docker DNS app:8443 访问。
+#   - reverse_proxy 127.0.0.1:8080（同容器内 backend），非 backend:8080（跨容器）。
+#   - tls internal（自签名），非 ACME。
+
+{
+	local_certs
+}
+
+# 监听 0.0.0.0:8443（agent 容器通过 app:8443 访问，Playwright 通过 localhost:8443）。
+# tls internal 需主机名为证书 SAN——显式列 localhost + app（docker DNS）。
+localhost:8443, app:8443 {
+	tls internal
+
+	# API（非 SSE）
+	@api path /api/*
+	handle @api {
+		reverse_proxy 127.0.0.1:8080 {
+			transport http {
+				versions h2c
+			}
+			flush_interval -1
+			health_uri /api/v1/health
+			health_interval 10s
+		}
+	}
+
+	# SSE（独立 handle，禁缓冲，flush_interval -1 + X-Accel-Buffering no）
+	@sse path /api/v1/agents/self/events
+	handle @sse {
+		reverse_proxy 127.0.0.1:8080 {
+			transport http {
+				versions h2c
+			}
+			flush_interval -1
+			header_up X-Accel-Buffering no
+		}
+	}
+
+	# 静态前端（Next.js out/）
+	handle {
+		root * /app/frontend/out
+		encode gzip zstd
+		try_files {path} {path}.html {path}/index.html /index.html
+		file_server {
+			precompressed gzip
+		}
+	}
+}

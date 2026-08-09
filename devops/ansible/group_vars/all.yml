@@ -1,0 +1,21 @@
+---
+# 所有 wakewake 环境共享的变量。每环境的覆盖在 group_vars/<env>.yml；
+# 每主机事实（user, home）在 host_vars/。
+
+app_name: wakewake
+apps_path: "{{ home }}/docker"
+app_path: "{{ apps_path }}/{{ app_name }}"
+compose_file: "{{ app_path }}/docker-compose.yml"
+config_file: "{{ app_path }}/config.toml"
+caddyfile: "{{ app_path }}/Caddyfile"
+
+# 所有环境内部端口一致：
+#   - wakewake-server 监听 8080（config 默认，永不对外发布）。
+#   - Caddy 监听 8443（容器内），是唯一对外发布的端口。
+backend_port: 8080
+caddy_port: 8443
+
+# Postgres 在每个环境都是兄弟容器，通过共享 postgres-socket 命名卷（Unix socket）
+# 连接——永不对外发布。
+postgres_db: wakewake
+postgres_user: wakewake

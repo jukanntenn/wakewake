@@ -1,0 +1,57 @@
+# wakewake Caddyfile — 烤进镜像的默认配置（plain HTTP）。
+#
+# 自部署（docker/docker-compose.yml）直接用此文件。
+# 本地验收（docker-compose.local.yml）和 e2e（e2e/Caddyfile）卷挂载 tls internal
+# 变体覆盖此文件；远程 dev/生产由 ansible 渲染 Caddyfile.dev 等覆盖。
+# 所有变体共享相同的路由逻辑（API/SSE 反代 + 静态前端托管），仅 TLS 层不同。
+#
+# 容器内布局（所有环境一致）：
+#   :8443   Caddy（本文件）         — 对外发布
+#   8080    wakewake-server（127.0.0.1） — 永不对外，Caddy 反代到它
+
+:8443 {
+	encode zstd gzip
+
+	# API（非 SSE）
+	@api path /api/*
+	handle @api {
+		reverse_proxy 127.0.0.1:8080 {
+			transport http {
+				versions h2c
+			}
+			flush_interval -1
+			health_uri /api/v1/health
+			health_interval 10s
+		}
+	}
+
+	# SSE（独立 handle，禁缓冲，flush_interval -1 + X-Accel-Buffering no）
+	@sse path /api/v1/agents/self/events
+	handle @sse {
+		reverse_proxy 127.0.0.1:8080 {
+			transport http {
+				versions h2c
+			}
+			flush_interval -1
+			header_up X-Accel-Buffering no
+		}
+	}
+
+	# 静态前端（Next.js out/）
+	handle {
+		root * /app/frontend/out
+
+		@immutable path /_next/static/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+		try_files {path} {path}.html {path}/index.html /index.html
+		file_server {
+			precompressed gzip
+		}
+	}
+
+	log {
+		output stderr
+		format console
+	}
+}

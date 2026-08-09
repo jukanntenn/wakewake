@@ -1,0 +1,9 @@
+#!/bin/sh
+# WoL UDP sniffer（e2e.md §6.3）。
+# tcpdump 捕获 UDP:9 包，每包写一行到 /tmp/wol_packets.log。
+# 测试端（utils/agent.ts getWolPackets）检查文件非空即证据①。
+#
+# WAKEWAKE_WOL__BROADCAST_ADDR=127.0.0.1:9 让 agent 发 loopback，tcpdump 必捕获。
+echo -n > /tmp/wol_packets.log
+# tcpdump 持续运行，每行输出即时 flush（-l），追加到 log
+exec tcpdump -i any -l -n 'udp port 9' >> /tmp/wol_packets.log 2>&1

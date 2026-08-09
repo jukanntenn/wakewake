@@ -1,0 +1,53 @@
+# 本地验收 Caddy 配置（自签名 TLS）。
+# 与 e2e/Caddyfile 完全一致：agent（宿主机）与 Playwright 都通过 localhost:8443 访问。
+# 容器内挂载于 /app/Caddyfile（s6 caddy run 脚本固定读此路径）。
+
+{
+	local_certs
+	# Caddy 默认把 TLS 证书维护/自动 HTTPS 等日志打到 INFO，会淹没 backend 业务日志。
+	# 降到 WARN：只保留警告/错误，让 docker logs 突显 wakewake-server 的可观测日志。
+	log {
+		level WARN
+	}
+}
+
+# 监听 0.0.0.0:8443（宿主机 agent 用 localhost:8443，浏览器也用 localhost）。
+# tls internal 需主机名为证书 SAN——显式列 localhost + app（docker DNS）。
+localhost:8443, app:8443 {
+	tls internal
+
+	# API（非 SSE）
+	@api path /api/*
+	handle @api {
+		reverse_proxy 127.0.0.1:8080 {
+			transport http {
+				versions h2c
+			}
+			flush_interval -1
+			health_uri /api/v1/health
+			health_interval 10s
+		}
+	}
+
+	# SSE（独立 handle，禁缓冲，flush_interval -1 + X-Accel-Buffering no）
+	@sse path /api/v1/agents/self/events
+	handle @sse {
+		reverse_proxy 127.0.0.1:8080 {
+			transport http {
+				versions h2c
+			}
+			flush_interval -1
+			header_up X-Accel-Buffering no
+		}
+	}
+
+	# 静态前端（Next.js out/）
+	handle {
+		root * /app/frontend/out
+		encode gzip zstd
+		try_files {path} {path}.html {path}/index.html /index.html
+		file_server {
+			precompressed gzip
+		}
+	}
+}

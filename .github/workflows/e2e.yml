@@ -1,0 +1,60 @@
+# E2E Tests workflow（e2e.md §10.1）。
+# 触发：main 推送 + 夜间 2 点 + 手动。分钟级（~10min 全套）。
+name: E2E Tests
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *' # 每天凌晨 2 点（夜间全量 e2e）
+# 纯噪音路径跳过（注意：paths-ignore 对 schedule/workflow_dispatch 不生效，
+# 所以夜间定时 e2e 仍会全量跑，符合预期）。
+paths-ignore:
+  - '**/*.md'
+  - 'docs/**'
+  - '.gitignore'
+  - 'LICENSE'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: corepack enable
+      - name: Install deps
+        run: cd e2e && pnpm install --frozen-lockfile
+      - name: Install Playwright browsers
+        run: cd e2e && npx playwright install --with-deps
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build app image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          load: true
+          tags: wakewake:e2e
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Run E2E
+        run: cd e2e && pnpm test # pretest 自动起容器 + 等就绪，posttest 自动 down -v
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+      - name: Upload docker logs
+        if: failure()
+        run: docker compose -f e2e/docker-compose.e2e.yml logs > docker-logs.txt
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: docker-logs
+          path: docker-logs.txt

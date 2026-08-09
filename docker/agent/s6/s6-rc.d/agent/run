@@ -1,0 +1,14 @@
+#!/bin/sh
+# wakewake-agent longrun（e2e.md §6.1）。
+# $WAKEWAKE_HOME=/data 由 Dockerfile ENV 设置（卷 agent_data:/data 持久化 RSA 私钥）。
+# WAKEWAKE_SERVER_URL / WAKEWAKE_PAIRING_CODE / WAKEWAKE_WOL__BROADCAST_ADDR 由 compose env 注入。
+#
+# s6 longrun 默认不继承容器 env（最小化环境），需显式 source。
+for f in /run/s6/container_environment/*; do
+  [ -f "$f" ] || continue
+  key=$(basename "$f")
+  val=$(cat "$f")
+  export "$key=$val"
+done
+export HOME=/data
+exec wakewake-agent

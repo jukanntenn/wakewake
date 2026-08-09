@@ -1,0 +1,96 @@
+---
+# 部署 wakewake-agent 到同网段 bare-metal 主机（解决 WoL 跨网段问题）。
+#
+# WoL 受限广播（255.255.255.255）不跨越路由器（RFC 919），agent 必须与目标设备
+# 同一 L2 网段才能唤醒。本 playbook 把本机编译的 agent 二进制推到同网段主机，
+# 用 supervisor 常驻管理（401 优雅退出 exit 0 不重启；崩溃自动重启）。
+#
+# 用法（从 devops/ansible/ 运行）：
+#   ansible-playbook -i hosts.yml deploy-agent.yml -l dev_agent \
+#     --vault-password-file ~/.ansible-vault/wakewake-dev.pwd -K
+#
+# 前提：本机已执行
+#   cd backend && cargo build --release -p wakewake-agent --features danger-insecure-tls
+#
+# 二进制路径可用 -e 覆盖（默认相对 ansible/ 目录指向 ../../backend/target/release/）：
+#   -e agent_local_binary=/path/to/wakewake-agent
+
+- name: Deploy wakewake-agent
+  hosts: dev_agent
+  user: "{{ user }}"
+  gather_facts: false
+
+  vars:
+    app_name: wakewake-agent
+    apps_path: "{{ home }}/apps"
+    app_path: "{{ apps_path }}/{{ app_name }}"
+    bin_dir: "{{ app_path }}/bin"
+    agent_binary_dest: "{{ bin_dir }}/wakewake-agent"
+    agent_config: "{{ app_path }}/config.toml"
+    # 本机编译产物路径（danger-insecure-tls feature 对接 dev Caddy tls internal 自签证书）
+    agent_local_binary: "../../backend/target/release/wakewake-agent"
+
+  roles:
+    - role: supervisor
+      become: yes
+      become_method: sudo
+
+  tasks:
+    # agent_server_url / agent_pairing_code 来自 dev vault。deploy.yml 用 {{ env }} 拼路径，
+    # 但 env: dev 只在 group_vars/dev.yml 定义（仅作用于 dev group）；agent 在 dev_agent
+    # group，env 未定义。本 playbook 仅 dev 用（danger-insecure-tls 对接 dev 自签证书），
+    # 故直接硬编码 dev vault 路径。
+    - name: Load dev vault
+      ansible.builtin.include_vars:
+        file: "vars/dev/vault.yml"
+
+    - name: Ensure paths
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ apps_path }}"
+        - "{{ app_path }}"
+        - "{{ bin_dir }}"
+        - "{{ app_path }}/logs"
+
+    - name: Copy agent binary (built locally with danger-insecure-tls)
+      ansible.builtin.copy:
+        src: "{{ agent_local_binary }}"
+        dest: "{{ agent_binary_dest }}"
+        mode: "0755"
+      notify: restart agent program
+
+    - name: Template agent config.toml
+      ansible.builtin.template:
+        src: agent-config.toml.j2
+        dest: "{{ agent_config }}"
+        mode: "0600"
+      notify: restart agent program
+
+    - name: Copy supervisor conf
+      become: true
+      become_method: sudo
+      ansible.builtin.template:
+        src: wakewake-agent.conf.j2
+        dest: "/etc/supervisor/conf.d/wakewake-agent.conf"
+        mode: "0644"
+      notify: restart agent program
+
+    - name: Add agent program to supervisor
+      become: true
+      become_method: sudo
+      community.general.supervisorctl:
+        config: /etc/supervisor/supervisord.conf
+        name: wakewake-agent
+        state: present
+
+  handlers:
+    - name: restart agent program
+      become: yes
+      become_method: sudo
+      community.general.supervisorctl:
+        config: /etc/supervisor/supervisord.conf
+        name: wakewake-agent
+        state: restarted

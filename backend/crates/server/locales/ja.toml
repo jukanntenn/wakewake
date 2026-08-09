@@ -1,0 +1,16 @@
+# ja.toml
+_version = 1
+
+"email.password_reset_subject" = "WakeWake パスワードのリセット"
+"email.password_reset_body" = "パスワードをリセットするにはリンクをクリックしてください：%{reset_url}\n\n心当たりがない場合は、このメールを無視してください。"
+"email.password_reset_heading" = "パスワードのリセット"
+"email.password_reset_html_body" = "下のボタンをクリックしてパスワードをリセットしてください。心当たりがない場合は、このメールを無視してください。"
+"email.password_reset_button" = "パスワードをリセット"
+"email.password_changed_subject" = "WakeWake パスワードが変更されました"
+"email.password_changed_body" = "パスワードが変更されました。心当たりがない場合は、すぐにリセットしてください。"
+
+"email.email_verification_subject" = "WakeWake のメールアドレスを確認"
+"email.email_verification_body" = "メールアドレスを確認するにはリンクをクリックしてください：%{verify_url}\n\n心当たりがない場合は、このメールを無視してください。"
+"email.email_verification_heading" = "メールアドレスの確認"
+"email.email_verification_html_body" = "下のボタンをクリックしてメールアドレスを確認し、アカウントを有効化してください。心当たりがない場合は、このメールを無視してください。"
+"email.email_verification_button" = "メールアドレスを確認"

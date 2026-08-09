@@ -1,0 +1,133 @@
+# E2E docker-compose（e2e.md §2.5）。
+# 2 服务 + agent 第 3 服务（按需 profiles）+ mailpit 第 4 服务（密码重置 E2E）。
+# 独立测试密钥，绝不复用生产 .env（e2e.md §11.1 安全约束）。
+#
+# 启动：
+#   cd e2e && docker compose -f docker-compose.e2e.yml up -d --build
+#   # agent 场景：--profile agent；密码重置：--profile mail
+#   docker compose -f docker-compose.e2e.yml --profile agent up -d
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8443:8443"
+    environment:
+      # 独立测试密钥，绝不复用生产 .env（安全约束，e2e.md §11.1）
+      WAKEWAKE_APP__PUBLIC_URL: https://localhost:8443
+      WAKEWAKE_DATABASE__DSN: "postgres://${POSTGRES_USER:-wakewake}:${POSTGRES_PASSWORD:-test}@postgres/${POSTGRES_DB:-wakewake_test}"
+      WAKEWAKE_JWT__SIGNING_KEY: e2e-test-signing-key-not-for-production-32bytes
+      WAKEWAKE_JWT__REFRESH_SIGNING_KEY: e2e-test-refresh-key-not-for-production-32byt
+      WAKEWAKE_PASSWORD_RESET__SECRET: e2e-test-reset-secret-not-for-production-32byte
+      # 只旁路 axum-governor 速率限制，不旁路业务配额（MAX_DEVICES_PER_USER 等硬编码 const）
+      WAKEWAKE_RATE_LIMIT__DISABLED: "true"
+      # 密码重置 E2E 需 mailpit（见 §9）
+      WAKEWAKE_MAILER__ENABLED: "true"
+      WAKEWAKE_MAILER__SMTP_HOST: mailpit
+      WAKEWAKE_MAILER__SMTP_PORT: "1025"
+      WAKEWAKE_MAILER__FROM_ADDRESS: noreply@wakewake.local
+      WAKEWAKE_MAILER__FROM_NAME: WakeWake E2E
+      RUST_LOG: info
+    volumes:
+      - ./Caddyfile:/app/Caddyfile:ro
+    networks:
+      - e2e-net
+    healthcheck:
+      test: ["CMD", "curl", "-fsk", "https://localhost:8443/api/v1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wakewake_test}
+      POSTGRES_USER: ${POSTGRES_USER:-wakewake}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-test}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - e2e-net
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-wakewake}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # agent：按需启动（profiles: [agent]），场景 2/3 才起（e2e.md §6.4）
+  agent:
+    build:
+      context: ..
+      dockerfile: docker/agent.Dockerfile
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      WAKEWAKE_SERVER_URL: https://app:8443
+      # 运行时由 fixture 动态注入（utils/agent.ts 设 shell env 后 compose up）
+      # 默认 placeholder（invalid → agent 收 401 退出，不污染）；真实 code 由 env 覆盖
+      WAKEWAKE_PAIRING_CODE: ${WAKEWAKE_PAIRING_CODE:-placeholder}
+      # WoL 广播地址：用 127.0.0.1 让容器内 sniffer（UDP-RECV:9 on 0.0.0.0）能捕获。
+      # 真实 WoL 发 LAN 广播，但 docker bridge 不回环广播包给同容器接收方。
+      # E2E 用 loopback 验证 agent 确实发包（双层证据①），真实发包行为不变。
+      WAKEWAKE_WOL__BROADCAST_ADDR: 127.0.0.1:9
+      # bemfa MQTT broker 指向 mosquitto mock（e2e.md §6.6），非真实巴法云
+      WAKEWAKE_BEMFA__BROKER: mosquitto
+      WAKEWAKE_BEMFA__PORT: "1883"
+      # bemfa topic 管理 HTTP API 指向 bemfa-mock（e2e.md §6.6），非真实巴法云
+      WAKEWAKE_BEMFA__API_BASE: http://bemfa-mock:8080
+      RUST_LOG: debug
+    volumes:
+      - agent_data:/data # agent RSA 私钥持久化（e2e.md §6.4）
+    networks:
+      - e2e-net
+    cap_add:
+      - NET_BROADCAST # UDP 广播（WoL 验证，e2e.md §6.3）
+    profiles:
+      - agent
+
+  # mailpit：密码重置 E2E（profiles: [mail]，e2e.md §9.1）
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025" # API（取邮件用，e2e.md §9.3）
+    networks:
+      - e2e-net
+    profiles:
+      - mail
+
+  # mosquitto：bemfa MQTT mock（profiles: [bemfa]，e2e.md §6.6）
+  # agent 的 bemfa 模块连此 mock（非真实巴法云），测试 publish "on" 模拟语音触发。
+  # mosquitto 2.x 默认 deny anonymous，需 allow_anonymous true + listener 1883。
+  mosquitto:
+    image: eclipse-mosquitto:2
+    entrypoint: /bin/sh
+    command: ["-c", "printf 'allow_anonymous true\nlistener 1883\n' > /tmp/m.conf && exec mosquitto -c /tmp/m.conf -v"]
+    networks:
+      - e2e-net
+    profiles:
+      - bemfa
+
+  # bemfa-mock：巴法云 topic 管理 HTTP API mock（profiles: [bemfa]，e2e.md §6.6）
+  # agent reconcile 会调 createTopic/deleteTopic/modifyName/allTopic——真实巴法云
+  # 无法在 E2E 使用（需真实账号），用固定 {code:0} 响应回放（参照 ha-xiaodu fixtures）。
+  bemfa-mock:
+    image: node:22-alpine
+    command: ["node", "/app/server.js"]
+    volumes:
+      - ./bemfa-mock/server.js:/app/server.js:ro
+    networks:
+      - e2e-net
+    profiles:
+      - bemfa
+
+volumes:
+  pg_data:
+  agent_data:
+
+networks:
+  e2e-net:
+    driver: bridge

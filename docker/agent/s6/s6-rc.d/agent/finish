@@ -1,0 +1,8 @@
+#!/bin/sh
+# s6 finish 脚本：agent 进程退出后调用。
+# agent 收 401 终止时返 0（优雅）→ 告诉 s6 停止服务（不重启）。
+# 其他退出码（崩溃）→ s6 默认重启。
+if [ "$1" = "0" ]; then
+  # 优雅退出（401 终止）→ 永久停止服务（s6-svc -d）
+  s6-svc -d /run/service/agent 2>/dev/null || true
+fi
