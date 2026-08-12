@@ -11,6 +11,7 @@ import { RefreshCw, Copy, Check } from 'lucide-react'
 import { useDefaultAgent, useRotatePairingCode } from '@/hooks/useAgents'
 import { copyText } from '@/lib/clipboard'
 import { BrandMark } from '@/components/brand/brand-logo'
+import { RelativeTime } from '@/components/ui/relative-time'
 
 export default function AgentsPage() {
   const t = useTranslations('agent')
@@ -18,26 +19,48 @@ export default function AgentsPage() {
   const { data: agent, isLoading } = useDefaultAgent()
   const rotateMut = useRotatePairingCode()
   const [copied, setCopied] = useState(false)
+  // L2 两段式按钮 armed 态（§11.B.6）：第一次点击 armed，3s 内再点执行，超时/移出恢复。
+  const [armed, setArmed] = useState(false)
+  const [rotateTimer, setRotateTimer] = useState<ReturnType<typeof setTimeout> | null>(null)
 
-  // rotate 后展示完整新码 30s（onSuccess 已更新缓存为完整码），之后刷新恢复脱敏。
-  // useDefaultAgent 5s 轮询会在下次 get_default 返回脱敏码，自然覆盖。
   useEffect(() => {
     if (!copied) return
     const id = setTimeout(() => setCopied(false), 2000)
     return () => clearTimeout(id)
   }, [copied])
 
-  const onRotate = async () => {
-    if (!confirm(t('rotateConfirm'))) return
+  // 清理 rotate timer on unmount
+  useEffect(() => {
+    return () => {
+      if (rotateTimer) clearTimeout(rotateTimer)
+    }
+  }, [rotateTimer])
+
+  const disarmRotate = () => {
+    if (rotateTimer) clearTimeout(rotateTimer)
+    setRotateTimer(null)
+    setArmed(false)
+  }
+
+  const onRotateClick = async () => {
+    if (!armed) {
+      // 第一次点击：armed，3s 后自动解除
+      setArmed(true)
+      const timer = setTimeout(() => {
+        setArmed(false)
+        setRotateTimer(null)
+      }, 3000)
+      setRotateTimer(timer)
+      return
+    }
+    // armed，第二次点击 → 执行
+    disarmRotate()
     try {
       const resp = await rotateMut.mutateAsync()
       toast.success(t('rotateSuccess'))
-      // rotate 成功后立即复制新码到剪贴板（旧码已失效，用户必须立即拿到新码）。
-      // copyText 优先用 Clipboard API，不可用时降级 execCommand（覆盖 HTTP 部署）。
       if (await copyText(resp.pairing_code)) {
         toast.message(t('copiedNewCode'))
       } else {
-        // 复制失败：新码已在 UI 显示，提示用户手动选中复制。
         toast.warning(t('codeCopiedManualHint'))
       }
     } catch {
@@ -105,12 +128,17 @@ export default function AgentsPage() {
               {copied ? <Check className="text-success h-4 w-4" /> : <Copy className="h-4 w-4" />}
             </button>
             <button
-              onClick={onRotate}
+              onClick={onRotateClick}
+              onMouseLeave={disarmRotate}
               disabled={rotateMut.isPending}
-              className="border-hairline text-ink-muted hover:bg-surface-2 hover:text-ink flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors disabled:opacity-50"
+              className={
+                armed
+                  ? 'border-destructive text-destructive hover:bg-destructive/10 flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors'
+                  : 'border-hairline text-ink-muted hover:bg-surface-2 hover:text-ink flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors'
+              }
             >
               <RefreshCw className={`h-3.5 w-3.5 ${rotateMut.isPending ? 'animate-spin' : ''}`} />
-              {t('rotate')}
+              {armed ? t('confirmRotate') : t('rotate')}
             </button>
           </div>
         </div>
@@ -128,7 +156,7 @@ export default function AgentsPage() {
         {/* last_seen */}
         {agent.last_seen && (
           <p className="text-ink-subtle mt-4 text-xs">
-            {t('lastSeen')}: {new Date(agent.last_seen).toLocaleString()}
+            {t('lastSeen')}: <RelativeTime date={agent.last_seen} />
           </p>
         )}
       </div>

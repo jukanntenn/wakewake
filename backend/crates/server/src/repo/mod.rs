@@ -6,6 +6,7 @@ pub mod admin_repo;
 pub mod agent_repo;
 pub mod device_repo;
 pub mod integration_repo;
+pub mod login_event_repo;
 pub mod refresh_token_repo;
 pub mod user_repo;
 pub mod wake_repo;

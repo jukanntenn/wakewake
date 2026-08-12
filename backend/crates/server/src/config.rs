@@ -83,6 +83,8 @@ pub struct Settings {
     pub security: SecuritySettings,
     #[garde(skip)]
     pub log: LogSettings,
+    #[garde(skip)]
+    pub maintenance: MaintenanceSettings,
 }
 
 /// 应用级配置（与 server 监听解耦的对外公网地址）。
@@ -101,6 +103,14 @@ pub struct AppSettings {
 pub struct ServerSettings {
     pub host: String,
     pub port: u16,
+    /// 信任 X-Forwarded-For / X-Real-IP（反代场景，§11.C.2）。
+    /// true 时从 XFF 最左取真实客户端 IP；false 时用 TCP 对端。直连部署设 false。
+    #[serde(default = "default_trust_proxy")]
+    pub trust_proxy: bool,
+}
+
+fn default_trust_proxy() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -220,7 +230,11 @@ impl Settings {
             .set_default("security.bootstrap_admin_email", "admin@wakewake.local")?
             .set_default("security.bootstrap_admin_password", "wakewake123")?
             .set_default("log.level", "info")?
-            .set_default("log.dir", "data/logs")?;
+            .set_default("log.dir", "data/logs")?
+            .set_default("server.trust_proxy", true)?
+            .set_default("maintenance.enabled", false)?
+            .set_default("maintenance.mode", "registration_disabled")?
+            .set_default("maintenance.message", "Scheduled maintenance in progress")?;
 
         // 2. TOML 文件（可选）
         builder = if let Some(path) = &cli.config {
@@ -275,5 +289,51 @@ impl JwtSettings {
 
     pub fn refresh_ttl(&self) -> anyhow::Result<Duration> {
         Ok(humantime::parse_duration(&self.refresh_expire)?)
+    }
+}
+
+/// 维护模式配置（ui-ux-risk-control §8.4）。
+/// 运维状态，配置驱动（TOML + env）。运行时可通过 POST /admin/maintenance 改变（持久化到 data/maintenance.json）。
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct MaintenanceSettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub mode: MaintenanceMode,
+    #[serde(default)]
+    pub message: String,
+}
+
+/// 维护模式三级（ui-ux-risk-control §8.4）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MaintenanceMode {
+    /// 禁止 POST /auth/register，其他正常。
+    #[default]
+    RegistrationDisabled,
+    /// 禁所有写操作（POST/PATCH/DELETE），GET 放行。
+    Readonly,
+    /// 非 admin 全部拒绝（含 GET）。
+    Full,
+}
+
+impl MaintenanceMode {
+    #[must_use]
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::RegistrationDisabled => "registration_disabled",
+            Self::Readonly => "readonly",
+            Self::Full => "full",
+        }
+    }
+
+    #[must_use]
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "registration_disabled" => Some(Self::RegistrationDisabled),
+            "readonly" => Some(Self::Readonly),
+            "full" => Some(Self::Full),
+            _ => None,
+        }
     }
 }

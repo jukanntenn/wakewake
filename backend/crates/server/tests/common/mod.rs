@@ -65,8 +65,12 @@ pub async fn setup_pool() -> PgPool {
 /// 清空所有业务表（测试隔离，按外键依赖顺序）。
 pub async fn clean_all(pool: &PgPool) {
     // 顺序：先删有 FK 依赖的，最后删 users。
-    // admin_actions 引用 users（RESTRICT），必须先于 users 删除。
+    // admin_actions/login_events 引用 users，必须先于 users 删除。
     sqlx::query("DELETE FROM admin_actions")
+        .execute(pool)
+        .await
+        .ok();
+    sqlx::query("DELETE FROM login_events")
         .execute(pool)
         .await
         .ok();

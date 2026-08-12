@@ -180,7 +180,13 @@ fn build_transport(
             .port(port)
             .tls(lettre::transport::smtp::client::Tls::None)
     };
-    if let (Some(u), Some(p)) = (username, password) {
+    // 空串视为无凭证：mailpit 等开放中继不宣告 AUTH 机制，若设了（空）Credentials，
+    // lettre 会强制 AUTH → "No compatible authentication mechanism was found"（BUG-MAILER）。
+    // 仅当 username/password 均非空才设凭证。
+    let creds = username
+        .filter(|u| !u.is_empty())
+        .zip(password.filter(|p| !p.is_empty()));
+    if let Some((u, p)) = creds {
         builder = builder.credentials(Credentials::new(u.to_string(), p.to_string()));
     }
     builder.build()

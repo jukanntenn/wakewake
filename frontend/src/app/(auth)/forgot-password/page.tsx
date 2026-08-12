@@ -1,60 +1,48 @@
 'use client'
 
-// Forgot Password 页面：邮箱 + PoW → POST /auth/password-reset/request（authentication.md §六）。
-// PoW：GET /pow/challenge → 暴力 nonce → 提交 challenge + nonce。恒显示成功（防枚举）。
+// Forgot Password 页面（ui-ux-risk-control §14.4，PoW 移入 Worker）。
+// PoW：GET /pow/challenge → Worker 求 nonce → POST /auth/password-reset/request。
+// 恒显示成功（防枚举）。用户视角进度条（不确定模式，文案 "Sending reset link..."）。
 
 import { useState } from 'react'
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
-import { ApiError } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
+import { solvePow } from '@/lib/pow'
 import { AuthShell } from '@/components/auth/auth-shell'
-
-async function solvePow(challenge: string, difficulty: number): Promise<string> {
-  const encoder = new TextEncoder()
-  for (let nonce = 0; ; nonce++) {
-    const data = encoder.encode(challenge + nonce.toString())
-    const hash = await crypto.subtle.digest('SHA-256', data)
-    const hex = Array.from(new Uint8Array(hash))
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('')
-    if (hex.slice(0, difficulty) === '0'.repeat(difficulty)) {
-      return nonce.toString()
-    }
-    if (nonce % 10000 === 0) {
-      await new Promise((r) => setTimeout(r, 0))
-    }
-  }
-}
 
 export default function ForgotPasswordPage() {
   const t = useTranslations('auth')
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
+  const [powProgress, setPowProgress] = useState(false)
   const [sent, setSent] = useState(false)
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setPowProgress(true)
     try {
-      const challengeResp = await fetch('/api/v1/pow/challenge').then((r) => r.json())
-      const nonce = await solvePow(challengeResp.challenge, challengeResp.difficulty)
-      await fetch('/api/v1/auth/password-reset/request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, challenge: challengeResp.id, nonce }),
-      })
+      const pow = await solvePow(
+        () => api.auth.powChallenge(),
+        () => {},
+      )
+      setPowProgress(false)
+      await api.auth.requestPasswordReset({ email, challenge: pow.challenge, nonce: pow.nonce })
       setSent(true)
       toast.success(t('resetLinkSent'))
     } catch (err) {
       if (err instanceof ApiError && err.code === 'RATE_LIMITED') {
         toast.error(t('error.RATE_LIMITED'))
       } else {
+        // 防枚举：其他错误也显示成功
         setSent(true)
-        toast.success(t('resetLinkSent')) // 防枚举：错误也显示成功
+        toast.success(t('resetLinkSent'))
       }
     } finally {
       setLoading(false)
+      setPowProgress(false)
     }
   }
 
@@ -67,7 +55,6 @@ export default function ForgotPasswordPage() {
           <Link href="/login" className="text-ink hover:text-ink-muted font-medium underline">
             {t('backToLogin')}
           </Link>
-          {/* 意识到自己没账号的用户：提供注册入口 */}
           <p className="text-xs">
             {t('noAccount')}{' '}
             <Link href="/register" className="text-ink-muted hover:text-ink underline">
@@ -108,6 +95,17 @@ export default function ForgotPasswordPage() {
               className="border-hairline bg-surface-1 text-ink focus:border-primary placeholder:text-ink-subtle/60 focus:ring-primary/20 h-10 w-full rounded-md border px-3 text-sm transition-colors outline-none focus:ring-2"
             />
           </div>
+
+          {/* PoW 进度条（不确定模式，§14.4） */}
+          {powProgress && (
+            <div className="space-y-1">
+              <div className="bg-surface-2 h-1.5 w-full overflow-hidden rounded-full">
+                <div className="bg-primary h-full w-1/3 animate-pulse rounded-full" />
+              </div>
+              <p className="text-ink-muted text-center text-xs">{t('sendingResetLink')}</p>
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading}

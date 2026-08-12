@@ -10,6 +10,7 @@ pub mod integration_service;
 pub mod jwt;
 pub mod login_lockout;
 pub mod mailer_service;
+pub mod maintenance;
 pub mod password_reset_service;
 pub mod pow;
 pub mod secrets;

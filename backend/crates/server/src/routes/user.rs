@@ -18,6 +18,7 @@ use crate::repo::user_repo;
 use crate::routes::auth::UserPublic;
 use crate::service::auth_service;
 use crate::state::AppState;
+use garde::Validate;
 
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -41,6 +42,8 @@ async fn change_password(
     user: AuthUser,
     Json(input): Json<ChangePasswordInput>,
 ) -> AppResult<StatusCode> {
+    // 服务端输入校验（A-08B）：current/new 密码长度 8..=72。
+    input.validate()?;
     auth_service::change_password(
         &state.pool,
         user.user_id,

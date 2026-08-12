@@ -3,7 +3,7 @@
 
 export const publicRoute = {
   shouldShow: (isAuth: boolean) => !isAuth,
-  redirectPath: '/dashboard',
+  redirectPath: '/devices',
   showSpinnerWhen: (isAuth: boolean) => isAuth, // 已认证用户访问 /login 时显示 spinner 直到跳转
 }
 
@@ -14,5 +14,5 @@ export const protectedRoute = {
 
 export const adminRoute = {
   shouldShow: (isAuth: boolean, isAdmin: boolean) => isAuth && isAdmin,
-  redirectPath: '/dashboard', // 非 admin 跳回 dashboard
+  redirectPath: '/devices', // 非 admin 跳回 dashboard
 }

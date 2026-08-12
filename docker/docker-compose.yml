@@ -57,7 +57,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - postgres-socket:/var/run/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h /var/run/postgresql -U ${POSTGRES_USER:-wakewake}"]
+      test: ["CMD-SHELL", "pg_isready -h /var/run/postgresql -U ${POSTGRES_USER:-wakewake} -d ${POSTGRES_DB:-wakewake}"]
       interval: 10s
       timeout: 5s
       retries: 5

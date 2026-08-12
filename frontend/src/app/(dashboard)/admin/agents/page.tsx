@@ -1,104 +1,253 @@
 'use client'
 
-// Admin 跨用户 agent 页（/admin/agents）。AdminRoute 守卫。
-// 列全部 agent（pending/online/offline + 归属 user），online agent 提供「强制断开」。
+// Admin Agents 页（ui-ux-risk-control §9.7）。
+// 调查型列表：DataTable + 搜索 + Status 过滤（客户端，后端不支持）+ offset 分页。
+// 操作：Disconnect（L1，仅 online；调用 useDisconnectAgent(id)）。
 
+import { Suspense, useMemo } from 'react'
+import Link from 'next/link'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
-import { ApiError } from '@/lib/api'
+import { ChevronLeft, MoreVertical } from 'lucide-react'
+import { ApiError, type AdminAgent } from '@/lib/api'
 import { useAdminAgents, useDisconnectAgent } from '@/hooks/useAdmin'
-import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Menu } from '@/components/ui/menu'
+import { DataTable, type Column } from '@/components/ui/data-table'
+import { StatusIndicator } from '@/components/ui/status-indicator'
+import { RelativeTime } from '@/components/ui/relative-time'
 
-export default function AdminAgentsPage() {
+function AdminAgentsPageInner() {
   const t = useTranslations('admin')
   const tErr = useTranslations('error')
-  const { data, isLoading } = useAdminAgents()
-  const disconnectMut = useDisconnectAgent()
-  const agents = data?.items ?? []
+  const router = useRouter()
+  const searchParams = useSearchParams()
 
-  const onDisconnect = async (id: number) => {
+  // URL query 同步（§11.B.4）。
+  const q = searchParams.get('q') ?? ''
+  const statusFilter = searchParams.get('status') ?? 'all' // all/online/offline/pending
+  const page = Number(searchParams.get('page') ?? '1')
+  const pageSize = Number(searchParams.get('pageSize') ?? '10')
+
+  const { data: resp, isLoading } = useAdminAgents({ q, page, page_size: pageSize })
+  const total = resp?.total ?? 0
+
+  const disconnectMut = useDisconnectAgent()
+
+  // 客户端过滤：status（后端不支持 status 过滤，前端筛）。
+  const filteredAgents = useMemo(() => {
+    const items = resp?.items ?? []
+    if (statusFilter === 'all') return items
+    return items.filter((a) => a.status === statusFilter)
+  }, [resp?.items, statusFilter])
+
+  const updateQuery = (updates: Record<string, string | number>) => {
+    const params = new URLSearchParams(searchParams.toString())
+    for (const [k, v] of Object.entries(updates)) {
+      if (v === 'all' || v === '' || v === 1) {
+        params.delete(k)
+      } else {
+        params.set(k, String(v))
+      }
+    }
+    router.push(`/admin/agents?${params.toString()}`)
+  }
+
+  const onDisconnect = async (a: AdminAgent) => {
     try {
-      await disconnectMut.mutateAsync(id)
+      await disconnectMut.mutateAsync(a.id)
       toast.success(t('disconnectSuccess'))
     } catch (err) {
       toast.error(tErr((err instanceof ApiError ? err.code : 'INTERNAL_ERROR') as 'SYNCING'))
     }
   }
 
-  const statusBadge = (status: string) => {
-    const map: Record<string, string> = {
-      online: 'text-green-600 dark:text-green-400',
-      offline: 'text-ink-subtle',
-      pending: 'text-amber-600 dark:text-amber-400',
+  // Status 单元格：online=success；offline=neutral；pending=active 脉冲（§9.7）。
+  const statusCell = (status: AdminAgent['status']) => {
+    const map: Record<
+      AdminAgent['status'],
+      { color: 'success' | 'neutral' | 'active'; label: string }
+    > = {
+      online: { color: 'success', label: t('agent_online') },
+      offline: { color: 'neutral', label: t('agent_offline') },
+      pending: { color: 'active', label: t('agent_pending') },
     }
-    return map[status] ?? 'text-ink-muted'
+    const cfg = map[status]
+    return (
+      <span className="inline-flex items-center gap-1.5 text-sm">
+        <StatusIndicator color={cfg.color} pulse={status === 'pending'} aria-label={cfg.label} />
+        <span className="text-ink-muted">{cfg.label}</span>
+      </span>
+    )
   }
-  const dotColor = (status: string) =>
-    status === 'online' ? 'bg-green-500' : status === 'pending' ? 'bg-amber-500' : 'bg-gray-400'
+
+  const columns: Column<AdminAgent>[] = [
+    { key: 'name', label: t('colAgent') },
+    { key: 'user_email', label: t('colOwner') },
+    { key: 'status', label: t('colStatus') },
+    { key: 'last_seen', label: t('colLastSeen') },
+    { key: 'actions', label: t('actions' as never) ?? '' },
+  ]
+
+  const renderCell = (a: AdminAgent, key: string) => {
+    if (key === 'name') {
+      return (
+        <div>
+          <div className="text-ink font-medium">{a.name}</div>
+          <div className="text-ink-subtle text-xs">{a.aid.slice(0, 12)}…</div>
+        </div>
+      )
+    }
+    if (key === 'user_email') {
+      return <span className="text-ink-muted text-sm">{a.user_email}</span>
+    }
+    if (key === 'status') {
+      return statusCell(a.status)
+    }
+    if (key === 'last_seen') {
+      return (
+        <span className="text-ink-muted text-sm">
+          <RelativeTime date={a.last_seen} />
+        </span>
+      )
+    }
+    if (key === 'actions') {
+      return (
+        <AgentsActionsMenu
+          agent={a}
+          onDisconnect={onDisconnect}
+          pending={disconnectMut.isPending}
+        />
+      )
+    }
+    return null
+  }
+
+  const hasActiveFilters = q !== '' || statusFilter !== 'all'
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* 面包屑 */}
+      <div className="flex items-center gap-2 text-sm">
+        <Link href="/admin" className="text-ink-muted hover:text-ink flex items-center gap-1">
+          <ChevronLeft className="h-4 w-4" />
+          {t('title')}
+        </Link>
+      </div>
       <h1 className="text-ink text-2xl font-semibold tracking-tight">{t('agents')}</h1>
 
-      <div className="border-hairline bg-surface-1 shadow-card rounded-lg border p-6">
-        <p className="text-ink-muted mb-4 text-sm">{t('agentsDesc')}</p>
-        {isLoading ? (
-          <div className="text-ink-subtle flex h-32 items-center justify-center text-sm">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            {t('loading')}
-          </div>
-        ) : agents.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-hairline text-ink-muted border-b text-left">
-                  <th className="py-2 pr-4 font-medium">{t('colAgent')}</th>
-                  <th className="py-2 pr-4 font-medium">{t('colOwner')}</th>
-                  <th className="py-2 pr-4 font-medium">{t('colStatus')}</th>
-                  <th className="py-2 pr-4 font-medium">{t('colLastSeen')}</th>
-                  <th className="py-2 pr-4 font-medium">{t('actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {agents.map((a) => (
-                  <tr key={a.id} className="border-hairline border-b">
-                    <td className="py-2 pr-4">
-                      <div className="text-ink font-medium">{a.name}</div>
-                      <div className="text-ink-subtle text-xs">{a.aid.slice(0, 12)}…</div>
-                    </td>
-                    <td className="text-ink-muted py-2 pr-4">{a.user_email}</td>
-                    <td className={`py-2 pr-4 font-medium ${statusBadge(a.status)}`}>
-                      <span className="inline-flex items-center">
-                        <span className={`mr-1.5 h-2 w-2 rounded-full ${dotColor(a.status)}`} />
-                        {t(`agent_${a.status}` as 'agent_online')}
-                      </span>
-                    </td>
-                    <td className="text-ink-subtle py-2 pr-4">
-                      {a.last_seen ? new Date(a.last_seen).toLocaleString() : '—'}
-                    </td>
-                    <td className="py-2 pr-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={a.status !== 'online' || disconnectMut.isPending}
-                        onClick={() => onDisconnect(a.id)}
-                        title={a.status !== 'online' ? t('disconnectDisabledHint') : undefined}
-                      >
-                        {t('disconnect')}
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="border-hairline text-ink-subtle flex h-32 items-center justify-center rounded-sm border border-dashed text-sm">
-            {t('emptyAgents')}
-          </div>
+      {/* 搜索 + 过滤栏 */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Input
+          className="max-w-xs"
+          placeholder={t('searchAgents' as never) ?? 'Search agent or user...'}
+          defaultValue={q}
+          onChange={(e) => updateQuery({ q: e.target.value, page: 1 })}
+        />
+        <Select
+          value={statusFilter}
+          onValueChange={(v) => updateQuery({ status: v ?? 'all', page: 1 })}
+        >
+          <SelectTrigger className="w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('filterAll' as never) ?? 'All'}</SelectItem>
+            <SelectItem value="online">{t('agent_online' as never) ?? 'Online'}</SelectItem>
+            <SelectItem value="offline">{t('agent_offline' as never) ?? 'Offline'}</SelectItem>
+            <SelectItem value="pending">{t('agent_pending' as never) ?? 'Pending'}</SelectItem>
+          </SelectContent>
+        </Select>
+        {hasActiveFilters && (
+          <button
+            onClick={() => router.push('/admin/agents')}
+            className="text-ink-muted hover:text-ink text-xs underline"
+          >
+            {t('filterClear' as never) ?? 'Clear'}
+          </button>
         )}
       </div>
+
+      {/* 表格 */}
+      <DataTable
+        columns={columns}
+        rows={filteredAgents}
+        rowKey={(a) => a.id}
+        render={renderCell}
+        loading={isLoading}
+        empty={
+          <p className="text-ink-muted py-8 text-center">
+            {t('emptyAgents' as never) ?? 'No agents'}
+          </p>
+        }
+        pagination={{
+          page,
+          pageSize,
+          total,
+          onPageChange: (p) => updateQuery({ page: p }),
+          onPageSizeChange: (s) => updateQuery({ pageSize: s, page: 1 }),
+        }}
+        mobile={{
+          primary: (a) => <span className="text-ink font-medium">{a.user_email}</span>,
+          secondary: [
+            { key: 'status', label: t('colStatus') },
+            { key: 'last_seen', label: t('colLastSeen') },
+          ],
+          actions: (a) => (
+            <AgentsActionsMenu
+              agent={a}
+              onDisconnect={onDisconnect}
+              pending={disconnectMut.isPending}
+            />
+          ),
+        }}
+      />
     </div>
+  )
+}
+
+function AgentsActionsMenu({
+  agent,
+  onDisconnect,
+  pending,
+}: {
+  agent: AdminAgent
+  onDisconnect: (a: AdminAgent) => void
+  pending: boolean
+}) {
+  const t = useTranslations('admin')
+  const isOnline = agent.status === 'online'
+  return (
+    <Menu>
+      <Menu.Trigger className="text-ink-muted hover:bg-surface-2 rounded-md p-1">
+        <MoreVertical className="h-4 w-4" />
+      </Menu.Trigger>
+      <Menu.Popup>
+        <Menu.Item
+          disabled={!isOnline || pending}
+          title={isOnline ? undefined : t('disconnectDisabledHint')}
+          onClick={() => onDisconnect(agent)}
+        >
+          {t('disconnect')}
+        </Menu.Item>
+      </Menu.Popup>
+    </Menu>
+  )
+}
+
+// Next.js 16：useSearchParams 需 Suspense 边界（静态导出场景）。
+export default function AdminAgentsPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminAgentsPageInner />
+    </Suspense>
   )
 }

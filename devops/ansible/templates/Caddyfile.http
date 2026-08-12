@@ -1,0 +1,67 @@
+# {{ ansible_managed }}
+# wakewake Caddyfile（staging / production）。
+#
+# Plain HTTP（无 TLS）。HTTPS 由外部反代终结（运维侧），容器内 Caddy 只服务 HTTP。
+# staging 和 production 共用此文件--两者容器侧字节同构，差异仅在 config.toml
+# （public_url / secrets / mailer）。路由逻辑与 Caddyfile.dev / 镜像内置
+# docker/Caddyfile 一致，仅去掉 tls internal / fallback_sni。
+#
+# 容器内布局（所有环境一致）：
+#   :{{ caddy_port }}   Caddy（本文件）         - 对外发布
+#   {{ backend_port }}  wakewake-server（127.0.0.1） - 永不对外，Caddy 反代到它
+
+{
+	auto_https off
+}
+
+:{{ caddy_port }} {
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	encode zstd gzip
+
+	# API（非 SSE）
+	@api path /api/*
+	handle @api {
+		reverse_proxy 127.0.0.1:{{ backend_port }} {
+			transport http {
+				versions h2c
+			}
+			flush_interval -1
+			health_uri /api/v1/health
+			health_interval 10s
+		}
+	}
+
+	# SSE（独立 handle，禁缓冲，flush_interval -1 + X-Accel-Buffering no）
+	@sse path /api/v1/agents/self/events
+	handle @sse {
+		reverse_proxy 127.0.0.1:{{ backend_port }} {
+			transport http {
+				versions h2c
+			}
+			flush_interval -1
+			header_up X-Accel-Buffering no
+		}
+	}
+
+	# 静态前端（Next.js out/）
+	handle {
+		root * /app/frontend/out
+
+		@immutable path /_next/static/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+		try_files {path} {path}.html {path}/index.html /index.html
+		file_server {
+			precompressed gzip
+		}
+	}
+
+	log {
+		output stderr
+		format console
+	}
+}

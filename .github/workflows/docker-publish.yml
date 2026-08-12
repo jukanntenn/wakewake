@@ -1,0 +1,66 @@
+# 发布 Docker 镜像到 Docker Hub。
+#
+# 惰性：仅 `git tag v*` 触发。在第一个发布 tag 之前什么都不做，符合"先手动后 CI"
+# （手动期用 docker/build.py --push --registry docker.io 直接推）。
+#
+# Tag 约定（metadata-action 语义化）：
+#   git tag v0.1.0      -> 0.1.0 / 0.1 / 0 / latest / sha-<short>
+#   git tag v0.1.0-rc.1 -> 0.1.0-rc.1 / sha-<short>   （预发布不产 latest / 滚动 tag）
+# staging/prod ansible 钉 wakewake_version 指向精确版本（如 v0.1.0 -> image:...:0.1.0）。
+name: Publish Docker image
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Build & push (multi-arch)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # QEMU + buildx：单 job 一次 build 出 amd64+arm64（无需 markpost 那种 manifest 合并）。
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 语义化标签：version / major.minor / major / sha / latest（预发布禁 latest）。
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: jukanntenn/wakewake
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable={{!is_prerelease}}
+
+      - name: Build & push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false

@@ -1,14 +1,19 @@
 'use client'
 
-// Wakes 页面：唤醒历史游标分页列表（api-design.md §1.4 唤醒历史）。
-// ?before=<created_at> 游标分页（上一页最后一条 created_at）。
-// 手动刷新按钮 + 首页 10s 自动刷新（useWakes）。
+// 用户侧 Wakes 页（ui-ux-risk-control §14.11）。
+// 游标分页 Load More（用户侧不是 admin 的 offset）。
+// 内联 StatusBadge → 规范 <WakeStatusBadge>。
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { RefreshCw } from 'lucide-react'
 import { useWakes } from '@/hooks/useWakes'
 import { Button } from '@/components/ui/button'
+import { LoadingState } from '@/components/ui/loading-state'
+import { WakeStatusBadge } from '@/components/wakes/status-badge'
+import { DataTable, type Column } from '@/components/ui/data-table'
+import { type Wake } from '@/lib/api'
+import { RelativeTime } from '@/components/ui/relative-time'
 
 export default function WakesPage() {
   const t = useTranslations('wakes')
@@ -21,9 +26,32 @@ export default function WakesPage() {
 
   const loadMore = () => {
     const last = items[items.length - 1]
-    if (last) {
-      setBefore(last.created_at)
-    }
+    if (last) setBefore(last.created_at)
+  }
+
+  const columns: Column<Wake>[] = [
+    { key: 'device_name', label: t('device') },
+    { key: 'type', label: t('type') },
+    { key: 'status', label: t('statusCol') },
+    { key: 'created_at', label: t('time') },
+  ]
+
+  const renderCell = (wake: Wake, key: string) => {
+    if (key === 'device_name') return <span className="text-ink">{wake.device_name}</span>
+    if (key === 'type')
+      return (
+        <span className="text-ink-muted">
+          {wake.type === 'wol' ? t('typeManual') : t('typeVoice')}
+        </span>
+      )
+    if (key === 'status') return <WakeStatusBadge status={wake.status} message={wake.message} />
+    if (key === 'created_at')
+      return (
+        <span className="text-ink-subtle">
+          <RelativeTime date={wake.created_at} />
+        </span>
+      )
+    return null
   }
 
   return (
@@ -42,74 +70,35 @@ export default function WakesPage() {
         </Button>
       </div>
 
-      <div className="border-hairline bg-surface-1 shadow-card overflow-hidden rounded-lg border">
-        <table className="w-full">
-          <thead>
-            <tr className="border-hairline text-ink-muted border-b text-left text-sm">
-              <th className="px-4 py-3 font-medium">{t('device')}</th>
-              <th className="px-4 py-3 font-medium">{t('type')}</th>
-              <th className="px-4 py-3 font-medium">{t('statusCol')}</th>
-              <th className="px-4 py-3 font-medium">{t('time')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan={4} className="text-ink-muted px-4 py-8 text-center">
-                  {t('loading')}
-                </td>
-              </tr>
-            ) : items.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="text-ink-muted px-4 py-8 text-center">
-                  {t('empty')}
-                </td>
-              </tr>
-            ) : (
-              items.map((wake) => (
-                <tr key={wake.id} className="border-hairline hover:bg-surface-2 border-b text-sm">
-                  <td className="text-ink px-4 py-3">{wake.device_name}</td>
-                  <td className="text-ink-muted px-4 py-3">
-                    {wake.type === 'wol' ? t('typeManual') : t('typeVoice')}
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={wake.status} />
-                  </td>
-                  <td className="text-ink-subtle px-4 py-3">
-                    {new Date(wake.created_at).toLocaleString()}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {hasMore && (
-        <div className="flex justify-center">
-          <Button onClick={loadMore} disabled={isFetching}>
-            {isFetching ? t('loading') : t('loadMore')}
-          </Button>
-        </div>
+      {isLoading ? (
+        <LoadingState variant="rows" />
+      ) : items.length === 0 ? (
+        <p className="text-ink-muted py-8 text-center">{t('empty')}</p>
+      ) : (
+        <>
+          <DataTable
+            columns={columns}
+            rows={items}
+            rowKey={(w) => w.id}
+            render={renderCell}
+            mobile={{
+              primary: (w) => <span className="text-ink font-medium">{w.device_name}</span>,
+              secondary: [
+                { key: 'type', label: t('type') },
+                { key: 'status', label: t('statusCol') },
+                { key: 'created_at', label: t('time') },
+              ],
+            }}
+          />
+          {hasMore && (
+            <div className="flex justify-center">
+              <Button onClick={loadMore} disabled={isFetching}>
+                {isFetching ? t('loading') : t('loadMore')}
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
-  )
-}
-
-function StatusBadge({ status }: { status: 'success' | 'failed' | 'expired' }) {
-  const t = useTranslations('wakes')
-  const color =
-    status === 'success' ? 'bg-success' : status === 'expired' ? 'bg-warning' : 'bg-destructive'
-  const label =
-    status === 'success'
-      ? t('statusSuccess')
-      : status === 'expired'
-        ? t('statusExpired')
-        : t('statusFailed')
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className={`h-2 w-2 rounded-full ${color}`} />
-      <span className="text-ink-muted">{label}</span>
-    </span>
   )
 }

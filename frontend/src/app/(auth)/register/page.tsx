@@ -1,11 +1,16 @@
 'use client'
 
+// 注册页（ui-ux-risk-control §14.3，含 PoW 进度）。
+// PoW 移入 Web Worker（§7.1），用户视角进度条（不确定模式，§7.2）。
+// 不暴露技术细节：进度文案 "Creating account..."，无百分比无 PoW 字样。
+
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import { api, ApiError } from '@/lib/api'
+import { solvePow } from '@/lib/pow'
 import { AuthShell } from '@/components/auth/auth-shell'
 
 const KNOWN_AUTH_ERRORS = [
@@ -14,6 +19,7 @@ const KNOWN_AUTH_ERRORS = [
   'AUTH_REQUIRED',
   'TOKEN_EXPIRED',
   'RATE_LIMITED',
+  'MAINTENANCE_REGISTRATION_CLOSED',
 ] as const
 
 export default function RegisterPage() {
@@ -23,13 +29,25 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [powProgress, setPowProgress] = useState(false)
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setPowProgress(true)
     try {
-      // 注册成功 → 不自动登录，跳 check-email 页引导验证。
-      await api.auth.register({ email, password })
+      // PoW 求解（Worker，§7.1）。用户视角文案 "Creating account..."（§7.2）。
+      const pow = await solvePow(
+        () => api.auth.powChallenge(),
+        () => {},
+      )
+      setPowProgress(false)
+      await api.auth.register({
+        email,
+        password,
+        challenge: pow.challenge,
+        nonce: pow.nonce,
+      })
       toast.success(t('verificationSent'))
       router.push(`/check-email?email=${encodeURIComponent(email)}`)
     } catch (err) {
@@ -40,6 +58,7 @@ export default function RegisterPage() {
       toast.error(tErr(known as (typeof KNOWN_AUTH_ERRORS)[number]))
     } finally {
       setLoading(false)
+      setPowProgress(false)
     }
   }
 
@@ -85,8 +104,19 @@ export default function RegisterPage() {
             onChange={(e) => setPassword(e.target.value)}
             className="border-hairline bg-surface-1 text-ink focus:border-primary placeholder:text-ink-subtle/60 focus:ring-primary/20 h-10 w-full rounded-md border px-3 text-sm transition-colors outline-none focus:ring-2"
           />
-          <p className="text-ink-subtle text-xs">8+ characters</p>
+          <p className="text-ink-subtle text-xs">{t('passwordHint')}</p>
         </div>
+
+        {/* PoW 进度条（不确定模式，§7.2） */}
+        {powProgress && (
+          <div className="space-y-1">
+            <div className="bg-surface-2 h-1.5 w-full overflow-hidden rounded-full">
+              <div className="bg-primary h-full w-1/3 animate-pulse rounded-full" />
+            </div>
+            <p className="text-ink-muted text-center text-xs">{t('creatingAccount')}</p>
+          </div>
+        )}
+
         <button
           type="submit"
           disabled={loading}

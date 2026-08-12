@@ -15,6 +15,37 @@ use crate::service::state;
 /// secret 字段 PATCH 哨兵值（§8.5）：用户没改时前端回传此值，后端识别为不修改。
 const SECRET_SENTINEL: &str = "***";
 
+/// best-effort 写 integration 审计（§8.5 三动作：create/update/delete + 启停）。
+/// 失败仅 warn，不阻断集成主流程。
+async fn audit(
+    pool: &PgPool,
+    user_id: i64,
+    agent_id: i64,
+    action: &str,
+    provider: &str,
+    detail: serde_json::Value,
+) {
+    let mut payload = serde_json::json!({ "provider": provider });
+    if let serde_json::Value::Object(map) = detail {
+        if let serde_json::Value::Object(dst) = &mut payload {
+            dst.extend(map);
+        }
+    }
+    if let Err(e) = crate::repo::admin_repo::insert_action(
+        pool,
+        user_id,
+        action,
+        Some(user_id),
+        Some(agent_id),
+        None,
+        &payload,
+    )
+    .await
+    {
+        tracing::warn!(error = ?e, action, "audit integration action failed");
+    }
+}
+
 /// 列用户集成（config 脱敏：secret 字段值替换为 "***"）。
 pub async fn list(
     pool: &PgPool,
@@ -83,6 +114,16 @@ pub async fn create<D: CommandDispatcher>(
         .await
         .map_err(AppError::from_repo)?;
     tx.commit().await.map_err(AppError::from)?;
+
+    audit(
+        pool,
+        user_id,
+        agent.id,
+        "integration.create",
+        &input.provider,
+        serde_json::json!({ "enabled": input.enabled }),
+    )
+    .await;
 
     state::refresh_for_agent(pool, dispatcher, agent.id).await?;
 
@@ -155,6 +196,16 @@ pub async fn update<D: CommandDispatcher>(
         .map_err(AppError::from_repo)?;
     tx.commit().await.map_err(AppError::from)?;
 
+    audit(
+        pool,
+        user_id,
+        agent.id,
+        "integration.update",
+        provider,
+        serde_json::json!({ "enabled": input.enabled }),
+    )
+    .await;
+
     state::refresh_for_agent(pool, dispatcher, agent.id).await?;
 
     let mut integration = integration;
@@ -190,6 +241,16 @@ pub async fn delete<D: CommandDispatcher>(
         .map_err(AppError::from_repo)?;
     tx.commit().await.map_err(AppError::from)?;
 
+    audit(
+        pool,
+        user_id,
+        agent.id,
+        "integration.delete",
+        provider,
+        serde_json::json!({}),
+    )
+    .await;
+
     let _ = integration;
     state::refresh_for_agent(pool, dispatcher, agent.id).await?;
     Ok(())
@@ -217,6 +278,16 @@ pub async fn set_enabled<D: CommandDispatcher>(
         .await
         .map_err(AppError::from_repo)?;
     tx.commit().await.map_err(AppError::from)?;
+
+    audit(
+        pool,
+        user_id,
+        agent.id,
+        "integration.update",
+        provider,
+        serde_json::json!({ "enabled": enabled }),
+    )
+    .await;
 
     let _ = integration;
     state::refresh_for_agent(pool, dispatcher, agent.id).await?;

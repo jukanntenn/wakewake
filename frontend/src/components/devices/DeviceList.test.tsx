@@ -1,31 +1,80 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { NextIntlClientProvider } from 'next-intl'
 import { DeviceList } from './DeviceList'
 import type { Device } from '@/lib/api'
 
-// Mock next-intl：返回 key 本身（便于断言 title 文案）
-vi.mock('next-intl', () => ({
-  useTranslations: () => (key: string) => key,
-}))
+const messages = {
+  device: {
+    syncing: 'Syncing',
+    syncError: 'Sync error',
+    agentOnline: 'Agent online',
+    agentOffline: 'Agent offline',
+    cloudSynced: 'Bemfa synced',
+    cloudError: 'Bemfa error: {error}',
+    cloudNone: 'Bemfa none',
+    cloudNotObserved: 'Waiting',
+    cloudSyncing: 'Syncing cloud',
+    driftDeleted: 'drift del',
+    driftRenamed: 'drift ren',
+    wake: 'Wake',
+    waking: 'Waking...',
+    wakeSuccess: 'ok',
+    wakeError: 'err',
+    wakeTimeout: 'timeout',
+    wakeFailed: 'failed: {message}',
+    edit: 'Edit',
+    delete: 'Delete',
+    cancel: 'Cancel',
+    deleteSuccess: 'deleted',
+    deleteDialogTitle: 'Delete device',
+    deleteDialogDesc: 'Permanently remove "{name}"?',
+    addDevice: 'Add device',
+    details: 'Device details',
+    detailIdentity: 'IDENTITY',
+    detailConnection: 'CONNECTION',
+    detailCloudSync: 'CLOUD SYNC',
+    colMac: 'MAC Address',
+    colDescription: 'Description',
+    colCreated: 'Created',
+    colAgent: 'Agent',
+    colLastSeen: 'Last seen',
+    colStatus: 'Status',
+    colLastSync: 'Last sync',
+    colLastDrift: 'Last drift',
+    masked: '(masked)',
+    noDescription: '—',
+    never: '—',
+    noDrift: '— (none)',
+  },
+  common: { cancel: 'Cancel', confirm: 'Confirm' },
+}
 
-// Mock hooks
+function wrap(ui: React.ReactNode) {
+  return (
+    <NextIntlClientProvider locale="en" messages={messages}>
+      {ui}
+    </NextIntlClientProvider>
+  )
+}
+
 const mockDeleteDevice = vi.fn().mockResolvedValue({})
 const mockWakeDevice = vi.fn().mockResolvedValue('c_test1234')
 vi.mock('@/hooks/useDevices', () => ({
   useDeleteDevice: () => ({ mutateAsync: mockDeleteDevice, isPending: false }),
   useWakeDevice: () => ({ mutateAsync: mockWakeDevice, isPending: false }),
-  // pollCommandStatus：立即返回 completed success（避免轮询循环）
   pollCommandStatus: vi.fn().mockResolvedValue({ status: 'completed', success: true }),
 }))
 
-// device-sync-v3 v3 Device 形状（agent_online + projection_status + cloud_status）
 const mockDevice: Device = {
   did: 'test-did-123',
   name: 'My NAS',
   mac_display: 'AA:**:**:**:**:FF',
   description: 'Office NAS',
   agent_online: true,
+  agent_name: 'Office-Agent',
+  agent_last_seen: '2026-01-01T00:00:00Z',
   projection_status: 'synced',
   cloud_status: 'synced',
   cloud_observed_name: 'My NAS',
@@ -37,80 +86,107 @@ const mockDevice: Device = {
   updated_at: '2026-01-01T00:00:00Z',
 }
 
-describe('DeviceList', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('renders empty state when no devices', () => {
-    render(<DeviceList devices={[]} onEdit={vi.fn()} />)
-    expect(screen.getByText('noDevices')).toBeInTheDocument()
-  })
+describe('DeviceList (重构后)', () => {
+  beforeEach(() => vi.clearAllMocks())
 
   it('renders device cards with name and mac_display', () => {
-    render(<DeviceList devices={[mockDevice]} onEdit={vi.fn()} />)
+    render(wrap(<DeviceList devices={[mockDevice]} onEdit={vi.fn()} />))
     expect(screen.getAllByText('My NAS').length).toBeGreaterThan(0)
     expect(screen.getByText('AA:**:**:**:**:FF')).toBeInTheDocument()
     expect(screen.getByText('Office NAS')).toBeInTheDocument()
   })
 
-  it('calls onEdit when edit button clicked', async () => {
-    const user = userEvent.setup()
-    const onEdit = vi.fn()
-    render(<DeviceList devices={[mockDevice]} onEdit={onEdit} />)
-
-    const editBtn = screen.getByLabelText('edit')
-    await user.click(editBtn)
-    expect(onEdit).toHaveBeenCalledWith(mockDevice)
+  it('renders online device icon (💻) when agent_online', () => {
+    render(wrap(<DeviceList devices={[mockDevice]} onEdit={vi.fn()} />))
+    expect(screen.getByText('💻')).toBeInTheDocument()
   })
 
-  it('shows wake button and triggers wake flow when agent online', async () => {
-    const user = userEvent.setup()
-    render(<DeviceList devices={[mockDevice]} onEdit={vi.fn()} />)
-
-    const wakeBtn = screen.getAllByText('wake')[0]
-    await user.click(wakeBtn)
-    // wake mutation 被调用
-    expect(mockWakeDevice).toHaveBeenCalledWith('test-did-123')
-  })
-
-  it('disables wake button when agent offline', () => {
-    const offlineDevice: Device = {
+  it('renders sleeping device (💤) + opacity-60 when agent offline', () => {
+    const offline: Device = {
       ...mockDevice,
       agent_online: false,
       projection_status: 'agent_offline',
     }
-    render(<DeviceList devices={[offlineDevice]} onEdit={vi.fn()} />)
-    const wakeBtn = screen.getAllByText('wake')[0]
+    const { container } = render(wrap(<DeviceList devices={[offline]} onEdit={vi.fn()} />))
+    expect(screen.getByText('💤')).toBeInTheDocument()
+    expect(container.querySelector('.opacity-60')).toBeInTheDocument()
+  })
+
+  it('wake button disabled when agent offline', () => {
+    const offline: Device = {
+      ...mockDevice,
+      agent_online: false,
+      projection_status: 'agent_offline',
+    }
+    render(wrap(<DeviceList devices={[offline]} onEdit={vi.fn()} />))
+    const wakeBtn = screen.getAllByText('Wake')[0].closest('button')
     expect(wakeBtn).toBeDisabled()
   })
 
-  it('shows projection badge (synced + online → green, title agentOnline)', () => {
-    render(<DeviceList devices={[mockDevice]} onEdit={vi.fn()} />)
-    // synced device + online agent → 绿点，title 为 agentOnline
-    const badge = document.querySelector('[title="agentOnline"]')
-    expect(badge).toBeInTheDocument()
+  it('wake button enabled and triggers wake when agent online', async () => {
+    const user = userEvent.setup()
+    render(wrap(<DeviceList devices={[mockDevice]} onEdit={vi.fn()} />))
+    const wakeBtn = screen.getAllByText('Wake')[0].closest('button')!
+    expect(wakeBtn).not.toBeDisabled()
+    await user.click(wakeBtn)
+    expect(mockWakeDevice).toHaveBeenCalledWith('test-did-123')
   })
 
-  it('shows syncing projection badge (yellow) when projection_status syncing', () => {
-    const syncingDevice: Device = { ...mockDevice, projection_status: 'syncing' }
-    render(<DeviceList devices={[syncingDevice]} onEdit={vi.fn()} />)
-    const badge = document.querySelector('[title="syncing"]')
-    expect(badge).toBeInTheDocument()
+  it('calls onEdit when edit button clicked', async () => {
+    const user = userEvent.setup()
+    const onEdit = vi.fn()
+    render(wrap(<DeviceList devices={[mockDevice]} onEdit={onEdit} />))
+    await user.click(screen.getByLabelText('Edit'))
+    expect(onEdit).toHaveBeenCalledWith(mockDevice)
   })
 
-  it('shows cloud synced icon (green, title cloudSynced)', () => {
-    render(<DeviceList devices={[mockDevice]} onEdit={vi.fn()} />)
-    const cloudIcon = document.querySelector('[title="cloudSynced"]')
-    expect(cloudIcon).toBeInTheDocument()
+  it('opens L3 ConfirmDialog when delete clicked, deletes on confirm', async () => {
+    const user = userEvent.setup()
+    render(wrap(<DeviceList devices={[mockDevice]} onEdit={vi.fn()} />))
+    await user.click(screen.getByLabelText('Delete'))
+    // ConfirmDialog 打开
+    expect(screen.getByText('Delete device')).toBeInTheDocument()
+    // 确认删除
+    const confirmBtn = screen.getAllByText('Delete').find((el) => el.tagName === 'BUTTON')!
+    await user.click(confirmBtn)
+    await waitFor(() => expect(mockDeleteDevice).toHaveBeenCalledWith('test-did-123'))
   })
 
-  it('shows cloud none icon (dashed, title cloudNone) when no_integration', () => {
-    const noIntegDevice: Device = { ...mockDevice, cloud_status: 'no_integration' }
-    const { container } = render(<DeviceList devices={[noIntegDevice]} onEdit={vi.fn()} />)
-    expect(document.querySelector('[title="cloudNone"]')).toBeInTheDocument()
-    // §14.2：no_integration 徽标用虚线边框表达「未启用/虚位以待」
-    expect(container.querySelector('.border-dashed')).toBeInTheDocument()
+  it('opens §3.7 detail dialog on ··· click showing three zones + masked MAC', async () => {
+    const user = userEvent.setup()
+    render(wrap(<DeviceList devices={[mockDevice]} onEdit={vi.fn()} />))
+    await user.click(screen.getByLabelText('Device details'))
+    // 三区标题
+    expect(screen.getByText('IDENTITY')).toBeInTheDocument()
+    expect(screen.getByText('CONNECTION')).toBeInTheDocument()
+    expect(screen.getByText('CLOUD SYNC')).toBeInTheDocument()
+    // MAC 只读 + (masked) 标注
+    expect(screen.getByText(/\(masked\)/)).toBeInTheDocument()
+    // CONNECTION：agent 名
+    expect(screen.getByText('Office-Agent')).toBeInTheDocument()
+  })
+
+  it('detail dialog Edit → calls onEdit and closes detail', async () => {
+    const user = userEvent.setup()
+    const onEdit = vi.fn()
+    render(wrap(<DeviceList devices={[mockDevice]} onEdit={onEdit} />))
+    await user.click(screen.getByLabelText('Device details'))
+    // 详情面板内 Edit 入口（双入口，§3.7）
+    const detailEdit = screen
+      .getAllByRole('button', { name: /Edit/ })
+      .find((b) => b.textContent?.includes('Edit'))
+    await user.click(detailEdit!)
+    expect(onEdit).toHaveBeenCalledWith(mockDevice)
+  })
+
+  it('cloud_status=error → border-l-warning (alert state)', () => {
+    const errDevice: Device = {
+      ...mockDevice,
+      cloud_status: 'error',
+      last_error: 'topic not found',
+    }
+    const { container } = render(wrap(<DeviceList devices={[errDevice]} onEdit={vi.fn()} />))
+    expect(container.querySelector('.border-warning')).toBeInTheDocument()
   })
 
   it('renders multiple devices', () => {
@@ -118,7 +194,7 @@ describe('DeviceList', () => {
       mockDevice,
       { ...mockDevice, did: 'did2', name: 'Gaming PC', mac_display: 'BB:**:**:**:**:FF' },
     ]
-    render(<DeviceList devices={devices} onEdit={vi.fn()} />)
+    render(wrap(<DeviceList devices={devices} onEdit={vi.fn()} />))
     expect(screen.getAllByText('My NAS').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Gaming PC').length).toBeGreaterThan(0)
   })

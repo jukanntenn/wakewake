@@ -1,27 +1,40 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test/test-utils'
+import type { AdminStats } from '@/lib/api'
 
-// Mock sonner
+// Mock sonner (overview doesn't toast, but keep consistent with sibling admin tests).
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }))
 
-// Mock useAuthStore（overview 不依赖，但 layout 可能引用）
+// Mock auth store: current user is an admin (admin pages are superuser-only).
+const mockUser = { id: 1, email: 'root@x.com', is_superuser: true }
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: Object.assign(vi.fn(), {
-    getState: () => ({ token: null, refreshToken: null, user: { id: 1, is_superuser: true } }),
-  }),
+  useAuthStore: Object.assign(
+    vi.fn(() => ({ user: mockUser })),
+    {
+      getState: () => ({ token: 't', refreshToken: 'r', user: mockUser }),
+    },
+  ),
 }))
 
-const statsData = {
+// Mock useAdminStats via a module-level mutable so individual tests can set the
+// return value without vi.resetModules/vi.doMock ceremony.
+let mockStats: AdminStats | undefined = undefined
+let mockIsLoading = false
+vi.mock('@/hooks/useAdmin', () => ({
+  useAdminStats: () => ({ data: mockStats, isLoading: mockIsLoading }),
+}))
+
+const healthyStats: AdminStats = {
   users: 5,
   active_users: 4,
   devices: 3,
   agents: 2,
   integrations: 1,
   wakes: 10,
-  devices_syncing: 1,
+  devices_syncing: 0,
   devices_sync_error: 0,
   online_agents: 1,
 }
@@ -29,69 +42,71 @@ const statsData = {
 describe('Admin overview page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.resetModules()
+    mockStats = healthyStats
+    mockIsLoading = false
   })
 
-  it('渲染 stats 卡片 + 各计数', async () => {
-    vi.doMock('@/hooks/useAdmin', () => ({
-      useAdminStats: () => ({ data: statsData, isLoading: false }),
-      useAuditLog: () => ({ data: { items: [], page_size: 10, total: 0 } }),
-    }))
+  it('renders the Admin title', async () => {
     const { default: AdminPage } = await import('./page')
     renderWithProviders(<AdminPage />)
-    // statUsers: 'Total users' 旁边渲染 5
-    expect(screen.getByText('5')).toBeInTheDocument()
-    expect(screen.getByText('10')).toBeInTheDocument() // wakes
-    expect(screen.getByText('Total users')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Admin' })).toBeInTheDocument()
   })
 
-  it('devices_sync_error > 0 时显示 attention 告警卡', async () => {
-    vi.doMock('@/hooks/useAdmin', () => ({
-      useAdminStats: () => ({ data: { ...statsData, devices_sync_error: 2 }, isLoading: false }),
-      useAuditLog: () => ({ data: { items: [], page_size: 10, total: 0 } }),
-    }))
+  it('renders management entry links', async () => {
     const { default: AdminPage } = await import('./page')
     renderWithProviders(<AdminPage />)
-    expect(screen.getByText('attention')).toBeInTheDocument()
+    // 治理层
+    expect(screen.getByRole('link', { name: /User Management/ })).toHaveAttribute(
+      'href',
+      '/admin/users',
+    )
+    expect(screen.getByRole('link', { name: /Activity/ })).toHaveAttribute(
+      'href',
+      '/admin/activity',
+    )
+    // 运维层
+    expect(screen.getByRole('link', { name: /^Devices/ })).toHaveAttribute('href', '/admin/devices')
+    expect(screen.getByRole('link', { name: /^Agents/ })).toHaveAttribute('href', '/admin/agents')
+    expect(screen.getByRole('link', { name: /Integrations/ })).toHaveAttribute(
+      'href',
+      '/admin/integrations',
+    )
+    expect(screen.getByRole('link', { name: /Wakes/ })).toHaveAttribute('href', '/admin/wakes')
+    // 系统层
+    expect(screen.getByRole('link', { name: /Maintenance/ })).toHaveAttribute(
+      'href',
+      '/admin/maintenance',
+    )
   })
 
-  it('加载中显示 loading 文案', async () => {
-    vi.doMock('@/hooks/useAdmin', () => ({
-      useAdminStats: () => ({ data: undefined, isLoading: true }),
-      useAuditLog: () => ({ data: undefined }),
-    }))
+  it('healthy state shows success indicator and stats counts', async () => {
     const { default: AdminPage } = await import('./page')
     renderWithProviders(<AdminPage />)
-    expect(screen.getByText('Loading...')).toBeInTheDocument()
+    expect(screen.getByText('All systems operational')).toBeInTheDocument()
+    // 用户/活跃计数
+    expect(screen.getByText(/5/)).toBeInTheDocument()
+    expect(screen.getByText(/4 active/)).toBeInTheDocument()
   })
 
-  it('最近审计日志渲染', async () => {
-    vi.doMock('@/hooks/useAdmin', () => ({
-      useAdminStats: () => ({ data: statsData, isLoading: false }),
-      useAuditLog: () => ({
-        data: {
-          items: [
-            {
-              id: 1,
-              actor_id: 1,
-              actor_email: 'admin@x.com',
-              action: 'user.disable',
-              target_user_id: 5,
-              target_agent_id: null,
-              target_device_did: null,
-              detail: {},
-              created_at: '2026-08-03T00:00:00Z',
-            },
-          ],
-          page_size: 10,
-          total: 1,
-        },
-      }),
-    }))
+  it('shows warning indicator when devices_sync_error > 0', async () => {
+    mockStats = { ...healthyStats, devices_sync_error: 2 }
     const { default: AdminPage } = await import('./page')
     renderWithProviders(<AdminPage />)
-    expect(screen.getByText('admin@x.com')).toBeInTheDocument()
-    expect(screen.getByText('user.disable')).toBeInTheDocument()
-    expect(screen.getByText(/user#5/)).toBeInTheDocument()
+    // 告警跳转链接：文本包含 "2 device sync errors"，href 含 cloud_status=error
+    const errorLink = screen.getByRole('link', { name: /2 device sync errors/ })
+    expect(errorLink).toHaveAttribute('href', '/admin/devices?cloud_status=error')
+    // 健康态文案不应出现
+    expect(screen.queryByText('All systems operational')).not.toBeInTheDocument()
+    // 健康仪表盘存在一个 warning 色的 StatusIndicator（圆点 bg-warning）
+    expect(document.querySelector('.bg-warning')).toBeInTheDocument()
+  })
+
+  it('shows skeleton while loading', async () => {
+    mockStats = undefined
+    mockIsLoading = true
+    const { default: AdminPage } = await import('./page')
+    const { container } = renderWithProviders(<AdminPage />)
+    expect(screen.getByRole('heading', { level: 1, name: 'Admin' })).toBeInTheDocument()
+    expect(container.querySelector('.animate-pulse')).toBeInTheDocument()
   })
 })

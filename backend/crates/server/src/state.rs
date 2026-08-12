@@ -14,6 +14,7 @@ use crate::integrations::ProviderRegistry;
 use crate::service::command_handler::WakeWriter;
 use crate::service::login_lockout::LoginLockout;
 use crate::service::mailer_service::MailerService;
+use crate::service::maintenance::MaintenanceHandle;
 use crate::service::pow::PowService;
 use wakewake_protocol::StateSnapshot;
 
@@ -33,6 +34,8 @@ pub struct AppState {
     /// 5s TTL 是 DB 压力与禁用生效延迟的折中：管理员禁用后最长 5s 内旧 access token 仍可用。
     pub user_active_cache: Cache<i64, bool, Xxh3DefaultBuilder>,
     pub wake_writer: WakeWriter,
+    /// 维护模式运行态（可变，支持 POST /admin/maintenance 实时切换）。
+    pub maintenance: MaintenanceHandle,
 }
 
 impl AppState {
@@ -47,6 +50,7 @@ impl AppState {
         pow: PowService,
         login_lockout: LoginLockout,
         wake_writer: WakeWriter,
+        maintenance: MaintenanceHandle,
     ) -> Self {
         Self {
             pool: Arc::new(pool),
@@ -67,6 +71,7 @@ impl AppState {
                 .max_capacity(100_000)
                 .build_with_hasher(Xxh3DefaultBuilder::new()),
             wake_writer,
+            maintenance,
         }
     }
 }

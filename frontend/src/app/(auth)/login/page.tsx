@@ -32,7 +32,7 @@ export default function LoginPage() {
     try {
       const resp = await api.auth.login({ email, password })
       setAuth(resp.access_token, resp.user, resp.refresh_token)
-      router.replace('/dashboard')
+      router.replace('/devices')
     } catch (err) {
       const code = err instanceof ApiError ? err.code : 'INTERNAL_ERROR'
       // 未验证邮箱 → 引导到 check-email 页（携带 email 供 resend 预填）。

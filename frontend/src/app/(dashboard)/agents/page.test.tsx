@@ -78,19 +78,22 @@ describe('AgentStatus (agents page) — copy & rotate', () => {
     expect(toast.success).not.toHaveBeenCalled()
   })
 
-  it('rotate: success + copy success → toast.success + toast.message(newCode)', async () => {
+  it('rotate: L2 two-step → first click arms, second click executes + copy success', async () => {
     mockRotate.mockResolvedValue({ pairing_code: 'newcode1234567890' })
     mockCopyText.mockResolvedValue(true)
-    // confirm() 在 jsdom 默认返回 true（不弹真实对话框）
     HTMLDialogElement.prototype.showModal = vi.fn()
-    window.confirm = vi.fn(() => true)
     const { default: AgentsPage } = await import('./page')
     renderWithProviders(<AgentsPage />)
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: 'Rotate Code' }))
+    const rotateBtn = screen.getByRole('button', { name: 'Rotate Code' })
+    // 第一次点击：armed（不执行 rotate）
+    await user.click(rotateBtn)
+    expect(mockRotate).not.toHaveBeenCalled()
 
-    // 等异步 mutateAsync 完成
+    // 第二次点击：执行（3s 窗口内）
+    await user.click(rotateBtn)
+
     await vi.waitFor(() => {
       expect(mockRotate).toHaveBeenCalled()
     })
@@ -101,15 +104,17 @@ describe('AgentStatus (agents page) — copy & rotate', () => {
     expect(toast.message).toHaveBeenCalledWith('New code copied to clipboard')
   })
 
-  it('rotate: success + copy fail → toast.warning (不再静默吞错)', async () => {
+  it('rotate: L2 two-step → success + copy fail → toast.warning', async () => {
     mockRotate.mockResolvedValue({ pairing_code: 'newcode1234567890' })
     mockCopyText.mockResolvedValue(false)
-    window.confirm = vi.fn(() => true)
     const { default: AgentsPage } = await import('./page')
     renderWithProviders(<AgentsPage />)
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: 'Rotate Code' }))
+    const rotateBtn = screen.getByRole('button', { name: 'Rotate Code' })
+    // 两步点击
+    await user.click(rotateBtn)
+    await user.click(rotateBtn)
 
     await vi.waitFor(() => {
       expect(mockCopyText).toHaveBeenCalledWith('newcode1234567890')

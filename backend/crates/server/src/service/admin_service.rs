@@ -62,7 +62,12 @@ async fn audit(
 ///
 /// 状态机：对已禁用用户再次 disable 返 409 SYNCING（幂等拒绝，api-design.md §admin）。
 /// 已签发的 access token（15min TTL）失效由 JWT 中间件 `is_active` 查询兜底（5s moka 缓存）。
-pub async fn disable_user(state: &AppState, actor_id: i64, user_id: i64) -> AppResult<User> {
+pub async fn disable_user(
+    state: &AppState,
+    actor_id: i64,
+    user_id: i64,
+    reason: Option<&str>,
+) -> AppResult<User> {
     // 状态机校验：当前已禁用 → 409 SYNCING（幂等拒绝）
     let current = user_repo::find_by_id(&state.pool, user_id)
         .await
@@ -72,8 +77,8 @@ pub async fn disable_user(state: &AppState, actor_id: i64, user_id: i64) -> AppR
         return Err(AppError::code(ErrorCode::Syncing));
     }
 
-    // 1. 写 is_active=false + disabled_at
-    let user = user_repo::set_active(&state.pool, user_id, false)
+    // 1. 写 is_active=false + disabled_at + disabled_reason + disabled_by（§8.2）
+    let user = user_repo::disable_with_reason(&state.pool, user_id, reason, actor_id)
         .await
         .map_err(AppError::from_repo)?
         .ok_or(AppError::code(ErrorCode::UserNotFound))?;
@@ -84,8 +89,6 @@ pub async fn disable_user(state: &AppState, actor_id: i64, user_id: i64) -> AppR
         .map_err(AppError::from_repo)?;
 
     // 3. 断开 agent SSE 连接（1:1 模型，按 user_id 找 agent_id）
-    //    agent 收到流结束按既定退避重连，重连时 pairing_code 中间件 JOIN users
-    //    查到 is_active=false → 401 USER_DISABLED → agent 立即终止（不重连）。
     if let Some(agent_id) = agent_repo::find_agent_id_by_user(&state.pool, user_id)
         .await
         .map_err(AppError::from_repo)?
@@ -93,9 +96,9 @@ pub async fn disable_user(state: &AppState, actor_id: i64, user_id: i64) -> AppR
         state.hub.unsubscribe(agent_id);
     }
 
-    // 失效 is_active moka 缓存（让 JWT 中间件下次查询走 DB，5s 内不必等）
     state.user_active_cache.invalidate(&user_id).await;
 
+    let detail = serde_json::json!({ "reason": reason });
     audit(
         &state.pool,
         actor_id,
@@ -103,7 +106,7 @@ pub async fn disable_user(state: &AppState, actor_id: i64, user_id: i64) -> AppR
         Some(user_id),
         None,
         None,
-        &serde_json::json!({}),
+        &detail,
     )
     .await;
 
@@ -230,14 +233,15 @@ pub async fn verify_email(state: &AppState, actor_id: i64, user_id: i64) -> AppR
     Ok(())
 }
 
-/// 列用户（分页 + `is_active` 过滤，GET /admin/users）。
+/// 列用户（分页 + `is_active` 过滤 + email 前缀搜索 `q`，GET /admin/users，§11.C.4）。
 pub async fn list_users(
     pool: &PgPool,
     is_active: Option<bool>,
+    q: Option<&str>,
     page: i64,
     page_size: i64,
 ) -> AppResult<(Vec<User>, i64)> {
-    let (items, total) = user_repo::list_for_admin(pool, is_active, page, page_size).await?;
+    let (items, total) = user_repo::list_for_admin(pool, is_active, q, page, page_size).await?;
     Ok((items, total))
 }
 
@@ -246,9 +250,11 @@ pub async fn list_users(
 // ============================================================================
 
 pub use admin_repo::{
-    AdminActionRow, AdminAgentRow, AdminDeviceRow, AdminWakeRow, GlobalStats, count_actions,
-    count_all_agents, count_all_devices, count_all_wakes, global_stats, list_actions,
-    list_all_agents, list_all_devices, list_all_wakes,
+    ActivityRow, AdminActionRow, AdminAgentRow, AdminDeviceRow, AdminIntegrationRow, AdminWakeRow,
+    GlobalStats, count_actions, count_activity, count_all_agents, count_all_devices,
+    count_all_integrations, count_all_wakes, count_all_wakes_offset, global_stats, list_actions,
+    list_activity, list_all_agents, list_all_devices, list_all_integrations, list_all_wakes,
+    list_all_wakes_offset,
 };
 
 // ============================================================================

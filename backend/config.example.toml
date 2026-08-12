@@ -29,6 +29,30 @@ public_url = "https://wakewake.app"
 # [server]
 # port = 8080
 
+# [OPTIONAL] 信任反代头（X-Forwarded-For / X-Real-IP）
+# true（默认）：从 XFF 最左取真实客户端 IP（反代场景，如 Caddy/Nginx）
+# false：用 TCP 对端地址（直连部署，防 XFF 伪造）
+# Env: WAKEWAKE_SERVER__TRUST_PROXY
+# Default: true
+# [server]
+# trust_proxy = true
+
+# ============================================================
+# Maintenance（维护模式，ui-ux-risk-control §8.4）
+# ============================================================
+# 运维状态：紧急止血用。启用后按 mode 拦截请求（admin 始终放行）。
+# 运行时可通过 POST /admin/maintenance 实时切换（持久化到 data/maintenance.json）。
+#
+# mode:
+#   registration_disabled — 禁止注册，其余正常
+#   readonly              — 禁所有写操作，GET 放行
+#   full                  — 非 admin 全部拒绝
+#
+# [maintenance]
+# enabled = false
+# mode = "registration_disabled"
+# message = "Scheduled maintenance in progress"
+
 # ============================================================
 # Database
 # ============================================================

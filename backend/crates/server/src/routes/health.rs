@@ -11,10 +11,22 @@ use serde_json::json;
 use crate::state::AppState;
 
 pub fn routes() -> Router<Arc<AppState>> {
-    Router::new().route("/health", get(health))
+    Router::new()
+        .route("/health", get(health))
+        // 维护状态（ui-ux-risk-control §2.4，前端横幅用，公开端点）。
+        .route("/health/maintenance", get(maintenance_status))
 }
 
 async fn health(State(_state): State<Arc<AppState>>) -> (StatusCode, Json<serde_json::Value>) {
     // 不查 DB（LB / Docker healthcheck 用）。
     (StatusCode::OK, Json(json!({"status": "ok"})))
+}
+
+async fn maintenance_status(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
+    let m = state.maintenance.snapshot();
+    Json(json!({
+        "enabled": m.enabled,
+        "mode": m.mode.as_str(),
+        "message": m.message,
+    }))
 }

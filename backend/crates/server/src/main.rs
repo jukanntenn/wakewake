@@ -108,6 +108,35 @@ async fn run_server(cli: Cli) -> anyhow::Result<()> {
     });
 
     let addr: SocketAddr = format!("{}:{}", settings.server.host, settings.server.port).parse()?;
+
+    // 维护模式运行态（从 data/maintenance.json 恢复，或用配置默认值）。
+    let maintenance_path = std::path::PathBuf::from("data/maintenance.json");
+    let maintenance = wakewake_server::service::maintenance::MaintenanceHandle::load_or_init(
+        settings.maintenance.enabled,
+        settings.maintenance.mode,
+        &settings.maintenance.message,
+        maintenance_path,
+    );
+
+    // login_events 清理任务（24h 周期，删 30 天前记录，ui-ux-risk-control §8.3）。
+    let cleanup_pool = pool.clone();
+    tokio::spawn(async move {
+        // 24h login_events 清理周期（§8.3）。
+        #[allow(clippy::duration_suboptimal_units)]
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(86_400));
+        loop {
+            interval.tick().await;
+            if let Err(e) = sqlx::query(
+                "DELETE FROM login_events WHERE created_at < now() - interval '30 days'",
+            )
+            .execute(&cleanup_pool)
+            .await
+            {
+                tracing::warn!(error = ?e, "login_events cleanup failed");
+            }
+        }
+    });
+
     let state = Arc::new(AppState::new(
         pool,
         settings.clone(),
@@ -117,6 +146,7 @@ async fn run_server(cli: Cli) -> anyhow::Result<()> {
         pow,
         login_lockout,
         wake_tx,
+        maintenance,
     ));
 
     let app = build_router(state.clone(), Arc::new(settings));
@@ -142,18 +172,31 @@ fn build_router(state: Arc<AppState>, settings: Arc<Settings>) -> Router {
     // rate_limit.disabled=true（e2e.md §2.5/§4.6 + load.md §9.2）：旁路 governor 速率限制。
     // 仅旁路 per-IP/per-user 频率，不旁路业务配额（MAX_DEVICES_PER_USER 等硬编码 const）。
     let rate_limit_disabled = settings.rate_limit.disabled;
+    // 限流 key 口径（A-05B）：trust_proxy=true 时读 XFF 首跳，与 §11.C.2 extract_client_ip 对齐。
+    let trust_proxy = settings.server.trust_proxy;
 
     // 公开认证端点（per-IP 限流：register/login/refresh 10/min、password-reset 3/hour）。
-    let public_auth = routes::auth::routes_with_rate_limit(rate_limit_disabled);
+    // 维护中间件挂 public_auth 域：拦截 register（§0.4）。
+    let public_auth = routes::auth::routes_with_rate_limit(rate_limit_disabled, trust_proxy).layer(
+        from_fn_with_state(
+            state.clone(),
+            wakewake_server::middleware::maintenance::maintenance_public,
+        ),
+    );
 
     // JWT 域（浏览器用户端点）。
     // jwt_middleware 现在用 State<Arc<AppState>>（is_active moka 缓存，authentication.md §十）。
+    // 维护中间件挂 jwt_routes 域（jwt_middleware 之后，AuthUser 已可用）：拦截 readonly 写方法 / full 非管理员全部（§0.4）。
     let jwt_routes = routes::user::routes()
         .merge(routes::devices::routes())
         .merge(routes::agents::routes())
         .merge(routes::integrations::routes())
         .merge(routes::commands::routes())
         .merge(routes::wakes::routes())
+        .layer(from_fn_with_state(
+            state.clone(),
+            wakewake_server::middleware::maintenance::maintenance_jwt,
+        ))
         .layer(from_fn_with_state(state.clone(), jwt_middleware));
 
     // Admin 域（JWT + superuser 守卫，api-design.md §admin）。

@@ -50,6 +50,35 @@ pub fn build_absolute_url(base: &str, path: &str, query: &[(&str, &str)]) -> Opt
     Some(url)
 }
 
+/// 从请求头提取真实客户端 IP（ui-ux-risk-control §11.C.2，反代场景）。
+///
+/// 优先级：X-Forwarded-For 最左 → X-Real-IP → TCP 对端。
+/// `trust_proxy=false` 时跳过 XFF/X-Real-IP，直接用 TCP 对端（防伪造）。
+/// XFF 格式："203.0.113.8, 10.0.0.1" → 取最左（最原始客户端）。
+#[must_use]
+pub fn extract_client_ip(
+    xff: Option<&str>,
+    x_real_ip: Option<&str>,
+    peer: std::net::SocketAddr,
+    trust_proxy: bool,
+) -> Option<std::net::IpAddr> {
+    if trust_proxy {
+        if let Some(xff) = xff {
+            if let Some(first) = xff.split(',').next() {
+                if let Ok(ip) = first.trim().parse::<std::net::IpAddr>() {
+                    return Some(ip);
+                }
+            }
+        }
+        if let Some(real) = x_real_ip {
+            if let Ok(ip) = real.trim().parse::<std::net::IpAddr>() {
+                return Some(ip);
+            }
+        }
+    }
+    Some(peer.ip())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -131,5 +160,47 @@ mod tests {
         assert_eq!(build_absolute_url("example.com", "/p", &[]), None);
         assert_eq!(build_absolute_url("/relative", "/p", &[]), None);
         assert_eq!(build_absolute_url("", "/p", &[]), None);
+    }
+
+    #[test]
+    fn extract_client_ip_xff_first() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+        let peer: SocketAddr = "10.0.0.1:1234".parse().unwrap();
+        let ip = extract_client_ip(Some("203.0.113.8, 10.0.0.1"), None, peer, true);
+        assert_eq!(ip, Some(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 8))));
+    }
+
+    #[test]
+    fn extract_client_ip_x_real_ip_fallback() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+        let peer: SocketAddr = "10.0.0.1:1234".parse().unwrap();
+        let ip = extract_client_ip(None, Some("198.51.100.5"), peer, true);
+        assert_eq!(ip, Some(IpAddr::V4(Ipv4Addr::new(198, 51, 100, 5))));
+    }
+
+    #[test]
+    fn extract_client_ip_no_trust_falls_back_to_peer() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+        let peer: SocketAddr = "10.0.0.1:1234".parse().unwrap();
+        // trust_proxy=false → 忽略 XFF，用 peer
+        let ip = extract_client_ip(Some("203.0.113.8"), None, peer, false);
+        assert_eq!(ip, Some(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1))));
+    }
+
+    #[test]
+    fn extract_client_ip_no_headers_uses_peer() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+        let peer: SocketAddr = "192.168.1.1:80".parse().unwrap();
+        let ip = extract_client_ip(None, None, peer, true);
+        assert_eq!(ip, Some(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1))));
+    }
+
+    #[test]
+    fn extract_client_ip_invalid_xff_falls_back() {
+        use std::net::SocketAddr;
+        let peer: SocketAddr = "10.0.0.1:1234".parse().unwrap();
+        // XFF 非 IP 格式 → 跳过，回退 peer
+        let ip = extract_client_ip(Some("not-an-ip"), None, peer, true);
+        assert!(ip.is_some());
     }
 }

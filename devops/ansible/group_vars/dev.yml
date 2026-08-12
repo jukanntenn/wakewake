@@ -4,7 +4,7 @@
 # 在内网可用）。崩了无所谓。
 
 env: dev
-image_tag: dev
+image_tag: main
 registry: "192.168.5.50:5000"
 image: "{{ registry }}/wakewake:{{ image_tag }}"
 

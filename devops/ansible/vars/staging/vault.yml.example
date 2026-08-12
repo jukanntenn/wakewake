@@ -1,0 +1,23 @@
+# staging vault 模板。
+#
+# 用法：复制为 vault.yml，填入真实值，然后加密：
+#   cp vars/staging/vault.yml.example vars/staging/vault.yml
+#   # 编辑填入真实 secrets
+#   ansible-vault encrypt vars/staging/vault.yml --vault-password-file ~/.ansible-vault/wakewake-staging.pwd
+#
+# 真实的 vault.yml 已被 .gitignore 忽略（devops/ansible/vars/*/vault.yml），
+# 切勿提交明文 secrets。本 .example 文件入库作为字段清单。
+
+# PostgreSQL 密码（与 docker-compose.yml.j2 的 postgres POSTGRES_PASSWORD 同源）。
+# 生成：openssl rand -base64 24
+db_password: "CHANGE_ME_staging_db_password"
+
+# JWT 签名密钥（≥32 字节）。生成：openssl rand -base64 32
+jwt_signing_key: "CHANGE_ME_staging_jwt_signing_key_padding_32"
+jwt_refresh_signing_key: "CHANGE_ME_staging_jwt_refresh_key_padding_32"
+
+# 无状态密码重置 token 的 HMAC 密钥。生成：openssl rand -base64 32
+password_reset_secret: "CHANGE_ME_staging_password_reset_secret_32"
+
+# 邮件 SMTP 密码（仅 group_vars/staging.yml 的 mailer_enabled=true 时需要）。
+# mailer_smtp_password: "CHANGE_ME_staging_smtp_password"

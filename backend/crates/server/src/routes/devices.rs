@@ -37,6 +37,10 @@ pub struct DeviceResponse {
     pub mac_display: String,
     pub description: Option<String>,
     pub agent_online: bool,
+    /// §3.7 设备详情面板 CONNECTION 区：所属 agent 名称（agent 行缺失时为 None）。
+    pub agent_name: Option<String>,
+    /// §3.7 设备详情面板 CONNECTION 区：所属 agent 最近在线时间（Rfc3339）。
+    pub agent_last_seen: Option<String>,
     pub projection_status: String,
     pub cloud_status: String,
     pub cloud_observed_name: Option<String>,
@@ -59,20 +63,32 @@ impl DeviceResponse {
         bemfa_present_enabled: bool,
     ) -> Self {
         use time::format_description::well_known::Rfc3339;
-        // 派生 agent_online + projection_status
+        // 派生 agent_online + projection_status + agent_name/last_seen（§3.7 详情面板）
         let agent_online = state.hub.is_online(d.agent_id);
-        let (proj_status, agent_online) = match agent_repo::find_by_id(&state.pool, d.agent_id)
-            .await
-            .ok()
-            .flatten()
-        {
-            Some(agent) => {
-                let acked = hub::acked_version(&state.hub, d.agent_id).unwrap_or(0);
-                let ps = projection_status(agent_online, acked, agent.projection_version);
-                (ps.as_str().to_string(), agent_online)
-            },
-            None => (ProjectionStatus::AgentOffline.as_str().to_string(), false),
-        };
+        let (proj_status, agent_online, agent_name, agent_last_seen) =
+            match agent_repo::find_by_id(&state.pool, d.agent_id)
+                .await
+                .ok()
+                .flatten()
+            {
+                Some(agent) => {
+                    let acked = hub::acked_version(&state.hub, d.agent_id).unwrap_or(0);
+                    let ps = projection_status(agent_online, acked, agent.projection_version);
+                    let seen = agent.last_seen.and_then(|t| t.format(&Rfc3339).ok());
+                    (
+                        ps.as_str().to_string(),
+                        agent_online,
+                        Some(agent.name),
+                        seen,
+                    )
+                },
+                None => (
+                    ProjectionStatus::AgentOffline.as_str().to_string(),
+                    false,
+                    None,
+                    None,
+                ),
+            };
 
         // 派生 cloud_status（§8.3）
         let cs = cloud_status(
@@ -90,6 +106,8 @@ impl DeviceResponse {
             mac_display: d.mac_display.clone(),
             description: d.description.clone(),
             agent_online,
+            agent_name,
+            agent_last_seen,
             projection_status: proj_status,
             cloud_status: cs.as_str().to_string(),
             cloud_observed_name: d.bemfa_observed_name.clone(),

@@ -14,30 +14,56 @@
 #   - Caddy tls internal（自签名）  vs.  真实证书
 # 其余（PG 兄弟容器、Unix-socket 连接、GUC 调优、healthcheck）与生产完全一致。
 #
-# 类似 e2e，本地验收不持久化数据：app data 目录和 PG 数据全在 ephemeral
-# 容器内，down -v 即得干净环境。仅 postgres-socket IPC 卷在服务间共享。
+# 本地验收不持久化数据：app data 目录和 PG 数据全在 ephemeral 容器内，
+# down -v 即得干净环境。仅 postgres-socket IPC 卷在服务间共享。
 #
-# 配置走文件挂载（../.local/config.acceptance.toml），对齐 markpost 的验收路径。
-# 密码重置验收用 mailpit（profile mail）；bemfa mock 用 mosquitto（profile bemfa）：
-#   docker compose -f docker/docker-compose.local.yml --profile mail up -d --build
+# 变更联动矩阵（改 A 处必须同步 B/C 处，各点注释互相引用）：
+#   POSTGRES_DB/USER/PASSWORD：postgres environment ↔ app WAKEWAKE_DATABASE__DSN
+#     ↔ postgres healthcheck ↔ config.local.toml [database] dsn（文档默认）
+#   容器内 8443（不变量）：Caddyfile.local 监听 ↔ app healthcheck curl
+#   APP_PORT（宿主端口）：ports ↔ WAKEWAKE_APP__PUBLIC_URL（同一插值源）
+#   服务名 app / mailpit：被 Caddyfile.local SAN / config.local.toml smtp_host 引用
+#   8080（不变量）：config.local.toml [server] port ↔ Caddyfile.local、内置 Caddyfile 的 reverse_proxy
+#   /var/run/postgresql（不变量）：postgres 镜像默认 socket 目录 ↔ 双卷挂载 ↔ healthcheck -h ↔ DSN host=
+#
+# 配置走文件挂载：./config.local.toml → /app/config.toml（server 默认读取路径）。
+# 该文件含全部配置项与说明，初始为默认值/占位符；已在 .gitignore /
+# .dockerignore 中（*.local.toml），不入库。
+#
+# 无 mock 服务：mailpit 是真实 SMTP 服务器 + 邮件捕获（密码重置/邮件验证
+# 验收），默认启动；bemfa 等集成走真实云端（agent 侧 env 默认指向 bemfa.com）。
+
+name: wakewake-local
 
 services:
   app:
+    # 服务名被 Caddyfile.local 的 SAN（app:8443）引用（docker DNS），改名必须同步。
+    image: wakewake:local
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: wakewake-acceptance
+    container_name: wakewake-local
     ports:
-      - "8443:8443"
+      # 宿主侧端口（.env: APP_PORT），与下方 WAKEWAKE_APP__PUBLIC_URL 同一插值源，改只改 APP_PORT。
+      # 容器内 Caddy 仍固定监听 8443（不变量，见 Caddyfile.local 监听 + 本服务 healthcheck curl）。
+      - "${APP_PORT:-8443}:8443"
+    environment:
+      # DSN 单一来源（.env 可覆盖）。改 DB 名/用户/密码必须同步：
+      # postgres 服务 environment、postgres healthcheck pg_isready、config.local.toml [database] dsn（文档默认）。
+      - WAKEWAKE_DATABASE__DSN=postgres:///${POSTGRES_DB:-wakewake_local}?host=/var/run/postgresql&user=${POSTGRES_USER:-wakewake}&password=${POSTGRES_PASSWORD:-wakewake}&sslmode=disable
+      # 邮件链接入口，与 ports 的 APP_PORT 同源（改端口只改 APP_PORT）。
+      - WAKEWAKE_APP__PUBLIC_URL=https://localhost:${APP_PORT:-8443}
     volumes:
-      - ../.local/config.acceptance.toml:/app/config.toml:ro
+      - ./config.local.toml:/app/config.toml:ro
       # s6 caddy run 脚本固定读 /app/Caddyfile。
       - ./Caddyfile.local:/app/Caddyfile:ro
+      # socket 目录 = postgres 镜像默认（不变量）：postgres 服务同款挂载 + healthcheck -h + DSN host= 共用，改需全部同步。
       - postgres-socket:/var/run/postgresql
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
+      # 容器内打 Caddy 8443：与 Caddyfile.local 监听端口互为同步点（不变量，改需两处一起改）。
       test: ["CMD", "curl", "-f", "-k", "https://localhost:8443/api/v1/health"]
       interval: 10s
       timeout: 5s
@@ -52,11 +78,13 @@ services:
 
   postgres:
     image: postgres:17-alpine
-    container_name: wakewake-acceptance-postgres
+    container_name: wakewake-local-postgres
     environment:
-      - POSTGRES_DB=wakewake_acceptance
-      - POSTGRES_USER=wakewake
-      - POSTGRES_PASSWORD=test
+      # DB 名/用户/密码单一来源（.env 可覆盖）。改这里必须同步：
+      # app 服务 WAKEWAKE_DATABASE__DSN、本服务 healthcheck pg_isready、config.local.toml [database] dsn（文档默认）。
+      - POSTGRES_DB=${POSTGRES_DB:-wakewake_local}
+      - POSTGRES_USER=${POSTGRES_USER:-wakewake}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-wakewake}
     # 与生产一致的 5 个 GUC 覆盖，作 -c 旗标施加（不动镜像默认 postgresql.conf）。
     # socket 目录保持镜像默认 /var/run/postgresql（entrypoint 拥有权限）。
     command:
@@ -72,9 +100,11 @@ services:
       - -c
       - synchronous_commit=off
     volumes:
+      # socket 目录不变量：与 app 服务同款挂载、healthcheck -h、DSN host= 共用，改需全部同步。
       - postgres-socket:/var/run/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h /var/run/postgresql -U wakewake"]
+      # -U/-d 与上方 POSTGRES_USER/DB 同源（.env 覆盖）；漏同步会探测不存在的库 → postgres 日志刷 FATAL 噪音。
+      test: ["CMD-SHELL", "pg_isready -h /var/run/postgresql -U ${POSTGRES_USER:-wakewake} -d ${POSTGRES_DB:-wakewake_local}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -85,24 +115,14 @@ services:
         max-file: "3"
     restart: unless-stopped
 
-  # mailpit：密码重置验收（profiles: [mail]）。
+  # mailpit：真实 SMTP 服务器 + Web UI/API 邮件捕获（端口 8025）。
+  # backend [mailer] 指向 mailpit:1025（见 config.local.toml）。
+  # 服务名被 config.local.toml [mailer] smtp_host 引用（docker DNS），改名必须同步。
   mailpit:
     image: axllent/mailpit:latest
+    container_name: wakewake-local-mailpit
     ports:
-      - "8025:8025" # API（取邮件用）
-    profiles:
-      - mail
-
-  # mosquitto：bemfa MQTT mock（profiles: [bemfa]）。
-  # mosquitto 2.x 默认 deny anonymous，需 allow_anonymous true + listener 1883。
-  mosquitto:
-    image: eclipse-mosquitto:2
-    entrypoint: /bin/sh
-    command: ["-c", "printf 'allow_anonymous true\nlistener 1883\n' > /tmp/m.conf && exec mosquitto -c /tmp/m.conf -v"]
-    ports:
-      - "1884:1883"
-    profiles:
-      - bemfa
+      - "8025:8025"
 
 volumes:
   postgres-socket:

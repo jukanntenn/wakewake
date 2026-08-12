@@ -39,6 +39,8 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
     loadMessages(detected).then((m) => {
       setLocaleState(detected)
       setMessages(m)
+      // §7.4：首次自动检测路径同步 <html lang>（修复首屏 lang 错误窗口）。
+      document.documentElement.lang = detected
     })
   }, [])
 

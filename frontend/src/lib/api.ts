@@ -42,6 +42,8 @@ export interface AdminUser {
   email: string
   is_active: boolean
   disabled_at: string | null
+  disabled_reason: string | null
+  disabled_by: number | null
   is_superuser: boolean
   email_verified: boolean
   last_login: string | null
@@ -114,6 +116,42 @@ export interface AuditLogEntry {
   created_at: string
 }
 
+// Admin 跨用户 integration（ui-ux-risk-control §9.8）。
+export interface AdminIntegration {
+  id: number
+  provider: string
+  user_id: number
+  user_email: string
+  status: Integration['status']
+  mqtt_connected: boolean
+  last_error: string | null
+  last_report_at: string | null
+  created_at: string
+}
+
+// Activity 统一时间线项（ui-ux-risk-control §0.3）。
+export interface ActivityItem {
+  kind: 'login' | 'audit'
+  created_at: string
+  actor_id: number | null
+  actor_label: string
+  action: string
+  detail: {
+    ip: string | null
+    user_agent: string | null
+    failure_code: string | null
+    target: string | null
+    reason: string | null
+  }
+}
+
+// 维护模式状态（ui-ux-risk-control §8.4/§9.10）。
+export interface MaintenanceStatus {
+  enabled: boolean
+  mode: 'registration_disabled' | 'readonly' | 'full'
+  message: string
+}
+
 export interface AuthResponse {
   access_token: string
   refresh_token: string
@@ -128,6 +166,10 @@ export interface Device {
   description: string | null
   /** device-sync-v3 §8.3：设备所属 agent 是否在线（hub 连接表）。 */
   agent_online: boolean
+  /** §3.7 详情面板 CONNECTION 区：所属 agent 名称（agent 行缺失时为 null）。 */
+  agent_name: string | null
+  /** §3.7 详情面板 CONNECTION 区：所属 agent 最近在线时间（Rfc3339）。 */
+  agent_last_seen: string | null
   /** §8.3 投影同步状态（syncing | synced | agent_offline）。 */
   projection_status: 'syncing' | 'synced' | 'agent_offline'
   /** §8.3 云端 topic 对账状态（not_observed | syncing | synced | error | no_integration）。 */
@@ -328,10 +370,10 @@ function buildQuery(params?: Record<string, unknown>): string {
 
 export const api = {
   auth: {
-    register: (data: { email: string; password: string }) =>
-      request<User>('/auth/register', { method: 'POST', body: data }),
+    register: (data: { email: string; password: string; challenge: string; nonce: string }) =>
+      request<User>('/auth/register', { method: 'POST', body: data, skipAuthRefresh: true }),
     login: (data: { email: string; password: string }) =>
-      request<AuthResponse>('/auth/login', { method: 'POST', body: data }),
+      request<AuthResponse>('/auth/login', { method: 'POST', body: data, skipAuthRefresh: true }),
     refresh: (refreshToken: string) =>
       request<Pick<AuthResponse, 'access_token' | 'refresh_token' | 'expires_in'>>(
         '/auth/refresh',
@@ -348,6 +390,10 @@ export const api = {
         method: 'POST',
         body: { email },
       }),
+    powChallenge: () =>
+      request<{ id: string; challenge: string; difficulty: number }>('/pow/challenge'),
+    requestPasswordReset: (data: { email: string; challenge: string; nonce: string }) =>
+      request<void>('/auth/password-reset/request', { method: 'POST', body: data }),
   },
   user: {
     me: () => request<User>('/me'),
@@ -397,10 +443,13 @@ export const api = {
   },
   admin: {
     stats: () => request<AdminStats>('/admin/stats'),
-    listUsers: (params?: { is_active?: boolean; page?: number; page_size?: number }) =>
+    listUsers: (params?: { is_active?: boolean; q?: string; page?: number; page_size?: number }) =>
       request<ListEnvelope<AdminUser>>(`/admin/users${buildQuery(params)}`),
-    disableUser: (id: number) =>
-      request<AdminUser>(`/admin/users/${id}/disable`, { method: 'POST' }),
+    disableUser: (id: number, reason?: string) =>
+      request<AdminUser & { disabled_reason?: string | null }>(`/admin/users/${id}/disable`, {
+        method: 'POST',
+        body: reason ? { reason } : {},
+      }),
     enableUser: (id: number) => request<AdminUser>(`/admin/users/${id}/enable`, { method: 'POST' }),
     resetUserPassword: (id: number, newPassword: string) =>
       request<void>(`/admin/users/${id}/reset-password`, {
@@ -409,21 +458,44 @@ export const api = {
       }),
     verifyUserEmail: (id: number) =>
       request<void>(`/admin/users/${id}/verify-email`, { method: 'POST' }),
-    listAgents: (params?: { user_id?: number; page?: number; page_size?: number }) =>
+    listAgents: (params?: { user_id?: number; q?: string; page?: number; page_size?: number }) =>
       request<ListEnvelope<AdminAgent>>(`/admin/agents${buildQuery(params)}`),
     listDevices: (params?: {
       user_id?: number
       cloud_status?: 'not_observed' | 'syncing' | 'synced' | 'error' | 'no_integration'
+      q?: string
       page?: number
       page_size?: number
     }) => request<ListEnvelope<AdminDevice>>(`/admin/devices${buildQuery(params)}`),
-    listWakes: (params?: { user_id?: number; before?: string; page_size?: number }) => {
-      // wakes 用游标分页，响应是 { items, page_size, total }（无 page）。
-      const qs = buildQuery(params)
-      return request<Pick<ListEnvelope<AdminWake>, 'items' | 'page_size' | 'total'>>(
-        `/admin/wakes${qs}`,
-      )
-    },
+    listWakes: (params?: {
+      user_id?: number
+      q?: string
+      wake_type?: string
+      result?: string
+      since?: string
+      until?: string
+      page?: number
+      page_size?: number
+    }) => request<ListEnvelope<AdminWake>>(`/admin/wakes${buildQuery(params)}`),
+    listIntegrations: (params?: {
+      user_id?: number
+      status?: string
+      q?: string
+      page?: number
+      page_size?: number
+    }) => request<ListEnvelope<AdminIntegration>>(`/admin/integrations${buildQuery(params)}`),
+    listActivity: (params?: {
+      kind?: 'login' | 'audit'
+      result?: 'success' | 'failed'
+      q?: string
+      since?: string
+      until?: string
+      page?: number
+      page_size?: number
+    }) => request<ListEnvelope<ActivityItem>>(`/admin/activity${buildQuery(params)}`),
+    getMaintenance: () => request<MaintenanceStatus>('/admin/maintenance'),
+    setMaintenance: (data: { enabled: boolean; mode: string; message?: string }) =>
+      request<MaintenanceStatus>('/admin/maintenance', { method: 'POST', body: data }),
     resyncDevice: (did: string) =>
       request<void>(`/admin/devices/${did}/resync`, { method: 'POST' }),
     resyncIntegration: (id: number) =>
@@ -432,5 +504,9 @@ export const api = {
       request<void>(`/admin/agents/${id}/disconnect`, { method: 'POST' }),
     auditLog: (params?: { action?: string; page?: number; page_size?: number }) =>
       request<ListEnvelope<AuditLogEntry>>(`/admin/audit-log${buildQuery(params)}`),
+  },
+  // 公开健康端点（无认证，ui-ux-risk-control §2.4 维护横幅用）。
+  health: {
+    maintenance: () => request<MaintenanceStatus>('/health/maintenance', { skipAuthRefresh: true }),
   },
 }

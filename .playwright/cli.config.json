@@ -2,11 +2,11 @@
   "browser": {
     "browserName": "chromium",
     "launchOptions": {
-      "channel": "chromium",
-      "args": ["--ignore-certificate-errors"]
+      "headless": true
     },
     "contextOptions": {
-      "ignoreHTTPSErrors": true
+      "ignoreHTTPSErrors": true,
+      "viewport": { "width": 1440, "height": 900 }
     }
   }
 }

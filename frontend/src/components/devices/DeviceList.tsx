@@ -1,14 +1,21 @@
 'use client'
 
-// DeviceList：设备卡片网格（device-sync-v3 §14.2 双徽标 + §14.3 唤醒交互）。
-// 投影徽标 = agent_online + projection_status；云徽标 = cloud_status + 漂移琥珀小标（agent 离线 UI 兜底）。
+// DeviceList：设备卡片网格（ui-ux-risk-control §3.5 四态 + §12.6 精确规格）。
+// 四态由 agent_online 主导：沉睡=opacity-60；告警=border-l-2 border-warning。
+// 双独立徽标用规范组件（ProjectionBadge/CloudBadge）。
+// 删除走 L3 ConfirmDialog（§5.4），唤醒按钮 text-ink（共识 3，a11y 达标）。
 
 import { useCallback, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
-import { Pencil, Trash2, Power, Cloud, CloudOff } from 'lucide-react'
+import { Pencil, Trash2, Power, MoreHorizontal } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { type Device } from '@/lib/api'
 import { useDeleteDevice, useWakeDevice, pollCommandStatus } from '@/hooks/useDevices'
+import { ProjectionBadge } from '@/components/devices/projection-badge'
+import { CloudBadge } from '@/components/devices/cloud-badge'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { DeviceDetailDialog } from '@/components/devices/DeviceDetailDialog'
 
 interface DeviceListProps {
   devices: Device[]
@@ -20,14 +27,12 @@ export function DeviceList({ devices, onEdit }: DeviceListProps) {
   const deleteMut = useDeleteDevice()
   const wakeMut = useWakeDevice()
   const [wakingIds, setWakingIds] = useState<Set<string>>(new Set())
+  const [deleteTarget, setDeleteTarget] = useState<Device | null>(null)
+  const [detailTarget, setDetailTarget] = useState<Device | null>(null)
 
   const onWake = useCallback(
     async (device: Device) => {
-      // §14.3：agent 离线时禁用唤醒按钮（入口阻断，不等 60s 超时）
-      if (!device.agent_online) {
-        toast.error(t('agentOffline'))
-        return
-      }
+      if (!device.agent_online) return
       setWakingIds((prev) => new Set(prev).add(device.did))
       try {
         const commandId = await wakeMut.mutateAsync(device.did)
@@ -35,9 +40,9 @@ export function DeviceList({ devices, onEdit }: DeviceListProps) {
         if (result.status === 'completed' && result.success) {
           toast.success(t('wakeSuccess'))
         } else if (result.status === 'expired') {
-          toast.error(t('wakeError'))
+          toast.error(t('wakeTimeout'))
         } else {
-          toast.error(result.message || t('wakeError'))
+          toast.error(t('wakeFailed', { message: result.message ?? '' }))
         }
       } catch {
         toast.error(t('wakeError'))
@@ -52,162 +57,129 @@ export function DeviceList({ devices, onEdit }: DeviceListProps) {
     [wakeMut, t],
   )
 
-  const onDelete = async (device: Device) => {
-    if (!confirm(t('deleteConfirm'))) return
-    try {
-      await deleteMut.mutateAsync(device.did)
-      toast.success(t('deleteSuccess'))
-    } catch {
-      toast.error(t('deleteFailed'))
-    }
-  }
-
-  if (devices.length === 0) {
-    return <p className="text-ink-muted">{t('noDevices')}</p>
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return
+    await deleteMut.mutateAsync(deleteTarget.did)
+    toast.success(t('deleteSuccess'))
+    setDeleteTarget(null)
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {devices.map((device) => (
-        <div
-          key={device.did}
-          className="border-hairline bg-surface-1 shadow-card hover:shadow-hover rounded-lg border p-6 transition"
-        >
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="text-ink font-medium">{device.name}</h3>
-              <p className="text-ink-subtle mt-1 font-mono text-xs">{device.mac_display}</p>
-              {device.description && (
-                <p className="text-ink-muted mt-1 text-sm">{device.description}</p>
-              )}
+    <>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {devices.map((device) => (
+          <div
+            key={device.did}
+            className={cn(
+              'border-hairline bg-surface-1 shadow-card rounded-lg border p-5 transition md:p-6',
+              !device.agent_online && 'opacity-60',
+              device.cloud_status === 'error' && 'border-warning border-l-2',
+            )}
+          >
+            {/* 头部：图标 + 名称 + 徽标 */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <DeviceIcon online={device.agent_online} />
+                <div className="min-w-0">
+                  <h3 className="text-ink truncate font-medium">{device.name}</h3>
+                  <p className="text-ink-subtle mt-0.5 font-mono text-xs">{device.mac_display}</p>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <ProjectionBadge
+                  agentOnline={device.agent_online}
+                  projectionStatus={device.projection_status}
+                />
+                <CloudBadge device={device} />
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <ProjectionBadge
-                agentOnline={device.agent_online}
-                projectionStatus={device.projection_status}
-              />
-              <CloudStatusIcon device={device} />
-            </div>
-          </div>
-          <div className="mt-4 flex gap-2">
+
+            {/* 描述（虚线分隔） */}
+            {device.description && (
+              <>
+                <div className="border-hairline my-3 border-t border-dashed" />
+                <p className="text-ink-muted text-sm">{device.description}</p>
+              </>
+            )}
+
+            {/* 离线态状态行 */}
+            {!device.agent_online && (
+              <p className="text-ink-subtle mt-3 text-xs">
+                ○ {t('agentOffline')} · {t('wakeUnavailable' as never)}
+              </p>
+            )}
+
+            {/* 唤醒按钮（全宽，text-ink 共识 3） */}
             <button
               onClick={() => onWake(device)}
               disabled={!device.agent_online || wakingIds.has(device.did)}
-              className="bg-success text-ink hover:bg-success/90 flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-              title={!device.agent_online ? t('agentOffline') : undefined}
+              className="bg-success text-ink hover:bg-success/90 mt-4 flex w-full items-center justify-center gap-1.5 rounded-md py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Power className="h-3.5 w-3.5" />
               {wakingIds.has(device.did) ? t('waking') : t('wake')}
             </button>
-            <button
-              onClick={() => onEdit(device)}
-              className="text-ink-muted hover:bg-surface-2 hover:text-ink rounded-md p-1.5 transition-colors"
-              aria-label={t('edit')}
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => onDelete(device)}
-              className="text-ink-muted hover:bg-surface-2 hover:text-destructive rounded-md p-1.5 transition-colors"
-              aria-label={t('delete')}
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+
+            {/* 操作图标（右下弱化）：§3.7 详情入口 ··· + Edit + Delete */}
+            <div className="mt-3 flex justify-end gap-1">
+              <button
+                onClick={() => setDetailTarget(device)}
+                aria-label={t('details')}
+                className="text-ink-muted hover:bg-surface-2 hover:text-ink rounded-md p-1.5 transition"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => onEdit(device)}
+                aria-label={t('edit')}
+                className="text-ink-muted hover:bg-surface-2 hover:text-ink rounded-md p-1.5 transition"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setDeleteTarget(device)}
+                aria-label={t('delete')}
+                className="text-ink-muted hover:bg-surface-2 hover:text-destructive rounded-md p-1.5 transition"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+
+      {/* L3 删除确认弹窗（§5.4） */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onConfirm={handleConfirmDelete}
+        onClose={() => setDeleteTarget(null)}
+        variant="danger"
+        title={t('deleteDialogTitle')}
+        description={t('deleteDialogDesc', { name: deleteTarget?.name ?? '' })}
+        confirmText={t('delete')}
+        cancelText={t('cancel')}
+      />
+
+      {/* §3.7 设备详情面板（三区 + Edit/Delete 双入口） */}
+      <DeviceDetailDialog
+        device={detailTarget}
+        onClose={() => setDetailTarget(null)}
+        onEdit={onEdit}
+        onDelete={(d) => setDeleteTarget(d)}
+      />
+    </>
   )
 }
 
-/// §14.2 漂移告警前端时间过滤：last_drift_at 非空且在 24h 内 → 仍展示。
-/// 模块级函数（非组件内），避免组件渲染期调用 Date.now 触发 React 纯度规则。
-function isDriftActive(lastDriftAt: string | null): boolean {
-  if (!lastDriftAt) return false
-  return Date.now() - new Date(lastDriftAt).getTime() < 24 * 60 * 60 * 1000
-}
-
-/// 投影徽标（§14.2 表 1）：agent_online + projection_status → 灰/黄/绿点 + 文案。
-function ProjectionBadge({
-  agentOnline,
-  projectionStatus,
-}: {
-  agentOnline: boolean
-  projectionStatus: Device['projection_status']
-}) {
-  const t = useTranslations('device')
-  if (!agentOnline || projectionStatus === 'agent_offline') {
-    return <span className="bg-ink-subtle h-2 w-2 rounded-full" title={t('agentOffline')} />
-  }
-  if (projectionStatus === 'syncing') {
-    return <span className="bg-warning h-2 w-2 rounded-full" title={t('syncing')} />
-  }
-  return <span className="bg-success h-2 w-2 rounded-full" title={t('agentOnline')} />
-}
-
-/// 云徽标（§14.2 表 2）：cloud_status + 漂移琥珀小标（agent 离线 UI 兜底）。
-/// 漂移告警前端按 now - last_drift_at < 24h 过滤显示（§14.2）。
-function CloudStatusIcon({ device }: { device: Device }) {
-  const t = useTranslations('device')
-
-  // agent 离线 UI 兜底：云徽标优先显示 agent_offline 态（§14.2）
-  if (!device.agent_online) {
-    return (
-      <span title={t('agentOffline')}>
-        <CloudOff className="text-ink-subtle h-3.5 w-3.5" />
-      </span>
-    )
-  }
-
-  // 漂移告警展示规则（§14.2）：last_drift_at 非空 + 24h 内 → 琥珀小标叠加。
-  // 纯前端时间过滤，在模块级函数计算（避免组件内调用 Date.now 触发 React 纯度 lint）。
-  const driftActive = isDriftActive(device.last_drift_at)
-
-  switch (device.cloud_status) {
-    case 'no_integration':
-      return (
-        <span
-          title={t('cloudNone')}
-          className="border-hairline text-ink-subtle inline-flex h-4 w-4 items-center justify-center rounded-full border border-dashed"
-        >
-          <CloudOff className="h-3 w-3" />
-        </span>
-      )
-    case 'not_observed':
-      return (
-        <span title={t('cloudNotObserved')}>
-          <Cloud className="text-warning h-3.5 w-3.5" />
-        </span>
-      )
-    case 'syncing':
-      return (
-        <span title={t('cloudSyncing')}>
-          <Cloud className="text-warning h-3.5 w-3.5" />
-        </span>
-      )
-    case 'synced':
-      if (driftActive && device.last_drift_kind) {
-        const driftTooltip =
-          device.last_drift_kind === 'deleted' ? t('driftDeleted') : t('driftRenamed')
-        return (
-          <span className="relative" title={driftTooltip}>
-            <Cloud className="text-success h-3.5 w-3.5" />
-            <span className="bg-warning absolute -top-1 -right-1 h-1.5 w-1.5 rounded-full" />
-          </span>
-        )
-      }
-      return (
-        <span title={t('cloudSynced')}>
-          <Cloud className="text-success h-3.5 w-3.5" />
-        </span>
-      )
-    case 'error':
-      return (
-        <span title={t('cloudError', { error: device.last_error ?? device.cloud_status })}>
-          <Cloud className="text-destructive h-3.5 w-3.5" />
-        </span>
-      )
-    default:
-      return null
-  }
+function DeviceIcon({ online }: { online: boolean }) {
+  // §3.6：在线 💻 / 离线 💤
+  return (
+    <div
+      className={cn(
+        'flex h-10 w-10 items-center justify-center rounded-md text-xl',
+        online ? 'bg-surface-2' : 'bg-surface-2 opacity-60',
+      )}
+    >
+      {online ? '💻' : '💤'}
+    </div>
+  )
 }

@@ -5,7 +5,7 @@ Builds a single unified image containing the Rust backend, Next.js frontend
 (static export), Caddy reverse proxy, and s6-overlay process manager.
 
 Supports load (local, single platform) and push (multi-platform to registry) modes.
-Always applies a 'dev' tag; additional tags can be specified via --tags.
+Applies a base tag (default 'main'); additional tags can be specified via --tags.
 
 Environment requirements (not auto-resolved):
   - Docker daemon running
@@ -27,8 +27,12 @@ import platform
 import subprocess
 import sys
 
-IMAGE_NAME = "wakewake"
+DEFAULT_IMAGE = "wakewake"
 DEFAULT_REGISTRY = "192.168.5.50:5000"
+# amd64-only by default: dev (fn) and staging/prod VPS targets are amd64, and a
+# single-platform load/push is far faster than a QEMU cross-build. Opt into a
+# true multi-arch build with repeated --platform (e.g. amd64 + arm64).
+DEFAULT_PLATFORMS = ("linux/amd64",)
 ALL_PLATFORMS = ("linux/amd64", "linux/arm64")
 
 PLATFORM_ALIASES = {
@@ -75,22 +79,35 @@ def parse_args():
         help="Push image to registry (default: load locally)",
     )
     parser.add_argument(
+        "--image",
+        default=DEFAULT_IMAGE,
+        help=f"Image name (default: {DEFAULT_IMAGE}). Use a namespaced name like "
+        "jukanntenn/wakewake to push to Docker Hub.",
+    )
+    parser.add_argument(
         "--registry",
         default=DEFAULT_REGISTRY,
         help=f"Container registry (default: {DEFAULT_REGISTRY})",
+    )
+    parser.add_argument(
+        "--base-tag",
+        default="main",
+        help="Base tag always applied to the image (default: main). Use a version "
+        "like v0.1.0 for releases.",
     )
     parser.add_argument(
         "--tags",
         nargs="+",
         action="extend",
         default=[],
-        help="Additional image tags (dev tag is always applied)",
+        help="Additional image tags (base tag is always applied)",
     )
     parser.add_argument(
         "--platform",
         action="append",
         default=[],
-        help="Target platform (amd64 or arm64). Repeatable. Defaults to all platforms.",
+        help="Target platform (amd64 or arm64). Repeatable. Defaults to amd64 only; "
+        "pass both for a multi-arch build.",
     )
     parser.add_argument(
         "--no-cache",
@@ -128,7 +145,7 @@ def resolve_platforms(platform_args):
                 f"Supported platforms: {', '.join(PLATFORM_ALIASES.keys())}",
             )
     resolved = list(dict.fromkeys(resolved))
-    return resolved if resolved else list(ALL_PLATFORMS)
+    return resolved if resolved else list(DEFAULT_PLATFORMS)
 
 
 def detect_host_platform():
@@ -288,14 +305,14 @@ def main():
     dockerfile_path = os.path.join(project_root, DOCKERFILE)
     context_path = os.path.join(project_root, BUILD_CONTEXT)
 
-    all_tags = ["dev"] + args.tags
+    all_tags = [args.base_tag] + args.tags
     full_image_names = []
     cmd = ["docker", "buildx", "build"]
     for tag in all_tags:
         if args.push:
-            full_tag = f"{args.registry}/{IMAGE_NAME}:{tag}"
+            full_tag = f"{args.registry}/{args.image}:{tag}"
         else:
-            full_tag = f"{IMAGE_NAME}:{tag}"
+            full_tag = f"{args.image}:{tag}"
         full_image_names.append(full_tag)
         cmd.extend(["--tag", full_tag])
 
@@ -303,7 +320,7 @@ def main():
 
     if args.push:
         cmd.append("--push")
-        cache_tag = f"{args.registry}/{IMAGE_NAME}:cache"
+        cache_tag = f"{args.registry}/{args.image}:cache"
         if not args.no_cache:
             cmd.extend(["--cache-from", f"type=registry,ref={cache_tag}"])
             cmd.extend(["--cache-to", f"type=registry,ref={cache_tag},mode=max"])

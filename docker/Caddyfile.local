@@ -1,6 +1,11 @@
 # 本地验收 Caddy 配置（自签名 TLS）。
 # 与 e2e/Caddyfile 完全一致：agent（宿主机）与 Playwright 都通过 localhost:8443 访问。
 # 容器内挂载于 /app/Caddyfile（s6 caddy run 脚本固定读此路径）。
+#
+# 同步矩阵（改一处必须改另一处，各点注释互相引用）：
+#   监听端口 8443（容器内不变量）：↔ docker-compose.local.yml app healthcheck curl。
+#   主机名 app（docker DNS）：↔ docker-compose.local.yml 服务名 app；改名必须同步下方 SAN。
+#   反代目标 127.0.0.1:8080：↔ config.local.toml [server] port；镜像内置 docker/Caddyfile、e2e/Caddyfile 同值。
 
 {
 	local_certs
@@ -13,12 +18,15 @@
 
 # 监听 0.0.0.0:8443（宿主机 agent 用 localhost:8443，浏览器也用 localhost）。
 # tls internal 需主机名为证书 SAN——显式列 localhost + app（docker DNS）。
+# 端口 8443 不变量：同步点 = docker-compose.local.yml app healthcheck curl。
+# 主机名 app = compose 服务名（docker DNS）：改名必须同步 docker-compose.local.yml 服务 key。
 localhost:8443, app:8443 {
 	tls internal
 
 	# API（非 SSE）
 	@api path /api/*
 	handle @api {
+		# 后端监听（不变量 8080）：同步点 = config.local.toml [server] port、内置 docker/Caddyfile、e2e/Caddyfile。
 		reverse_proxy 127.0.0.1:8080 {
 			transport http {
 				versions h2c
@@ -32,6 +40,7 @@ localhost:8443, app:8443 {
 	# SSE（独立 handle，禁缓冲，flush_interval -1 + X-Accel-Buffering no）
 	@sse path /api/v1/agents/self/events
 	handle @sse {
+		# 后端监听（不变量 8080）：同步点 = config.local.toml [server] port、内置 docker/Caddyfile、e2e/Caddyfile。
 		reverse_proxy 127.0.0.1:8080 {
 			transport http {
 				versions h2c
