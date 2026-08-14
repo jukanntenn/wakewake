@@ -100,6 +100,3 @@ tests/load/pairing_codes.txt
 tests/load/results/
 tests/load/metrics-samples.csv
 tests/load/node_modules/
-
-# Ansible vault 明文（加密后的真实 secrets，绝不入库；.example 模板入库）。
-devops/ansible/vars/*/vault.yml

@@ -6,6 +6,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
+import { useQueryClient } from '@tanstack/react-query'
 import { LogOut, Settings } from 'lucide-react'
 import { Menu } from '@/components/ui/menu'
 import { api } from '@/lib/api'
@@ -16,6 +17,7 @@ export function UserMenu() {
   const router = useRouter()
   const tCommon = useTranslations('common')
   const tNav = useTranslations('navigation')
+  const queryClient = useQueryClient()
   const { user, refreshToken, logout } = useAuthStore()
 
   const onLogout = async () => {
@@ -27,6 +29,8 @@ export function UserMenu() {
       }
     }
     logout()
+    // 清空 server-state 缓存，防止下一位登录用户看到上个账户的设备/集成等数据。
+    queryClient.clear()
     router.replace('/login')
     toast.success(tCommon('logout'))
   }

@@ -333,7 +333,33 @@
     "resetDialogDesc": "Set a new password for \"{email}\". Their old password will stop working and they'll be logged out everywhere.",
     "resetDialogPasswordLabel": "New password (min 8 characters):",
     "disconnectFailedHint": "Agent is not online",
-    "statusActive": "Active"
+    "statusActive": "Active",
+    "auditAction": {
+      "integration": {
+        "create": "Integration erstellt",
+        "update": "Integration aktualisiert",
+        "delete": "Integration gelöscht",
+        "resync": "Integration neu synchronisiert"
+      },
+      "agent": {
+        "rotate_code": "Pairing-Code rotiert",
+        "disconnect": "Agent getrennt"
+      },
+      "user": {
+        "change_password": "Passwort geändert",
+        "disable": "Benutzer deaktiviert",
+        "enable": "Benutzer aktiviert",
+        "reset_password": "Passwort zurückgesetzt",
+        "verify_email": "E-Mail verifiziert"
+      },
+      "device": {
+        "resync": "Gerät neu synchronisiert"
+      },
+      "maintenance": {
+        "enabled": "Wartung aktiviert",
+        "disabled": "Wartung deaktiviert"
+      }
+    }
   },
   "theme": {
     "light": "...",

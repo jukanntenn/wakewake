@@ -10,3 +10,6 @@ coverage/
 pnpm-lock.yaml
 next-env.d.ts
 tsconfig.tsbuildinfo
+# 工具缓存（不入库，也不格式化）。
+.playwright-cli/
+.playwright/

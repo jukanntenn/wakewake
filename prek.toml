@@ -1,53 +1,44 @@
-# prek configuration — see https://prek.j178.dev
+# prek workspace 根配置 —— 见 https://prek.j178.dev
 # Install:  prek install
 # Run all:  prek run --all-files
 #
-# 三层门禁：
-#   pre-commit  —— 格式/同步检查（快，不修改，失败提示手动修）
-#   pre-push    —— 无 DB 依赖的测试（后端单元 + 前端全量；后端集成测试需 PG，留 CI）
-#   commit-msg  —— Conventional Commits 格式
+# 配置拆分（workspace 模式自动发现，各项目只见自己目录内的文件）：
+#   prek.toml           仓库级卫生检查 + commit-msg 门禁
+#   backend/prek.toml   Rust 门禁（fmt / clippy / test / build）
+#   frontend/prek.toml  前端门禁（prettier / eslint / tsc / vitest / build）
+# 按项目精选：prek run backend:clippy、prek run frontend:lint
+#
+# 三组门禁（CI 与本地共用同一命令源，杜绝 drift）：
+#   format —— 格式（builtin 修正器 + fmt/prettier 的 --check）
+#   lint   —— 静态分析（clippy / eslint / tsc / actionlint）
+#   check  —— 动态验证（文件合法性、agents-sync、测试、构建）
+#
+# 本地 git hook 分层：pre-commit = 快门禁；pre-push = 慢门禁；
+# manual = 仅显式调用（CI 的 build 门禁经 --hook-stage manual 触发）。
 
 default_install_hook_types = ["pre-commit", "pre-push", "commit-msg"]
 
-# 产物目录全局排除（不喂给任何 hook）。
-exclude = """^(backend/target/|frontend/node_modules/|frontend/.next/|frontend/out/|.local/|acceptance/)"""
+# 产物目录全局排除（不喂给任何 hook）。子项目配置另有各自的排除。
+exclude = """^(backend/target/|frontend/node_modules/|frontend/.next/|frontend/out/|.local/|acceptance/|e2e/node_modules/|e2e/playwright-report/|e2e/test-results/)"""
 
-# ---- Generic checks (prek builtin: 零依赖 Rust 原生 hook) ----
+# ---- 仓库卫生（prek builtin：零依赖原生 hook） ----
 [[repos]]
 repo = "builtin"
 hooks = [
-  { id = "trailing-whitespace" },
-  { id = "end-of-file-fixer" },
-  { id = "check-yaml" },
-  { id = "check-toml" },
-  { id = "check-json" },
-  { id = "check-merge-conflict" },
-  { id = "check-added-large-files", args = ["--maxkb=1024"] },
-  { id = "detect-private-key", exclude = "backend/crates/agent/src/crypto\\.rs" },
-  { id = "mixed-line-ending", args = ["--fix=lf"] },
+  { id = "trailing-whitespace", groups = ["format"] },
+  { id = "end-of-file-fixer", groups = ["format"] },
+  { id = "mixed-line-ending", args = ["--fix=lf"], groups = ["format"] },
+  { id = "check-yaml", groups = ["check"] },
+  { id = "check-toml", groups = ["check"] },
+  { id = "check-json", groups = ["check"] },
+  { id = "check-merge-conflict", groups = ["check"] },
+  { id = "check-added-large-files", args = ["--maxkb=1024"], groups = ["check"] },
+  { id = "detect-private-key", exclude = "backend/crates/agent/src/crypto\\.rs", groups = ["check"] },
 ]
 
-# ---- pre-commit: 格式检查（--check，不修改） + AGENTS 同步 ----
+# ---- 仓库级门禁（pre-commit，秒级） ----
 [[repos]]
 repo = "local"
-
-[[repos.hooks]]
-id = "cargo-fmt-check"
-name = "cargo fmt --check (backend)"
-language = "system"
-entry = "bash -c 'cd backend && cargo fmt --check'"
-files = "^backend/.*\\.rs$"
-pass_filenames = false
-stages = ["pre-commit"]
-
-[[repos.hooks]]
-id = "prettier-check"
-name = "prettier --check (frontend)"
-language = "system"
-entry = "bash -c 'cd frontend && pnpm exec prettier --check .'"
-files = "^frontend/.*\\.(ts|tsx|js|jsx|json|css|md)$"
-pass_filenames = false
-stages = ["pre-commit"]
 
 [[repos.hooks]]
 id = "agents-sync"
@@ -57,6 +48,7 @@ entry = "python3 scripts/sync_agents.py --check"
 files = "^(AGENTS|CLAUDE)\\.md$"
 pass_filenames = false
 stages = ["pre-commit"]
+groups = ["check"]
 
 # actionlint —— 校验 GitHub Actions workflow 语法/语义。check-yaml 只验证
 # “是否合法 YAML”，抓不到 paths-ignore 放错位置这类“合法 YAML 但非法 workflow”
@@ -69,27 +61,9 @@ entry = "actionlint"
 files = "^\\.github/workflows/.*\\.(yml|yaml)$"
 pass_filenames = false
 stages = ["pre-commit"]
+groups = ["lint"]
 
-# ---- pre-push: 无 DB 依赖测试 ----
-[[repos.hooks]]
-id = "backend-unit-test"
-name = "cargo test --lib (backend unit, no DB)"
-language = "system"
-entry = "cargo test --lib --manifest-path backend/Cargo.toml"
-files = "^backend/.*\\.rs$"
-pass_filenames = false
-stages = ["pre-push"]
-
-[[repos.hooks]]
-id = "frontend-test"
-name = "vitest run (frontend)"
-language = "system"
-entry = "bash -c 'cd frontend && pnpm test:run'"
-files = "^frontend/"
-pass_filenames = false
-stages = ["pre-push"]
-
-# ---- commit-msg: Conventional Commits ----
+# ---- commit-msg: Conventional Commits（无组——group 选择不覆盖它） ----
 [[repos.hooks]]
 id = "conventional-commits"
 name = "commit message format"

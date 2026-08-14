@@ -431,7 +431,33 @@
     "loginSuccess": "Success",
     "loginFailed": "Failed",
     "operationsTitle": "Operations",
-    "systemTitle": "System"
+    "systemTitle": "System",
+    "auditAction": {
+      "integration": {
+        "create": "Created integration",
+        "update": "Updated integration",
+        "delete": "Deleted integration",
+        "resync": "Resynced integration"
+      },
+      "agent": {
+        "rotate_code": "Rotated pairing code",
+        "disconnect": "Disconnected agent"
+      },
+      "user": {
+        "change_password": "Changed password",
+        "disable": "Disabled user",
+        "enable": "Enabled user",
+        "reset_password": "Reset password",
+        "verify_email": "Verified email"
+      },
+      "device": {
+        "resync": "Resynced device"
+      },
+      "maintenance": {
+        "enabled": "Enabled maintenance",
+        "disabled": "Disabled maintenance"
+      }
+    }
   },
   "theme": {
     "light": "Light",

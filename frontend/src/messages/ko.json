@@ -333,7 +333,33 @@
     "resetDialogDesc": "Set a new password for \"{email}\". Their old password will stop working and they'll be logged out everywhere.",
     "resetDialogPasswordLabel": "New password (min 8 characters):",
     "disconnectFailedHint": "Agent is not online",
-    "statusActive": "Active"
+    "statusActive": "Active",
+    "auditAction": {
+      "integration": {
+        "create": "통합 생성",
+        "update": "통합 업데이트",
+        "delete": "통합 삭제",
+        "resync": "통합 재동기화"
+      },
+      "agent": {
+        "rotate_code": "페어링 코드 갱신",
+        "disconnect": "에이전트 연결 해제"
+      },
+      "user": {
+        "change_password": "비밀번호 변경",
+        "disable": "사용자 비활성화",
+        "enable": "사용자 활성화",
+        "reset_password": "비밀번호 재설정",
+        "verify_email": "이메일 인증"
+      },
+      "device": {
+        "resync": "기기 재동기화"
+      },
+      "maintenance": {
+        "enabled": "유지보수 활성화",
+        "disabled": "유지보수 비활성화"
+      }
+    }
   },
   "theme": {
     "light": "...",

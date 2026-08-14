@@ -5,7 +5,8 @@ Builds a single unified image containing the Rust backend, Next.js frontend
 (static export), Caddy reverse proxy, and s6-overlay process manager.
 
 Supports load (local, single platform) and push (multi-platform to registry) modes.
-Applies a base tag (default 'main'); additional tags can be specified via --tags.
+Tag semantics: 'main' (current workspace code) is ALWAYS applied; --tags adds
+more (e.g. 0.1.3 / 0.1.3-rc.1 for releases), duplicates removed.
 
 Environment requirements (not auto-resolved):
   - Docker daemon running
@@ -29,10 +30,8 @@ import sys
 
 DEFAULT_IMAGE = "wakewake"
 DEFAULT_REGISTRY = "192.168.5.50:5000"
-# amd64-only by default: dev (fn) and staging/prod VPS targets are amd64, and a
-# single-platform load/push is far faster than a QEMU cross-build. Opt into a
-# true multi-arch build with repeated --platform (e.g. amd64 + arm64).
-DEFAULT_PLATFORMS = ("linux/amd64",)
+# 'main' 恒定指向当前工作区代码（浮动 tag）；发布时 --tags 追加版本 tag。
+DEFAULT_TAG = "main"
 ALL_PLATFORMS = ("linux/amd64", "linux/arm64")
 
 PLATFORM_ALIASES = {
@@ -90,24 +89,25 @@ def parse_args():
         help=f"Container registry (default: {DEFAULT_REGISTRY})",
     )
     parser.add_argument(
-        "--base-tag",
-        default="main",
-        help="Base tag always applied to the image (default: main). Use a version "
-        "like v0.1.0 for releases.",
-    )
-    parser.add_argument(
         "--tags",
         nargs="+",
         action="extend",
         default=[],
-        help="Additional image tags (base tag is always applied)",
+        help=f'Additional image tags (default: "{DEFAULT_TAG}" only). '
+        f'"{DEFAULT_TAG}" is always applied, duplicates removed. '
+        "Release example: --tags 0.1.3-rc.1",
     )
     parser.add_argument(
         "--platform",
         action="append",
         default=[],
-        help="Target platform (amd64 or arm64). Repeatable. Defaults to amd64 only; "
-        "pass both for a multi-arch build.",
+        help="Target platform (amd64 or arm64). Repeatable. Defaults to the "
+        "host platform.",
+    )
+    parser.add_argument(
+        "--all-platforms",
+        action="store_true",
+        help="Build all supported platforms (amd64+arm64).",
     )
     parser.add_argument(
         "--no-cache",
@@ -132,7 +132,9 @@ def env_error(msg, hint=None):
     sys.exit(2)
 
 
-def resolve_platforms(platform_args):
+def resolve_platforms(platform_args, all_platforms=False):
+    if all_platforms:
+        return list(ALL_PLATFORMS)
     resolved = []
     for p in platform_args:
         if p in PLATFORM_ALIASES:
@@ -144,8 +146,21 @@ def resolve_platforms(platform_args):
                 f"Unknown platform: {p}",
                 f"Supported platforms: {', '.join(PLATFORM_ALIASES.keys())}",
             )
-    resolved = list(dict.fromkeys(resolved))
-    return resolved if resolved else list(DEFAULT_PLATFORMS)
+    return list(dict.fromkeys(resolved)) or [detect_host_platform()]
+
+
+def resolve_tags(extra_tags):
+    """'main' 恒含 + 用户追加，去重保序（main 永远第一）。"""
+    return list(dict.fromkeys([DEFAULT_TAG, *extra_tags]))
+
+
+def resolve_git_sha():
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
+        ).strip()
+    except Exception:
+        return "unknown"
 
 
 def detect_host_platform():
@@ -280,7 +295,7 @@ def main():
     args = parse_args()
     setup_logging(verbose=args.verbose)
 
-    target_platforms = resolve_platforms(args.platform)
+    target_platforms = resolve_platforms(args.platform, args.all_platforms)
 
     if args.push:
         platforms_to_build = target_platforms
@@ -305,7 +320,7 @@ def main():
     dockerfile_path = os.path.join(project_root, DOCKERFILE)
     context_path = os.path.join(project_root, BUILD_CONTEXT)
 
-    all_tags = [args.base_tag] + args.tags
+    all_tags = resolve_tags(args.tags)
     full_image_names = []
     cmd = ["docker", "buildx", "build"]
     for tag in all_tags:
@@ -318,14 +333,14 @@ def main():
 
     cmd.extend(["--platform", ",".join(platforms_to_build)])
 
+    # 无 registry 缓存：本地 buildkit 容器缓存已覆盖同机提速；registry cache
+    # 只对跨机器构建有增益（本项目无此场景），且会持续膨胀 registry 磁盘。
     if args.push:
         cmd.append("--push")
-        cache_tag = f"{args.registry}/{args.image}:cache"
-        if not args.no_cache:
-            cmd.extend(["--cache-from", f"type=registry,ref={cache_tag}"])
-            cmd.extend(["--cache-to", f"type=registry,ref={cache_tag},mode=max"])
     else:
         cmd.append("--load")
+
+    cmd.extend(["--build-arg", f"GIT_SHA={resolve_git_sha()}"])
 
     if args.no_cache:
         cmd.append("--no-cache")

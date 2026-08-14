@@ -1,28 +1,33 @@
 ---
 # wakewake 统一部署 playbook。
 #
-# 单 playbook 服务 dev（将来可扩 staging / production）。目标环境用 --limit 选择
-# （必填），每环境的差异在 group_vars/<env>.yml。从 devops/ansible/ 运行：
+# 单 playbook 服务全部环境，目标环境用 --limit 选择（必填），每环境差异在
+# group_vars/<env>/（env.yml + vault.yml，后者 avpm 单变量加密自动加载）。
+# 从仓库任意目录运行（根 ansible.cfg 提供 inventory + avpm vault 身份）：
 #
-#   cd devops/ansible
-#   ansible-playbook -i hosts.yml deploy.yml -l dev --vault-password-file ~/.ansible-vault/wakewake-dev.pwd
+#   ansible-playbook devops/ansible/deploy.yml -l test
+#   ansible-playbook devops/ansible/deploy.yml -l staging
+#   ansible-playbook devops/ansible/deploy.yml -l prod
+#
+# 部署尾部健康校验：scripts/check_deploy.py 轮询 /api/v1/health 就绪后，比对
+# /api/v1/version 的 git_sha 与本地 HEAD（浮动 main tag 防"容器活着但跑旧镜像"）。
+# 从非 tag 提交点部署 staging/prod 时用 -e verify_sha=no 跳过 sha 比对。
 
 - name: Deploy wakewake
   hosts: all
   user: "{{ user }}"
   gather_facts: false
 
-  tasks:
-    - name: Load environment vault
-      ansible.builtin.include_vars:
-        file: "vars/{{ env }}/vault.yml"
+  vars:
+    check_deploy_script: "{{ playbook_dir }}/../../scripts/check_deploy.py"
 
+  tasks:
     - name: Require --limit so a single environment is targeted
       ansible.builtin.assert:
         that: ansible_limit is defined
         fail_msg: >-
           Refusing to run without --limit. Specify the environment explicitly,
-          e.g. -l dev, to avoid deploying to every host at once.
+          e.g. -l test, to avoid deploying to every host at once.
 
     - name: Ensure application directories exist
       ansible.builtin.file:
@@ -55,3 +60,24 @@
         pull: always
         state: present
         remove_orphans: true
+
+    - name: Record expected git sha from local HEAD
+      ansible.builtin.command: git rev-parse HEAD
+      changed_when: false
+      delegate_to: localhost
+      run_once: true
+      register: local_head
+      when: (verify_sha | default(true) | bool)
+
+    # 健康检查恒跑；sha 比对仅在 verify_sha 未显式关掉且本地 HEAD 已取到时附加。
+    - name: Verify deployment health (and git sha)
+      ansible.builtin.command:
+        cmd: >-
+          python3 {{ check_deploy_script }} --url {{ health_url }}
+          {{ '--insecure' if (health_insecure | default(false) | bool) else '' }}
+          {{ ('--sha ' ~ local_head.stdout)
+             if (verify_sha | default(true) | bool and local_head.stdout is defined)
+             else '' }}
+      changed_when: false
+      delegate_to: localhost
+      run_once: true

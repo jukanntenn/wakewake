@@ -1,5 +1,6 @@
 # {{ ansible_managed }}
-# wakewake Caddyfile（dev）。
+# wakewake Caddyfile（test）。
+#
 #
 # HTTPS via Caddy 内部 CA（tls internal）：自签证书，自动签发+轮换。
 # 浏览器访问会弹证书警告（自签 CA 非公网信任），点"继续"即可。

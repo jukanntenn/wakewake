@@ -8,7 +8,8 @@
 # ============================================================
 # Stage 0: 前端构建（Next.js static export → frontend/out/）
 # ============================================================
-FROM node:22-alpine AS frontend
+# node 版本与 frontend/.nvmrc 对齐（本地 / CI / 镜像三处同一大版本）
+FROM node:24-alpine AS frontend
 WORKDIR /web
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 # CI=true 避免 pnpm depsStatusCheck 因 no TTY 报 ERR_PNPM_ABORTED_REMOVE_MODULES_DIR
@@ -47,6 +48,11 @@ COPY backend/ .
 RUN printf '' > /app/.cargo/config.toml
 # SQLX_OFFLINE=true 读 backend/.sqlx（无编译期宏，但保留 env 防 sqlx 启动期检查）
 ENV SQLX_OFFLINE=true
+# 部署校验用：option_env!("WAKEWAKE_GIT_SHA") 编译期烙进 /api/v1/version
+# （docker/build.py 与 CI 各自传 --build-arg GIT_SHA=<sha>）。必须在 chef cook 之后
+# 声明——ARG 值变化会打掉其后所有缓存层，放前面会让每次构建重编全部依赖（~3min）。
+ARG GIT_SHA
+ENV WAKEWAKE_GIT_SHA=${GIT_SHA}
 RUN cargo build --release --bin wakewake-server
 
 # ============================================================

@@ -48,7 +48,7 @@ describe('DataTable', () => {
           columns={columns}
           rows={rows}
           rowKey={(r) => r.id}
-          render={(row, key) => <>{String((row as Record<string, unknown>)[key])}</>}
+          render={(row, key) => <>{String((row as unknown as Record<string, unknown>)[key])}</>}
         />,
       ),
     )
@@ -145,7 +145,7 @@ describe('DataTable', () => {
           rows={rows}
           rowKey={(r) => r.id}
           rowWarning={(r) => r.status === 'disabled'}
-          render={(row, key) => <>{String((row as Record<string, unknown>)[key])}</>}
+          render={(row, key) => <>{String((row as unknown as Record<string, unknown>)[key])}</>}
         />,
       ),
     )

@@ -431,7 +431,33 @@
     "loginSuccess": "成功",
     "loginFailed": "失败",
     "operationsTitle": "运维",
-    "systemTitle": "系统"
+    "systemTitle": "系统",
+    "auditAction": {
+      "integration": {
+        "create": "创建集成",
+        "update": "更新集成",
+        "delete": "删除集成",
+        "resync": "重同步集成"
+      },
+      "agent": {
+        "rotate_code": "轮换配对码",
+        "disconnect": "断开 Agent"
+      },
+      "user": {
+        "change_password": "修改密码",
+        "disable": "禁用用户",
+        "enable": "启用用户",
+        "reset_password": "重置密码",
+        "verify_email": "验证邮箱"
+      },
+      "device": {
+        "resync": "重同步设备"
+      },
+      "maintenance": {
+        "enabled": "启用维护模式",
+        "disabled": "停用维护模式"
+      }
+    }
   },
   "theme": {
     "light": "浅色",

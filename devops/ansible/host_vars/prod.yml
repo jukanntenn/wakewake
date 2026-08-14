@@ -1,5 +1,5 @@
 ---
-# production host 事实。host 名在 hosts.yml 的 production group 确定后，把本文件重命名为
+# prod host 事实。host 名在 hosts.yml 的 prod group 确定后，把本文件重命名为
 # 对应的 host_vars/<prod-host>.yml。
 # TODO: 填入真实用户名和 home 路径。
 user: "alice"

@@ -1,0 +1,16 @@
+# prod secrets —— avpm 单变量加密入库（vault-id: wakewake-prod）。
+# 上线时逐字段加密追加（值不落明文）：
+#   avpm-client set wakewake-prod
+#   ansible-vault encrypt_string --vault-id wakewake-prod@~/.local/bin/avpm-client \
+#     '<value>' --name db_password >> devops/ansible/group_vars/prod/vault.yml
+#
+# ⚠️ prod secrets 必须与 staging 不同（独立密钥）。
+#
+# 字段清单（生成命令见括号）：
+#   db_password             (openssl rand -base64 24)
+#   jwt_signing_key         (openssl rand -base64 32)
+#   jwt_refresh_signing_key (openssl rand -base64 32)
+#   password_reset_secret   (openssl rand -base64 32)
+#   mailer_smtp_password    (mailer_enabled=true 时)
+---
+{}

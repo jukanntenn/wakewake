@@ -352,7 +352,11 @@ export async function request<T>(endpoint: string, options: RequestOptions = {})
   }
 
   if (response.status === 204) return undefined as T
-  return response.json()
+  // 部分 mutating 端点（集成 enable/disable、admin resync/disconnect 等）以 200 + 空 body
+  // 回应。空 body 不能当 JSON 解析（会抛 SyntaxError 而误报失败），统一按 void 处理。
+  const text = await response.text()
+  if (text.length === 0) return undefined as T
+  return JSON.parse(text) as T
 }
 
 // ---- API 函数（对齐 api-design.md §1.4 端点全表）----

@@ -6,9 +6,9 @@
 # feature 对接 dev Caddy tls internal 自签证书），再推送到同网段主机，用 supervisor
 # 常驻管理（401 优雅退出 exit 0 不重启；崩溃自动重启）。
 #
-# 用法（从仓库任意目录，构建 + 部署一条命令，无前置操作）：
-#   ansible-playbook -i devops/ansible/hosts.yml devops/ansible/deploy-agent.yml \
-#     -l dev_agent --vault-password-file ~/.ansible-vault/wakewake-dev.pwd -K
+# 用法（从仓库任意目录，构建 + 部署一条命令，无前置操作；根 ansible.cfg 提供
+# inventory + avpm vault 身份）：
+#   ansible-playbook devops/ansible/deploy-agent.yml -l test_agent -K
 #
 # 常用覆盖（-e）：
 #   agent_skip_build=true   跳过本地构建（用现有产物，本地迭代更快）
@@ -16,7 +16,7 @@
 #   agent_local_binary=...  二进制路径（默认 playbook_dir/../../backend/target/release/）
 
 - name: Deploy wakewake-agent
-  hosts: dev_agent
+  hosts: test_agent
   user: "{{ user }}"
   gather_facts: true
 
@@ -63,13 +63,12 @@
           cd backend && cargo build --release -p wakewake-agent --features danger-insecure-tls
       when: not agent_binary_stat.stat.exists
 
-    # agent_server_url / agent_pairing_code 来自 dev vault。deploy.yml 用 {{ env }} 拼路径，
-    # 但 env: dev 只在 group_vars/dev.yml 定义（仅作用于 dev group）；agent 在 dev_agent
-    # group，env 未定义。本 playbook 仅 dev 用（danger-insecure-tls 对接 dev 自签证书），
-    # 故直接硬编码 dev vault 路径。
-    - name: Load dev vault
+    # agent_server_url / agent_pairing_code 来自 test vault。agent 在 test_agent group，
+    # group_vars/test 不会自动加载（不同 group），故显式 include（相对 playbook 目录）。
+    # 本 playbook 仅 test 用（danger-insecure-tls 对接 test 自签证书）。
+    - name: Load test vault
       ansible.builtin.include_vars:
-        file: "vars/dev/vault.yml"
+        file: "group_vars/test/vault.yml"
 
     - name: Ensure paths
       ansible.builtin.file:

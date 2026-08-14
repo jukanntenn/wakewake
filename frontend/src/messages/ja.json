@@ -333,7 +333,33 @@
     "resetDialogDesc": "Set a new password for \"{email}\". Their old password will stop working and they'll be logged out everywhere.",
     "resetDialogPasswordLabel": "New password (min 8 characters):",
     "disconnectFailedHint": "Agent is not online",
-    "statusActive": "Active"
+    "statusActive": "Active",
+    "auditAction": {
+      "integration": {
+        "create": "統合を作成",
+        "update": "統合を更新",
+        "delete": "統合を削除",
+        "resync": "統合を再同期"
+      },
+      "agent": {
+        "rotate_code": "ペアリングコードを更新",
+        "disconnect": "エージェントを切断"
+      },
+      "user": {
+        "change_password": "パスワードを変更",
+        "disable": "ユーザーを無効化",
+        "enable": "ユーザーを有効化",
+        "reset_password": "パスワードをリセット",
+        "verify_email": "メールを認証"
+      },
+      "device": {
+        "resync": "デバイスを再同期"
+      },
+      "maintenance": {
+        "enabled": "メンテナンスを有効化",
+        "disabled": "メンテナンスを無効化"
+      }
+    }
   },
   "theme": {
     "light": "...",

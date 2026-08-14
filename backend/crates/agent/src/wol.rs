@@ -223,6 +223,7 @@ mod tests {
         )
         .await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("RSA decryption failed"));
+        // 非 base64 输入在解密前就被拒（crypto::DecryptError::Base64 的文案）。
+        assert!(result.unwrap_err().contains("base64 decode failed"));
     }
 }

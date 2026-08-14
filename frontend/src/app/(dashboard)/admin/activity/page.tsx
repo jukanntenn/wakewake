@@ -28,6 +28,7 @@ const DEFAULT_PAGE_SIZE = 20
 
 function ActivityPageInner() {
   const t = useTranslations('admin')
+  const tAudit = useTranslations('admin.auditAction')
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -95,10 +96,12 @@ function ActivityPageInner() {
           : /disable/i.test(action)
             ? 'error'
             : 'neutral'
+        // 动作 key（如 integration.update）翻译为人类可读文案；未知 key 原样回退。
+        const actionLabel = tAudit(action as never)
         return (
           <span className="inline-flex items-center gap-1.5 text-sm">
             <StatusIndicator color={color} />
-            <code className="bg-surface-2 text-ink rounded px-1.5 py-0.5 text-xs">{action}</code>
+            <span className="text-ink-muted">{actionLabel}</span>
           </span>
         )
       }

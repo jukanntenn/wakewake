@@ -1,112 +1,167 @@
-# 部署验收体系
+# 构建与部署体系
 
-四环境（本地验收 → 远程验收 dev → staging → prod），每步对应一条命令，单向闸门提升。
 设计目标：最低心智负担 + staging 与 prod 容器侧字节同构（差异只在配置）。
+四环境（本地验收 → test → staging → prod），每步对应一条命令，单向闸门提升。
 
 ## 环境定义
 
-| | 本地验收 | 远程验收 dev | staging | prod |
+| | 本地验收 | test | staging | prod |
 |---|---|---|---|---|
-| **位置** | 本机 | fn (LAN) | VPS | VPS |
+| **位置** | 本机 | fn (LAN 192.168.5.200) | VPS（未上线，占位） | VPS（未上线，占位） |
 | **镜像源** | 本地 build | LAN `192.168.5.50:5000` | Docker Hub `jukanntenn/wakewake` | 同 staging |
-| **镜像 tag** | `local` | `main`（浮动） | `vX.Y.Z`（钉精确） | 同 staging（同版本） |
-| **容器 Caddy** | `tls internal` | `tls internal` | **HTTP** | **HTTP** |
-| **HTTPS 终结** | Caddy 自签 | Caddy 自签 | 外部反代 | 外部反代 + CF CDN |
+| **镜像 tag** | `local` | `main`（浮动，= 工作区代码） | `X.Y.Z`（钉精确版本） | 同 staging（同版本） |
+| **容器 Caddy** | `tls internal` | `tls internal`（自签） | **HTTP** | **HTTPS**（CF Origin Cert） |
+| **HTTPS 终结** | Caddy 自签 | Caddy 自签 | 宿主机隧道（cloudflared 类） | Cloudflare 直连回源 |
+| **入口** | — | LAN 直连 | 隧道 → host_port | CF CDN → 仅 CF CIDR 回源 |
+| **debug** | — | 全开（方便排错） | 关 | 关 |
 | **agent** | 本机 | `danger-insecure-tls` | 正常 TLS | 同 staging |
-| **部署** | compose up | ansible `-l dev` | ansible `-l staging` | ansible `-l production` |
+| **部署** | compose up | `deploy.yml -l test` | `deploy.yml -l staging` | `deploy.yml -l prod` |
 
 不变量（四环境一致）：单容器 s6（Caddy:`caddy_port` + backend:`backend_port`）+ 兄弟 postgres 走 Unix socket（`postgres-socket` 卷）。差异只在 TLS 层、对外端口、镜像源、配置。
+
+## 镜像 tag 规范（SemVer 2.0.0，https://semver.org）
+
+预发布必须连字符（`v0.1.3rc1` **非法**，`v0.1.3-rc.1` 合法）：
+
+| tag | 指向 | 生产者 |
+|---|---|---|
+| `main` | 当前工作区代码（浮动） | `docker/build.py`（恒定包含，`--tags` 只追加） |
+| `latest` | 最新**正式版**（不含预发布） | CI（git tag 触发，`!is_prerelease`） |
+| `X.Y.Z` / `X.Y.Z-rc.N` | 对应 git tag `vX.Y.Z` / `vX.Y.Z-rc.N` | CI；手动期 build.py |
+
+## 构建与发布
+
+```bash
+# 本地验收（load 到本机，宿主平台）
+python3 docker/build.py                       # → wakewake:main
+python3 docker/build.py --tags 0.1.3-rc.1     # → wakewake:main + wakewake:0.1.3-rc.1
+
+# 推 LAN registry（test 环境部署前）
+python3 docker/build.py --push                # → 192.168.5.50:5000/wakewake:main
+
+# 手动期发布 Docker Hub（CI 启用前的过渡）
+python3 docker/build.py --push --registry docker.io --image jukanntenn/wakewake --tags 0.1.3
+
+# CI 期发布（多平台原生 runner：amd64 + arm64 各自构建，imagetools 合并）
+git tag v0.1.3 && git push origin v0.1.3      # → 0.1.3 + latest（多平台）
+git tag v0.1.3-rc.1 && git push origin v0.1.3-rc.1   # → 0.1.3-rc.1（无 latest）
+```
+
+- 本地多平台只能走 buildx（`--all-platforms` 或重复 `--platform`，跨架构需 QEMU binfmt）；
+  CI 多平台走原生镜像（ubuntu-latest + ubuntu-24.04-arm，无 QEMU）。
+- push 模式不写 registry 缓存（本地 buildkit 缓存已够；registry cache 只对跨机构建有增益，
+  本项目无此场景，徒占 registry 磁盘）。
+- `GIT_SHA` 构建参数烙进镜像 → `/api/v1/version` 暴露 `git_sha`（部署校验用）。
 
 ## 提升流程
 
 ```
-[本地验收]   docker compose -f docker/docker-compose.local.yml up -d --build
-             # 健康 + 功能确认后
+[本地验收]   python3 docker/build.py && docker compose -f docker/docker-compose.local.yml up -d
+             # 或直接 dev.py 起开发栈；健康 + 功能确认后
              ↓
-git push origin main   ──▶  CI: lint/test/build/e2e（已有，不动）
+git push origin main   ──▶  CI: lint/test/build/e2e（命令源 = prek，见下）
              # CI green
              ↓
-[远程验收 dev]
+[test]
              python3 docker/build.py --push
-             cd devops/ansible && ansible-playbook -i hosts.yml deploy.yml -l dev \
-               --vault-password-file ~/.ansible-vault/wakewake-dev.pwd
-             # dogfood 稳定
+             ansible-playbook devops/ansible/deploy.yml -l test
+             # 部署尾部自动健康校验（/api/v1/health + git_sha 比对本地 HEAD）
+             # dogfood 稳定后
              ↓
 [staging 发布]（手动期）
              python3 docker/build.py --push --registry docker.io \
-               --image jukanntenn/wakewake --base-tag v0.1.0
-             ansible-playbook -i hosts.yml deploy.yml -l staging \
-               --vault-password-file ~/.ansible-vault/wakewake-staging.pwd
-             ↓（CI 启用后）
-[staging 发布]（CI 期）
-             git tag v0.1.0 && git push --tags   # docker-publish.yml 自动 build+push 语义化标签
-             # 改 group_vars/staging.yml 的 wakewake_version，重跑 ansible
+               --image jukanntenn/wakewake --tags 0.1.3
+             ansible-playbook devops/ansible/deploy.yml -l staging
+             ↓（CI 期）
+             git tag v0.1.3 && git push origin v0.1.3   # docker-publish.yml 自动发布
+             # 改 group_vars/staging/env.yml 的 wakewake_version，重跑 ansible
              ↓ staging 验证通过
 [prod 发布]
-             ansible-playbook -i hosts.yml deploy.yml -l production \
-               --vault-password-file ~/.ansible-vault/wakewake-prod.pwd
-             # 同版本号，仅换配置 + 目标 host
+             # 同版本号，改 group_vars/prod/env.yml（域名/cert/邮件），重跑：
+             ansible-playbook devops/ansible/deploy.yml -l prod
 ```
 
-## Tag 约定（metadata-action 语义化）
+回滚：改 `wakewake_version` 指向旧版本，重跑 playbook（镜像不可变，秒级回退）。
+从非 tag 提交点部署 staging/prod 时 `-e verify_sha=no` 跳过 sha 比对（健康检查仍跑）。
 
-CI（`.github/workflows/docker-publish.yml`）由 `git tag v*` 触发，docker/metadata-action 自动生成：
+## 质量门禁（prek 单一命令源，本地 = CI）
 
-| 触发 | 生成的标签 | 用途 |
-|---|---|---|
-| `git tag v0.1.0` | `0.1.0`, `0.1`, `0`, `latest`, `sha-<short>` | 正式发布 |
-| `git tag v0.1.0-rc.1` | `0.1.0-rc.1`, `sha-<short>` | 预发布（不产 `latest`/滚动 tag） |
+所有门禁命令定义在 prek，按目录拆分（workspace 模式自动发现）：
 
-- staging/prod ansible 钉 `wakewake_version: "vX.Y.Z"` -> 镜像 `jukanntenn/wakewake:X.Y.Z`。
-- 回滚：改 `wakewake_version` 指向旧版本，重跑 playbook（镜像不可变，秒级回退）。
+| 配置 | format 组 | lint 组 | check 组 |
+|---|---|---|---|
+| `prek.toml`（根） | builtin 修正器 | actionlint | check-yaml/toml/json、agents-sync 等 |
+| `backend/prek.toml` | cargo fmt | cargo clippy | test（真 PG workspace，回退 --lib）、build（manual） |
+| `frontend/prek.toml` | prettier | eslint、tsc | vitest、build（manual） |
 
-手动期（CI 未启用）：`docker/build.py --push --registry docker.io --image jukanntenn/wakewake --base-tag vX.Y.Z` 直接推单架构到 Docker Hub。
+- 本地 git hooks：pre-commit = 快门禁；pre-push = 慢门禁（clippy/eslint/tsc/测试）；
+  manual = 仅显式调用（build 门禁）。
+- CI 按 `项目:hook/组` 调 prek（`pip install prek==<本地版本>`），与本地跑同一条命令，
+  杜绝"本地全绿、CI 报红"。常用：
+  - `prek run --all-files --group format --group lint backend/`
+  - `prek run --all-files backend:test`（scripts/backend_tests.py：有 PG → workspace 全量）
+  - `prek run --all-files --hook-stage manual frontend:build`
+- Node 版本真源 `frontend/.nvmrc`，pnpm 版本真源 `frontend/package.json` 的 `packageManager`。
+
+## 部署后健康校验
+
+`scripts/check_deploy.py`（控制机执行，stdlib only）：
+
+1. 轮询 `/api/v1/health`（默认 5s 间隔 / 180s 超时）等 `{"status":"ok"}`；
+2. 给定 `--sha` 时比对 `/api/v1/version` 的 `git_sha`——容器"活着但跑旧镜像"才是部署验证核心；
+3. 自签环境（test）加 `--insecure`。
+
+deploy.yml 尾部自动执行（health_url / health_insecure 每环境 group_vars 定义）。
 
 ## Ansible 结构
 
 ```
+ansible.cfg                        根配置（inventory + avpm vault 身份，仓库任意目录免参数）
 devops/ansible/
-  hosts.yml                    inventory（dev / dev_agent / staging / production 四 group）
-  deploy.yml                   单 playbook，env-agnostic，--limit 选环境（必填）
+  ansible.cfg                      目录局部配置（cd 进去跑同样免参数）
+  hosts.yml                        inventory（test / test_agent / staging / prod）
+  deploy.yml                       统一部署 playbook，--limit 选环境（必填）+ 尾部健康校验
+  deploy-agent.yml                 agent 部署（本地构建 + supervisor 常驻）
   group_vars/
-    all.yml                    共享变量（端口、PG 库名/用户、路径）
-    dev.yml                    dev：LAN registry，浮动 main tag，tls internal
-    staging.yml                staging：Docker Hub 钉版本，HTTP，外部反代
-    production.yml             prod：与 staging 同构，差异仅配置
-  host_vars/
-    fn.yml / agent.yml         dev host 事实
-    staging.yml / production.yml   TODO 占位（host 定后改名）
-  vars/
-    dev/vault.yml              dev secrets（加密入库）
-    staging/vault.yml.example  staging secrets 模板（真实 vault.yml 加密不入库）
-    production/vault.yml.example
+    all.yml                        共享变量（端口、PG 库名/用户、路径）
+    test/{env.yml,vault.yml}       test：LAN registry 浮动 main + 自签 HTTPS + secrets（加密）
+    staging/{env.yml,vault.yml}    staging：Docker Hub 钉版本 + 隧道前置（占位）
+    prod/{env.yml,vault.yml}       prod：CF 直连回源 + Origin Cert（占位）
+  host_vars/                       每主机事实（user / home）
   templates/
-    docker-compose.yml.j2      通用（healthcheck / caddy-data 按 tls_profile 分支）
-    config.toml.j2             通用（DSN password 用 urlencode）
-    Caddyfile.dev              dev：tls internal + fallback_sni
-    Caddyfile.http             staging + prod 共用：plain HTTP
+    docker-compose.yml.j2          通用（healthcheck / caddy-data 按 tls_profile 分支）
+    config.toml.j2                 通用（DSN password urlencode）
+    Caddyfile.test                 test：tls internal + fallback_sni
+    Caddyfile.http                 staging：plain HTTP（隧道终结 TLS）
+    Caddyfile.prod                 prod：CF Origin Cert + CF CIDR 放行（占位注释）
 ```
 
-### Vault 密码文件约定
+### Vault（avpm 单变量加密）
 
-每环境一个 vault 密码文件（本地保管，不入库）：
-- `~/.ansible-vault/wakewake-dev.pwd`
-- `~/.ansible-vault/wakewake-staging.pwd`
-- `~/.ansible-vault/wakewake-prod.pwd`
+每环境一个 vault-id，密码在 avpm keyring（`~/.local/bin/avpm-client`，多设备加密同步），
+secrets 以 `!vault` 单变量加密**入库**（group_vars/<env>/vault.yml，ansible.cfg 的
+vault_identity_list 自动解密）：
 
-新建 staging/prod vault：
 ```bash
-cd devops/ansible
-cp vars/staging/vault.yml.example vars/staging/vault.yml
-# 编辑填入真实 secrets
-ansible-vault encrypt vars/staging/vault.yml \
-  --vault-password-file ~/.ansible-vault/wakewake-staging.pwd
+# 接线一个新环境（一次性）：
+avpm-client set wakewake-test          # 录入/轮换密码（staging/prod 同理）
+
+# 增改一个 secret（值经 stdin/参数进 encrypt_string，不落明文文件）：
+ansible-vault encrypt_string --vault-id wakewake-test@~/.local/bin/avpm-client \
+  '<value>' --name db_password >> devops/ansible/group_vars/test/vault.yml
 ```
 
-## 待办（host 就绪后填）
+迁移备注：dev 时代的整文件加密 vault（vars/<env>/vault.yml + ~/.ansible-vault/*.pwd）
+已废弃删除；`~/.ansible-vault/wakewake-dev.pwd` 保留作 keyring 丢失时的恢复备份，
+确认 avpm 同步可靠后可删。
 
-- `hosts.yml`：staging / production group 填入真实 VPS IP / 用户
-- `host_vars/staging.yml` / `production.yml`：重命名为对应 host 名，填 `user`/`home`
-- `group_vars/staging.yml` / `production.yml`：填 `public_url`（真实域名）、按需开 `mailer_*`
-- 真实 `vars/staging/vault.yml` / `vars/production/vault.yml`：按 `.example` 填 + 加密
-- GitHub secrets：`DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`（CI 启用时）
+## 待办（staging/prod 上线时）
+
+- `hosts.yml`：staging / prod group 填入真实 VPS IP / 用户
+- `host_vars/staging.yml` / `prod.yml`：重命名为对应 host 名，填 `user`/`home`
+- `group_vars/staging/env.yml` / `prod/env.yml`：填 `public_url`（真实域名）、按需开 `mailer_*`
+- prod：生成 CF Origin Cert 放 `{{ app_path }}/certs/`，解开 env.yml 的 origin_cert/origin_key
+  与 Caddyfile.prod 的 CIDR 放行（或 VPS 防火墙方案）
+- vault：`avpm-client set wakewake-staging / wakewake-prod` + 按 vault.yml 头部字段清单加密
+- GitHub secrets：`DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`（CI 发布期；token 需带
+  read/write/delete 权限，delete 用于清理临时 build-<arch> tag）

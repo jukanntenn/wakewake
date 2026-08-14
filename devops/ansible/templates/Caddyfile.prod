@@ -1,19 +1,32 @@
 # {{ ansible_managed }}
-# wakewake Caddyfile（staging）。
+# wakewake Caddyfile（prod，占位——上线时按注释补齐）。
 #
-# Plain HTTP（无 TLS）。HTTPS 由宿主机隧道（cloudflared 类，出站连接）终结后
-# 回送 HTTP 到 host_port——容器内 Caddy 只服务 HTTP。路由逻辑与 Caddyfile.test /
-# 镜像内置 docker/Caddyfile 一致，仅去掉 tls internal / fallback_sni。
+# 拓扑：访客 -> Cloudflare（免费 CDN）-> 直连回源本容器 Caddy。
+# TLS：Cloudflare Origin Certificate（CF dashboard 生成，15 年有效）挂载进容器，
+# Caddy 用它服务 HTTPS（CF 回源模式 Full-strict）。
+# 回源限制（二选一，上线时定）：
+#   a) VPS 防火墙（ufw）仅放行 Cloudflare CIDR —— 推荐，容器配置零感知；
+#   b) 下方注释掉的 Caddy remote_ip matcher —— 需 trusted_proxies 才能拿到真实
+#      客户端 IP（CF 回源的 TCP 源 IP 恒为 CF 节点）。
 #
 # 容器内布局（所有环境一致）：
 #   :{{ caddy_port }}   Caddy（本文件）         - 对外发布
 #   {{ backend_port }}  wakewake-server（127.0.0.1） - 永不对外，Caddy 反代到它
 
 {
+	# Origin Cert 已显式提供，禁用 ACME 自动签发。
 	auto_https off
 }
 
-:{{ caddy_port }} {
+https://:{{ caddy_port }} {
+	# TODO: 上线时挂载 Origin Cert（group_vars/prod/env.yml 的 origin_cert/origin_key）。
+	tls {{ origin_cert | default("/app/certs/origin.pem") }} {{ origin_key | default("/app/certs/origin.key") }}
+
+	# 方案 b（可选）：仅放行 Cloudflare 回源。CIDR 列表见
+	# https://www.cloudflare.com/ips/（cloudflare_cidrs 变量上线时补）。
+	# @not_cf not remote_ip {{ cloudflare_cidrs | default("173.245.48.0/20") }}
+	# respond @not_cf 403
+
 	header {
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"

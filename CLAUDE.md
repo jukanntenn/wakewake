@@ -37,6 +37,8 @@ All commands assume the working directory noted in each section. Prefer the dev 
 
 - `python3 devops/dev.py start` — start backend (Docker Compose: backend + postgres + caddy) + frontend (local `pnpm dev`), with health checks
 - `python3 devops/dev.py stop` — stop everything
+- `python3 docker/build.py [--push] [--tags <tag>...]` — build the unified image (`main` tag always included; default platform = host). See [`devops/README.md`](devops/README.md) for release flow and tag semantics (SemVer: `v0.1.3-rc.1`, never `v0.1.3rc1`)
+- `ansible-playbook devops/ansible/deploy.yml -l <test|staging|prod>` — deploy an environment (root `ansible.cfg` supplies inventory + avpm vault identities; post-deploy health + git-sha verification runs automatically)
 
 ## Tech Stack
 
@@ -113,7 +115,7 @@ Schema changes go through `sqlx::migrate!` with versioned SQL files in `backend/
 
 - **Conventional Commits** (match existing history): `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `build:`, `style:`, `ci:`, `perf:`, `revert:`. Optional scope: `refactor(backend): ...`.
 - Examples from this repo: `feat: add integrations system with Bemfa IoT support`, `refactor(backend): restructure database configuration and migrations`, `test: improve test compliance with naming conventions`.
-- `prek` runs on pre-commit (format checks + AGENTS sync), pre-push (unit tests), and commit-msg (Conventional Commits format).
+- `prek` gates live in three per-directory configs (root + `backend/prek.toml` + `frontend/prek.toml`, auto-discovered in workspace mode) with three groups: `format` / `lint` / `check`. Git hooks: pre-commit (fast gates), pre-push (clippy / eslint / tsc / tests), commit-msg (Conventional Commits). CI invokes the same prek hooks (`prek run --all-files --group <g> <project>/`) — the command source is single, so local-green/CI-red drift is a bug in the configs, not bad luck.
 
 ## Testing
 
