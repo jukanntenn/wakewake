@@ -135,20 +135,21 @@ s6-overlay 管理）+ 旁路 PostgreSQL。多架构（`linux/amd64`、`linux/arm
 镜像由 [`docker/build.py`](./docker/build.py) 构建。
 
 ```bash
-# 1. 配置环境
+# 1. 配置（应用配置 + PostgreSQL 凭据）
+cp docker/config.example.toml docker/config.toml
 cp docker/.env.example docker/.env
-#   → 修改 JWT_SIGNING_KEY、REFRESH_SIGNING_KEY、PASSWORD_RESET__SECRET
-#     （openssl rand -base64 32）和 POSTGRES_PASSWORD
+#   → 修改 config.toml 里的 3 个密钥（openssl rand -base64 32）和 public_url，
+#     以及 .env 里的 POSTGRES_PASSWORD
 
 # 2. 起服务
 docker compose -f docker/docker-compose.yml up -d
 
 # 3. 打开应用
-#   https://<你的主机>:8443
+#   http://<你的主机>:8443
 ```
 
 迁移在 server 启动时自动执行（`sqlx::migrate!`），无需单独迁移步骤。首启会
-幂等创建一个 bootstrap admin（见 `.env.example` → `WAKEWAKE_SECURITY__BOOTSTRAP_*`）。
+幂等创建一个 bootstrap admin（见 `backend/config.example.toml` → `WAKEWAKE_SECURITY__BOOTSTRAP_*`）。
 
 ### Agent
 

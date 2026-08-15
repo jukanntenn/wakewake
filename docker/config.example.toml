@@ -1,0 +1,33 @@
+# Wakewake 自部署配置模板（copy 为 config.toml 后修改，docker compose 自动挂载）。
+#   1. cp config.example.toml config.toml && cp .env.example .env
+#   2. 替换下方 3 个密钥（openssl rand -base64 32）和 public_url
+#   3. docker compose up -d && open http://<your-ip>:8443
+#
+# 完整 schema 与字段说明见 backend/config.example.toml（本文件只列自部署需关心的项；
+# WAKEWAKE_* 环境变量可覆盖任意项，优先级 env > 本文件 > 内置默认）。
+#
+# 注意：[database] 不在此文件——DSN 由 docker-compose.yml 从 .env 的 POSTGRES_*
+# 拼接注入（密码只写 .env 一处）。
+
+# [REQUIRED] 应用对外访问地址（邮件链接用），改成实际 IP/域名:端口
+[app]
+public_url = "http://localhost:8443"
+
+# [REQUIRED] 3 个密钥，生成命令：openssl rand -base64 32（彼此独立，勿复用）
+[jwt]
+signing_key = "CHANGE_ME_openssl_rand_base64_32"
+refresh_signing_key = "CHANGE_ME_openssl_rand_base64_32"
+
+[password_reset]
+secret = "CHANGE_ME_openssl_rand_base64_32"
+
+# ── 可选 ──
+# 密码重置邮件（不配则该功能返 503）。
+# [mailer]
+# enabled = true
+# smtp_host = "smtp.example.com"
+# smtp_port = 587
+# smtp_username = ""
+# smtp_password = ""
+# from_address = "noreply@example.com"
+# from_name = "WakeWake"

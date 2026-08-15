@@ -1,0 +1,63 @@
+# wakewake 路由唯一真源（Caddyfile snippet，烤进镜像 /app/caddy/routes.caddy）。
+#
+# 所有环境共享同一路由逻辑（API/SSE 反代 + 静态前端托管 + 安全头 + 访问日志），
+# 每环境的 Caddyfile 只有一件事：import 本文件 + 声明站点地址和 TLS 层。
+# 改路由只改这里；站点变体共 4 份，每份对应一种 TLS 形态：
+#   docker/Caddyfile（镜像内置 HTTP；自部署 + staging）、docker/Caddyfile.local
+#   （自签；本地验收 + e2e）、devops/ansible/templates/Caddyfile.{test,prod}。
+#
+# 同步矩阵（本文件内部的不变量，改需整体一致）：
+#   8080：反代目标 = 容器内 backend 监听（config.toml [server].port）。
+#   /app/frontend/out：静态导出目录（Dockerfile COPY --from=frontend）。
+
+(wakewake_routes) {
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	encode zstd gzip
+
+	# API（非 SSE）
+	@api path /api/*
+	handle @api {
+		reverse_proxy 127.0.0.1:8080 {
+			transport http {
+				versions h2c
+			}
+			flush_interval -1
+			health_uri /api/v1/health
+			health_interval 10s
+		}
+	}
+
+	# SSE（独立 handle，禁缓冲，flush_interval -1 + X-Accel-Buffering no）
+	@sse path /api/v1/agents/self/events
+	handle @sse {
+		reverse_proxy 127.0.0.1:8080 {
+			transport http {
+				versions h2c
+			}
+			flush_interval -1
+			header_up X-Accel-Buffering no
+		}
+	}
+
+	# 静态前端（Next.js out/）
+	handle {
+		root * /app/frontend/out
+
+		@immutable path /_next/static/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+		try_files {path} {path}.html {path}/index.html /index.html
+		file_server {
+			precompressed gzip
+		}
+	}
+
+	log {
+		output stderr
+		format console
+	}
+}

@@ -48,11 +48,14 @@
         dest: "{{ config_file }}"
         mode: "0600"
 
+    # tls_profile=http 的环境（staging）不定义 caddyfile_template：
+    # 不渲染不挂载，容器直接用镜像内置 /app/Caddyfile（hostless :8443 plain HTTP）。
     - name: Template Caddyfile
       ansible.builtin.template:
         src: "{{ caddyfile_template }}"
         dest: "{{ caddyfile }}"
         mode: "0644"
+      when: caddyfile_template is defined
 
     - name: Pull image and recreate containers on change
       community.docker.docker_compose_v2:

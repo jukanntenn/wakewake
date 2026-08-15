@@ -1,5 +1,6 @@
 # {{ ansible_managed }}
-# wakewake Caddyfile（prod，占位——上线时按注释补齐）。
+# wakewake Caddyfile（prod，占位——上线时按注释补齐）。路由唯一真源在镜像内
+# /app/caddy/routes.caddy（import），本文件只声明站点地址与 TLS 层。
 #
 # 拓扑：访客 -> Cloudflare（免费 CDN）-> 直连回源本容器 Caddy。
 # TLS：Cloudflare Origin Certificate（CF dashboard 生成，15 年有效）挂载进容器，
@@ -8,15 +9,13 @@
 #   a) VPS 防火墙（ufw）仅放行 Cloudflare CIDR —— 推荐，容器配置零感知；
 #   b) 下方注释掉的 Caddy remote_ip matcher —— 需 trusted_proxies 才能拿到真实
 #      客户端 IP（CF 回源的 TCP 源 IP 恒为 CF 节点）。
-#
-# 容器内布局（所有环境一致）：
-#   :{{ caddy_port }}   Caddy（本文件）         - 对外发布
-#   {{ backend_port }}  wakewake-server（127.0.0.1） - 永不对外，Caddy 反代到它
 
 {
 	# Origin Cert 已显式提供，禁用 ACME 自动签发。
 	auto_https off
 }
+
+import /app/caddy/routes.caddy
 
 https://:{{ caddy_port }} {
 	# TODO: 上线时挂载 Origin Cert（group_vars/prod/env.yml 的 origin_cert/origin_key）。
@@ -27,53 +26,5 @@ https://:{{ caddy_port }} {
 	# @not_cf not remote_ip {{ cloudflare_cidrs | default("173.245.48.0/20") }}
 	# respond @not_cf 403
 
-	header {
-		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
-	}
-
-	encode zstd gzip
-
-	# API（非 SSE）
-	@api path /api/*
-	handle @api {
-		reverse_proxy 127.0.0.1:{{ backend_port }} {
-			transport http {
-				versions h2c
-			}
-			flush_interval -1
-			health_uri /api/v1/health
-			health_interval 10s
-		}
-	}
-
-	# SSE（独立 handle，禁缓冲，flush_interval -1 + X-Accel-Buffering no）
-	@sse path /api/v1/agents/self/events
-	handle @sse {
-		reverse_proxy 127.0.0.1:{{ backend_port }} {
-			transport http {
-				versions h2c
-			}
-			flush_interval -1
-			header_up X-Accel-Buffering no
-		}
-	}
-
-	# 静态前端（Next.js out/）
-	handle {
-		root * /app/frontend/out
-
-		@immutable path /_next/static/*
-		header @immutable Cache-Control "public, max-age=31536000, immutable"
-
-		try_files {path} {path}.html {path}/index.html /index.html
-		file_server {
-			precompressed gzip
-		}
-	}
-
-	log {
-		output stderr
-		format console
-	}
+	import wakewake_routes
 }

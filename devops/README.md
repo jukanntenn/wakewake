@@ -3,6 +3,20 @@
 设计目标：最低心智负担 + staging 与 prod 容器侧字节同构（差异只在配置）。
 四环境（本地验收 → test → staging → prod），每步对应一条命令，单向闸门提升。
 
+## 环境速查（我想跑起来/改配置 → 用哪个）
+
+| 我想… | 命令 | 要改的文件 |
+|---|---|---|
+| 本地开发（热重载） | `python3 devops/dev.py start` | 无（dev.py 首启自动生成 `backend/config.local.toml`） |
+| 本地验收生产形态 | `docker compose -f docker/docker-compose.local.yml up -d --build` | `cp docker/config.local.example.toml docker/config.local.toml`（3 个密钥）；可选 `docker/.env`（APP_PORT / POSTGRES_*） |
+| 跑 E2E | `cd e2e && pnpm test` | 无（compose 内置测试密钥） |
+| 自部署（单机用户） | `cd docker && docker compose up -d` | `cp config.example.toml config.toml`（public_url + 3 密钥）+ `cp .env.example .env`（PG 密码） |
+| 部署远程 test | `ansible-playbook devops/ansible/deploy.yml -l test` | 无（`group_vars/test/` 已定型） |
+| 部署 staging / prod | 同上 `-l staging` / `-l prod` | 上线时：env.yml（域名/版本）+ vault（4 密钥） |
+| 部署 agent（bare-metal） | `ansible-playbook devops/ansible/deploy-agent.yml -l test_agent` | 无（vault 已定型） |
+
+配置分层规则（所有环境一致）：**TOML 文件为主，必要时用 `WAKEWAKE_*` 环境变量覆盖**（e2e/测试的动态覆盖走这一层）；secrets 按环境落位：dev 固定值 / e2e 内置测试密钥 / 远程 ansible vault / 自部署本地文件（不入库）。
+
 ## 环境定义
 
 | | 本地验收 | test | staging | prod |
@@ -132,8 +146,8 @@ devops/ansible/
     docker-compose.yml.j2          通用（healthcheck / caddy-data 按 tls_profile 分支）
     config.toml.j2                 通用（DSN password urlencode）
     Caddyfile.test                 test：tls internal + fallback_sni
-    Caddyfile.http                 staging：plain HTTP（隧道终结 TLS）
     Caddyfile.prod                 prod：CF Origin Cert + CF CIDR 放行（占位注释）
+                                   （staging 零挂载：直接用镜像内置 /app/Caddyfile）
 ```
 
 ### Vault（avpm 单变量加密）

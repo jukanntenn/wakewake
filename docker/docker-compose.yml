@@ -5,28 +5,32 @@
 # reached over a shared Unix-socket volume. The app connects to postgres
 # via /var/run/postgresql — postgres is never published on the host.
 #
-#   1. cp .env.example .env && edit secrets
-#   2. docker compose up -d
-#   3. open http://<your-ip>:8443
+#   1. cp config.example.toml config.toml  (app config: secrets + public_url)
+#      cp .env.example .env                (postgres credentials, single source
+#                                           for both postgres and the app DSN)
+#   2. edit both files
+#   3. docker compose up -d
+#   4. open http://<your-ip>:8443
+#
+# The baked-in Caddyfile (plain HTTP) is used as-is — no Caddyfile mount needed;
+# only mount a variant if you terminate TLS inside the container (then add a
+# ./Caddyfile:/app/Caddyfile:ro volume).
 
 services:
   wakewake:
-    image: 192.168.5.50:5000/wakewake:dev
+    # Image published by the release flow (devops/README.md); pin a version
+    # tag instead of latest for reproducible updates.
+    image: jukanntenn/wakewake:latest
     container_name: wakewake
     ports:
       - "8443:8443"
     volumes:
-      # s6 caddy run 脚本固定读 /app/Caddyfile。
-      - ./Caddyfile:/app/Caddyfile:ro
+      - ./config.toml:/app/config.toml:ro
       - ./data:/app/data
       - postgres-socket:/var/run/postgresql
     environment:
-      # JWT signing keys (change these!)
-      - WAKEWAKE_JWT__SIGNING_KEY=${WAKEWAKE_JWT__SIGNING_KEY:-change-me-min-32-bytes-padding!!}
-      - WAKEWAKE_JWT__REFRESH_SIGNING_KEY=${WAKEWAKE_JWT__REFRESH_SIGNING_KEY:-change-me-min-32-bytes-padding!!}
-      # Password reset HMAC secret
-      - WAKEWAKE_PASSWORD_RESET__SECRET=${WAKEWAKE_PASSWORD_RESET__SECRET:-change-me-min-32-bytes-padding!!}
-      # PostgreSQL DSN over the shared Unix-socket volume (password must match POSTGRES_PASSWORD below).
+      # DSN 单一来源：由 .env 的 POSTGRES_* 拼接（密码不写第二处）。
+      # 其余应用配置在挂载的 config.toml（copy 自 config.example.toml）。
       - WAKEWAKE_DATABASE__DSN=postgres:///${POSTGRES_DB:-wakewake}?host=/var/run/postgresql&user=${POSTGRES_USER:-wakewake}&password=${POSTGRES_PASSWORD:-change-me}&sslmode=disable
       # Optional: timezone (read by s6 cont-init.d/01-setup.sh)
       - TZ=${TZ:-UTC}

@@ -82,9 +82,11 @@ RUN curl -fsSL "https://github.com/caddyserver/caddy/releases/download/${CADDY_V
 COPY docker/s6/cont-init.d /etc/cont-init.d
 COPY docker/s6/user-bundles.d /etc/s6-overlay/user-bundles.d
 COPY docker/s6/s6-rc.d /etc/s6-overlay/s6-rc.d
-# 烤进默认 Caddyfile（plain HTTP）；compose 可卷挂载覆盖（验收用 Caddyfile.local，
-# e2e 用 e2e/Caddyfile，生产/远程 dev 用 ansible 渲染的 Caddyfile）。
-COPY docker/Caddyfile /etc/caddy/Caddyfile
+# 烤进路由唯一真源（snippet，各环境 Caddyfile import 它）+ 默认 Caddyfile（plain HTTP）。
+# s6 caddy run 固定读 /app/Caddyfile（docker/s6/s6-rc.d/caddy/run）；compose 卷挂载
+# 各环境变体覆盖（本地验收 Caddyfile.local、e2e/Caddyfile、ansible 渲染的 Caddyfile）。
+COPY docker/caddy/routes.caddy /app/caddy/routes.caddy
+COPY docker/Caddyfile /app/Caddyfile
 COPY --from=builder /app/target/release/wakewake-server /app/wakewake-server
 COPY --from=frontend /web/out /app/frontend/out
 RUN mkdir -p /app/data && chmod +x /etc/cont-init.d/*.sh /etc/s6-overlay/s6-rc.d/*/run

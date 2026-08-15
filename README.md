@@ -141,21 +141,22 @@ Caddy, managed by s6-overlay) and a sidecar PostgreSQL. Multi-arch
 [`docker/build.py`](./docker/build.py).
 
 ```bash
-# 1. Configure environment
+# 1. Configure (app config + postgres credentials)
+cp docker/config.example.toml docker/config.toml
 cp docker/.env.example docker/.env
-#   → edit JWT_SIGNING_KEY, REFRESH_SIGNING_KEY, PASSWORD_RESET__SECRET
-#     (openssl rand -base64 32) and POSTGRES_PASSWORD
+#   → edit the 3 secrets in config.toml (openssl rand -base64 32),
+#     public_url, and POSTGRES_PASSWORD in .env
 
 # 2. Bring up the stack
 docker compose -f docker/docker-compose.yml up -d
 
 # 3. Open the app
-#   https://<your-host>:8443
+#   http://<your-host>:8443
 ```
 
 Migrations run automatically on server startup (`sqlx::migrate!`); there is no
 separate migration step. A bootstrap admin is created idempotently on first
-start (see `.env.example` → `WAKEWAKE_SECURITY__BOOTSTRAP_*`).
+start (see `backend/config.example.toml` → `WAKEWAKE_SECURITY__BOOTSTRAP_*`).
 
 ### The agent
 

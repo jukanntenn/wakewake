@@ -17,18 +17,17 @@
 # 本地验收不持久化数据：app data 目录和 PG 数据全在 ephemeral 容器内，
 # down -v 即得干净环境。仅 postgres-socket IPC 卷在服务间共享。
 #
-# 变更联动矩阵（改 A 处必须同步 B/C 处，各点注释互相引用）：
+# 变更联动矩阵（改 A 处必须同步 B 处，各点注释互相引用）：
 #   POSTGRES_DB/USER/PASSWORD：postgres environment ↔ app WAKEWAKE_DATABASE__DSN
-#     ↔ postgres healthcheck ↔ config.local.toml [database] dsn（文档默认）
-#   容器内 8443（不变量）：Caddyfile.local 监听 ↔ app healthcheck curl
+#     ↔ postgres healthcheck（config.local.toml [database] dsn 仅文档，被 env 覆盖）
 #   APP_PORT（宿主端口）：ports ↔ WAKEWAKE_APP__PUBLIC_URL（同一插值源）
 #   服务名 app / mailpit：被 Caddyfile.local SAN / config.local.toml smtp_host 引用
-#   8080（不变量）：config.local.toml [server] port ↔ Caddyfile.local、内置 Caddyfile 的 reverse_proxy
-#   /var/run/postgresql（不变量）：postgres 镜像默认 socket 目录 ↔ 双卷挂载 ↔ healthcheck -h ↔ DSN host=
+# 路由不变量已收敛进镜像（/app/caddy/routes.caddy）：8080 反代目标、8443 容器端口、
+# /var/run/postgresql socket——改这些 = 改 docker/caddy/routes.caddy + Dockerfile，不再散落本目录。
 #
 # 配置走文件挂载：./config.local.toml → /app/config.toml（server 默认读取路径）。
-# 该文件含全部配置项与说明，初始为默认值/占位符；已在 .gitignore /
-# .dockerignore 中（*.local.toml），不入库。
+# 首次：cp config.local.example.toml config.local.toml（含全部配置项与说明，
+# 默认值/占位符）。后者已在 .gitignore / .dockerignore 中（*.local.toml），不入库。
 #
 # 无 mock 服务：mailpit 是真实 SMTP 服务器 + 邮件捕获（密码重置/邮件验证
 # 验收），默认启动；bemfa 等集成走真实云端（agent 侧 env 默认指向 bemfa.com）。
