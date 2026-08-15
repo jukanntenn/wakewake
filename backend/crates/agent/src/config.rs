@@ -1,4 +1,4 @@
-//! Agent 配置（config-rs + clap，configuration.md §4 Agent schema）。
+//! Agent 配置（config-rs + clap，specs/backend/configuration.md §4 Agent schema）。
 //!
 //! 三层覆盖：CLI 参数 > 环境变量 > TOML 文件 > 内置默认值。
 //! 文件搜索：~/.wakewake/config.toml 或 ./wakewake.toml 或 --config 指定。

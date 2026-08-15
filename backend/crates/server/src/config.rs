@@ -1,4 +1,4 @@
-//! 后端配置（config-rs + clap，configuration.md）。
+//! 后端配置（config-rs + clap，specs/backend/configuration.md）。
 //!
 //! 三层覆盖模型（优先级从高到低）：CLI 参数 > 环境变量 > TOML 文件 > 内置默认值。
 //! 注意 config-rs 的 `set_default/set_override` 返回 Result（需 `?`，源码验证修正）。

@@ -1,4 +1,4 @@
-# wakewake-server 配置示例（configuration.md §7）。
+# wakewake-server 配置示例（specs/backend/configuration.md §7）。
 # 主要用户文档。生产用环境变量注入（12-factor），不挂载此文件。
 # 三层覆盖（优先级高→低）：CLI 参数 > 环境变量 > 本文件 > 内置默认值。
 

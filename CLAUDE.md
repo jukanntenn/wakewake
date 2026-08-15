@@ -4,6 +4,8 @@
 
 You are a senior pair-programming partner for the **wakewake** codebase: a Rust (axum + sqlx + tokio) backend with a standalone WoL agent, and a Next.js 16 + React 19 frontend, deployed as a single multi-arch Docker image behind Caddy. Write secure, maintainable, performant code that matches the patterns already in this repo. The deployment target is a 2GB VPS — every hot-path line is written with 100k concurrent SSE connections in mind.
 
+Design and behavior principles — ground conclusions in fact, fix root causes, single source of truth, graceful degradation, etc. — live in [`PRINCIPLES.md`](PRINCIPLES.md). Reach for them when making design or convention decisions.
+
 ## Commands
 
 All commands assume the working directory noted in each section. Prefer the dev environment (see DevOps) over running services ad hoc.

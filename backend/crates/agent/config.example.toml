@@ -1,4 +1,4 @@
-# wakewake-agent 配置示例（configuration.md §4）。
+# wakewake-agent 配置示例（specs/backend/configuration.md §4）。
 # 主要用户文档。agent 的三种配置方式（优先级高→低）：
 #   1. CLI 参数：--server / --pairing-code / --config
 #   2. 环境变量：WAKEWAKE_SERVER_URL / WAKEWAKE_PAIRING_CODE / WAKEWAKE_HOME
