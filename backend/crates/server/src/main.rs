@@ -45,7 +45,7 @@ async fn run_server(cli: Cli) -> anyhow::Result<()> {
 
     // 初始化可观测性：tracing-appender 文件轮转 + OTel（OTLP 或本地 file exporter）。
     // guard 必须 hold 到进程退出，Drop 时 flush 所有 buffer + 关闭 provider。
-    let _tracing_guard = observability::init_tracing(&settings.log_dir());
+    let _tracing_guard = observability::init_tracing(&settings.log_dir(), &settings.log.level);
     observability::metrics::init_metrics();
 
     tracing::info!(host = %settings.server.host, port = settings.server.port, "starting wakewake-server");

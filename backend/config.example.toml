@@ -148,7 +148,9 @@ secret = "CHANGE_ME_openssl_rand_base64_32_padding"
 # Log（tracing-appender 文件轮转 + OTel）
 # ============================================================
 # [OPTIONAL] 日志级别
-# Env: WAKEWAKE_LOG__LEVEL（或 RUST_LOG）
+# 优先级：RUST_LOG 环境变量（支持按模块过滤，如 wakewake_server=debug,sqlx=warn）
+# > 本项。serve 与 admin 子命令同用此回落链。
+# Env: WAKEWAKE_LOG__LEVEL
 # Default: info
 # [log]
 # level = "info"
