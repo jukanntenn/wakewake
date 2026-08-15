@@ -2,24 +2,19 @@
 //!
 //! 覆盖 §10.7「本轮修复结果下轮 `repair_errors` 携带」+ §10.6 teardown 清空挂起错误。
 //!
-//! 这两个场景共用 `WAKEWAKE_BEMFA__API_BASE` env 缝隙（bemfa.rs 的 E2E mock 重定向），
-//! env 是进程全局量——为避免并行测试互相覆盖 env，合并进**单个**串行测试函数。
+//! 巴法 API 重定向走 `ReconcilerDeps.bemfa_settings.api_base`（配置注入，
+//! 各测试独立 mock server，无共享全局量，可并行）。
 
 use std::sync::Arc;
 
 use base64::Engine;
 use rsa::sha2::Sha256;
 use rsa::{Oaep, RsaPrivateKey, RsaPublicKey};
-use tokio::sync::Mutex;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-/// env 是进程全局量，用此锁强制所有设置 `WAKEWAKE_BEMFA__API_BASE` 的测试串行
-/// （避免并行测试互相覆盖 env）。用 tokio::sync::Mutex 以支持跨 await 持有。
-static ENV_LOCK: Mutex<()> = Mutex::const_new(());
-
 use wakewake_agent::bemfa_state::{BemfaCoordinator, ReconcilerDeps};
-use wakewake_agent::config::WolSettings;
+use wakewake_agent::config::{BemfaSettings, WolSettings};
 use wakewake_agent::state::AgentState;
 use wakewake_protocol::{DeviceData, IntegrationData};
 
@@ -71,11 +66,13 @@ fn seed_state(pub_key: &RsaPublicKey, enabled: bool) -> Arc<std::sync::RwLock<Ag
     state
 }
 
-/// 构造 ReconcilerDeps（state/server_url 注入；其余用测试桩）。
+/// 构造 ReconcilerDeps（state/server_url/bemfa mock 基址注入；其余用测试桩）。
+#[allow(clippy::too_many_arguments)]
 fn make_deps(
     state: Arc<std::sync::RwLock<AgentState>>,
     priv_key: RsaPrivateKey,
     server_url: String,
+    bemfa_base: String,
 ) -> ReconcilerDeps {
     ReconcilerDeps {
         state,
@@ -84,6 +81,10 @@ fn make_deps(
             broadcast_addr: "255.255.255.255:9".to_string(),
             packet_count: 3,
             packet_delay_ms: 100,
+        },
+        bemfa_settings: BemfaSettings {
+            api_base: Some(bemfa_base),
+            ..BemfaSettings::default()
         },
         http_client: reqwest::Client::new(),
         server_url,
@@ -109,14 +110,13 @@ fn extract_repair_errors(received: &[wiremock::Request]) -> Vec<serde_json::Valu
         .collect()
 }
 
-/// §10.7 + §10.6 串行场景（合并避免 env 并发竞争）。
+/// §10.7 + §10.6 场景。
 ///
 /// 1. 轮 1：createTopic 返回 40009（失败）→ repair_errors 挂起，断言 did + 错误码。
 /// 2. 轮 2：挂起错误出现在本轮 `/sync` 请求体 `repair_errors` 中（跨轮携带）。
 /// 3. 禁用集成 → 轮 3 走 teardown → 挂起的 repair_errors 被清空。
 #[tokio::test]
 async fn repair_errors_carry_over_then_teardown_clears() {
-    let _env_guard = ENV_LOCK.lock().await;
     // ---- mock 巴法云：allTopic 恒空 + createTopic 恒 40009 ----
     let bemfa_server = MockServer::start().await;
     Mock::given(method("GET"))
@@ -144,13 +144,16 @@ async fn repair_errors_carry_over_then_teardown_clears() {
         .mount(&wakewake_server)
         .await;
 
-    // env 缝隙重定向 bemfa API → mock。安全：仅本测试二进制进程内，串行执行无竞争。
-    std::env::set_var("WAKEWAKE_BEMFA__API_BASE", bemfa_server.uri());
-
+    // bemfa_settings.api_base 重定向巴法 API → mock（每测试独立 server）。
     let (priv_key, pub_key) = gen_keypair();
     let state = seed_state(&pub_key, true);
     let coord = BemfaCoordinator::new();
-    let deps = make_deps(state.clone(), priv_key, wakewake_server.uri());
+    let deps = make_deps(
+        state.clone(),
+        priv_key,
+        wakewake_server.uri(),
+        bemfa_server.uri(),
+    );
 
     // ---- 阶段 1：轮 1 createTopic 失败 → 挂起 repair_error ----
     let settled1 = coord.reconcile_once(&deps).await;
@@ -188,11 +191,9 @@ async fn repair_errors_carry_over_then_teardown_clears() {
         coord.pending_repair_errors().await.is_empty(),
         "teardown 应清空挂起 repair_errors"
     );
-
-    std::env::remove_var("WAKEWAKE_BEMFA__API_BASE");
 }
 
-/// Notify 句柄：notify_one 不 panic 即视为接线正确（不触达 env，可独立并行）。
+/// Notify 句柄：notify_one 不 panic 即视为接线正确。
 #[tokio::test]
 async fn coordinator_notify_is_wired() {
     let coord = BemfaCoordinator::new();
@@ -206,8 +207,7 @@ async fn coordinator_notify_is_wired() {
 #[tokio::test]
 async fn orphan_topic_deleted_when_enabled_and_guard_passes() {
     use wakewake_agent::bemfa::{self, device_topic};
-    let _env_guard = ENV_LOCK.lock().await;
-
+    // ---- mock 巴法云：allTopic 返回孤儿 + 当前设备 topic ----
     // 孤儿 topic：同 aid（同 k4 前缀）但 did 不在 seed_state 设备集
     let orphan_did = "deadbeefdeadbeefdeadbeefdeadbeef";
     let orphan_topic = device_topic(AID_SIMPLE, orphan_did);
@@ -247,12 +247,10 @@ async fn orphan_topic_deleted_when_enabled_and_guard_passes() {
         .mount(&wakewake_server)
         .await;
 
-    std::env::set_var("WAKEWAKE_BEMFA__API_BASE", bemfa_server.uri());
-
     let (priv_key, pub_key) = gen_keypair();
     let state = seed_state(&pub_key, true);
     let coord = BemfaCoordinator::new();
-    let deps = make_deps(state, priv_key, wakewake_server.uri());
+    let deps = make_deps(state, priv_key, wakewake_server.uri(), bemfa_server.uri());
 
     let settled = coord.reconcile_once(&deps).await;
     // all_settled：无 create（当前 topic 已存在）/ modify（name 匹配）/ repair_error
@@ -260,7 +258,6 @@ async fn orphan_topic_deleted_when_enabled_and_guard_passes() {
 
     // delete_mock 的 expect(1) 在 drop 时断言调用次数
     drop(delete_mock);
-    std::env::remove_var("WAKEWAKE_BEMFA__API_BASE");
 
     // 静态断言 orphan_topic 确实是本部署前缀（is_owned_topic 为 true），否则测试无意义
     assert!(

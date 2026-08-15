@@ -68,3 +68,20 @@ pairing_code = "CHANGE_ME_a1b2c3d4e5f60718"
 # Default: pretty
 # [log]
 # format = "pretty"
+
+# ============================================================
+# Bemfa（巴法云 MQTT；E2E 用 env 指向 mock）
+# ============================================================
+# [OPTIONAL] MQTT broker 地址
+# Env: WAKEWAKE_BEMFA__BROKER
+# Default: bemfa.com
+# [OPTIONAL] MQTT TLS 端口（认证方式一：uid 作 client_id，无账密）
+# Env: WAKEWAKE_BEMFA__PORT
+# Default: 9503
+# [OPTIONAL] topic 管理 HTTP API 基址覆盖（E2E/测试指向 mock 用，日常不设）
+# 不设 = 使用真实巴法云各域名（createTopic/deleteTopic 等按版本路由）
+# Env: WAKEWAKE_BEMFA__API_BASE
+# [bemfa]
+# broker = "bemfa.com"
+# port = 9503
+# api_base = "http://bemfa-mock:8080"

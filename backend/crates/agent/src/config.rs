@@ -55,6 +55,8 @@ pub struct Settings {
     pub wol: WolSettings,
     #[serde(default)]
     pub log: LogSettings,
+    #[serde(default)]
+    pub bemfa: BemfaSettings,
 }
 
 /// 默认 home `目录：$WAKEWAKE_HOME` > ~/.wakewake > ./.wakewake。
@@ -112,6 +114,25 @@ fn default_log_dir() -> Option<String> {
     None
 }
 
+/// Bemfa（巴法云）端点配置。真实云各 API 分散在多个域名（pro/apis.bemfa.com），
+/// `api_base` 仅作整体覆盖（基址 + 路径重组）——E2E/测试指向 mock 用，日常不设。
+#[derive(Debug, Clone, Deserialize)]
+pub struct BemfaSettings {
+    pub broker: String,
+    pub port: u16,
+    pub api_base: Option<String>,
+}
+
+impl Default for BemfaSettings {
+    fn default() -> Self {
+        Self {
+            broker: "bemfa.com".to_string(),
+            port: 9503,
+            api_base: None,
+        }
+    }
+}
+
 impl WolSettings {
     pub fn broadcast_socket_addr(&self) -> Result<SocketAddr, std::net::AddrParseError> {
         self.broadcast_addr.parse()
@@ -127,7 +148,9 @@ impl Settings {
             .set_default("wol.packet_count", 3i64)?
             .set_default("wol.packet_delay_ms", 50i64)?
             .set_default("log.level", "info")?
-            .set_default("log.format", "pretty")?;
+            .set_default("log.format", "pretty")?
+            .set_default("bemfa.broker", "bemfa.com")?
+            .set_default("bemfa.port", 9503i64)?;
 
         // --config 指定的必须存在；否则搜默认路径
         builder = if let Some(path) = &cli.config {

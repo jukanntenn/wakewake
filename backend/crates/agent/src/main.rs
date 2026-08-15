@@ -44,6 +44,7 @@ async fn main() -> anyhow::Result<()> {
             state: state.clone(),
             private_key: private_key.clone(),
             wol_settings: settings.wol.clone(),
+            bemfa_settings: settings.bemfa.clone(),
             http_client: http_client.clone(),
             server_url: settings.server_url.clone(),
             pairing_code: settings.pairing_code.clone(),
