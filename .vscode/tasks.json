@@ -2,8 +2,8 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Start All",
-      "detail": "devops/dev.py start — backend (Docker Compose) + frontend (pnpm dev) + health checks",
+      "label": "Dev: All",
+      "detail": "devops/dev.py start — infra (postgres+mailpit) + backend (cargo watch) + frontend (pnpm dev)",
       "type": "shell",
       "command": "python3",
       "args": ["devops/dev.py", "start"],
@@ -18,7 +18,7 @@
       "icon": { "id": "rocket", "color": "terminal.ansiBlue" }
     },
     {
-      "label": "Stop All",
+      "label": "Dev: Stop",
       "detail": "devops/dev.py stop",
       "type": "shell",
       "command": "python3",
@@ -32,6 +32,37 @@
       },
       "problemMatcher": [],
       "icon": { "id": "stop", "color": "terminal.ansiRed" }
+    },
+    {
+      "label": "Dev: Backend",
+      "detail": "cargo watch + run with backend/config.local.toml (infra auto-started, self-contained)",
+      "type": "shell",
+      "command": "python3 ../devops/dev.py init && cargo watch -x 'run -- --config config.local.toml serve'",
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false
+      },
+      "problemMatcher": [],
+      "isBackground": true,
+      "icon": { "id": "server", "color": "terminal.ansiGreen" }
+    },
+    {
+      "label": "Dev: Frontend",
+      "detail": "pnpm dev (port ${FRONTEND_PORT:-3034}, /api proxied to localhost:8080)",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["dev"],
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false
+      },
+      "problemMatcher": [],
+      "isBackground": true,
+      "icon": { "id": "globe", "color": "terminal.ansiYellow" }
     }
   ]
 }

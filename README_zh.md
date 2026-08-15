@@ -124,9 +124,9 @@ pnpm lint && pnpm format:check
 cd e2e && pnpm test
 ```
 
-> **关于开发工具：** `devops/dev.py` 以 Docker 化后端做编排，方便起见。
-> 你也可以直接 `cargo run` 跑后端、`pnpm dev` 跑前端。完整命令参考见
-> [`AGENTS.md`](./AGENTS.md)。
+> **关于开发工具：** `devops/dev.py` 起基础设施（Docker 内 postgres +
+> mailpit），后端（`cargo watch`）与前端（`pnpm dev`）以宿主进程热重载运行。
+> 完整命令参考见 [`AGENTS.md`](./AGENTS.md)。
 
 ## 部署
 
@@ -177,7 +177,7 @@ backend/
 frontend/       Next.js 16 应用（静态导出）
 e2e/            Playwright（chromium；独立 workspace）
 docker/         多架构 Dockerfile + build.py + compose
-devops/         dev.py + docker-compose + Caddyfile + ansible/
+devops/         dev.py + dev-compose.yml（postgres + mailpit）+ ansible/
 specs/          设计规范（architecture / api / database / testing）
 .github/        CI workflows（lint / test / build / 夜间 e2e）
 ```

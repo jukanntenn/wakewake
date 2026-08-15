@@ -37,7 +37,8 @@ All commands assume the working directory noted in each section. Prefer the dev 
 
 **DevOps** (repo root):
 
-- `python3 devops/dev.py start` — start backend (Docker Compose: backend + postgres + caddy) + frontend (local `pnpm dev`), with health checks
+- `python3 devops/dev.py start` — start infra (Docker Compose: postgres + mailpit) + backend (host `cargo watch`) + frontend (host `pnpm dev`), with health checks; generates `backend/config.local.toml` (dev defaults) on first run
+- `python3 devops/dev.py init` — infra + config only (backend/frontend run separately, e.g. via `.vscode/tasks.json`)
 - `python3 devops/dev.py stop` — stop everything
 - `python3 docker/build.py [--push] [--tags <tag>...]` — build the unified image (`main` tag always included; default platform = host). See [`devops/README.md`](devops/README.md) for release flow and tag semantics (SemVer: `v0.1.3-rc.1`, never `v0.1.3rc1`)
 - `ansible-playbook devops/ansible/deploy.yml -l <test|staging|prod>` — deploy an environment (root `ansible.cfg` supplies inventory + avpm vault identities; post-deploy health + git-sha verification runs automatically)
@@ -87,7 +88,7 @@ frontend/
     i18n/ + messages/     next-intl config + locale files
     providers/            context providers (theme)
 e2e/                      Playwright workspace (separate package.json, chromium only)
-devops/                   dev.py + docker-compose.yml + Caddyfile + ansible/
+devops/                   dev.py + dev-compose.yml (postgres + mailpit) + ansible/
 docker/                   production Dockerfiles (s6 multi-process), build.py
 specs/                    design specs (testing/, backend/, frontend/, architecture/)
 .github/workflows/        CI (lint/test/build with path filters + nightly e2e)

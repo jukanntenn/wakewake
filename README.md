@@ -128,10 +128,10 @@ pnpm lint && pnpm format:check
 cd e2e && pnpm test
 ```
 
-> **Note on dev tooling:** `devops/dev.py` orchestrates a Dockerized backend
-> for convenience. If you prefer, run the backend directly with `cargo run`
-> and the frontend with `pnpm dev`. See [`AGENTS.md`](./AGENTS.md) for the
-> canonical command reference.
+> **Note on dev tooling:** `devops/dev.py` starts the infrastructure (postgres
+> + mailpit in Docker) and runs the backend (`cargo watch`) and frontend
+> (`pnpm dev`) as host processes with hot reload. See [`AGENTS.md`](./AGENTS.md)
+> for the canonical command reference.
 
 ## Deployment
 
@@ -185,7 +185,7 @@ backend/
 frontend/       Next.js 16 app (static export)
 e2e/            Playwright (chromium; separate workspace)
 docker/         multi-arch Dockerfiles + build.py + compose
-devops/         dev.py + docker-compose + Caddyfile + ansible/
+devops/         dev.py + dev-compose.yml (postgres + mailpit) + ansible/
 specs/          design specs (architecture, api, database, testing)
 .github/        CI workflows (lint / test / build / nightly e2e)
 ```

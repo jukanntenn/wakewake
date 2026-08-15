@@ -67,6 +67,8 @@ __pycache__/
 
 devops/frontend.pid
 devops/frontend.log
+devops/backend.pid
+devops/backend.log
 
 # Playwright CLI cache
 .playwright-cli/
