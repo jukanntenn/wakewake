@@ -118,6 +118,7 @@ Schema changes go through `sqlx::migrate!` with versioned SQL files in `backend/
 - **Conventional Commits** (match existing history): `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `build:`, `style:`, `ci:`, `perf:`, `revert:`. Optional scope: `refactor(backend): ...`.
 - Examples from this repo: `feat: add integrations system with Bemfa IoT support`, `refactor(backend): restructure database configuration and migrations`, `test: improve test compliance with naming conventions`.
 - `prek` gates live in three per-directory configs (root + `backend/prek.toml` + `frontend/prek.toml`, auto-discovered in workspace mode) with three groups: `format` / `lint` / `check`. Git hooks: pre-commit (fast gates), pre-push (clippy / eslint / tsc / tests), commit-msg (Conventional Commits). CI invokes the same prek hooks (`prek run --all-files --group <g> <project>/`) — the command source is single, so local-green/CI-red drift is a bug in the configs, not bad luck.
+- Committing and shipping are skill-driven: use the `commit` skill for logical, plan-confirmed commits (never push, never amend); use the `shipping` skill to ship end-to-end (commit → build & push → deploy → report; deploys default to `test`).
 
 ## Testing
 
