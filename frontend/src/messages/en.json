@@ -500,9 +500,7 @@
     "name": "Name",
     "email": "Email",
     "password": "Password",
-    "mac_encrypted": "MAC address",
-    "config.uid": "Bemfa UID",
-    "config.topic_prefix": "Topic prefix"
+    "mac_encrypted": "MAC address"
   },
   "status": {
     "healthy": "All systems operational",
@@ -548,5 +546,87 @@
     "adminIntegrations": "No integrations found",
     "adminWakes": "No wake history found",
     "searchNoResults": "No results for \"{query}\""
+  },
+  "landing": {
+    "nav": {
+      "howItWorks": "How it works",
+      "security": "Security",
+      "deploy": "Deploy",
+      "signIn": "Sign in",
+      "menu": "Menu"
+    },
+    "hero": {
+      "title": "Wake your home network, from anywhere.",
+      "subtitle": "A secret crosses the cloud, and the machine at home lights up.",
+      "facts": "no open ports · no exposed LAN · the server only sees ciphertext",
+      "ctaPrimary": "Get started",
+      "ctaGithub": "GitHub",
+      "diagramAlt": "Topology: the browser sends an RSA-encrypted MAC over TLS to the WakeWake server on a 2 GB VPS; the agent at home holds an outbound SSE connection and broadcasts a UDP magic packet to wake the device",
+      "noteBrowser": "Plaintext MAC never leaves your browser",
+      "noteServer": "The server only sees ciphertext",
+      "noteAgent": "Dials out only — no inbound ports",
+      "noteDevice": "Lights up = woken"
+    },
+    "hops": {
+      "kicker": "How it works",
+      "title": "One wake, exactly three hops",
+      "hop1": {
+        "title": "Encrypted in your browser",
+        "body": "Your browser encrypts the MAC with the agent's public key. From receipt to database, the server only ever sees ciphertext."
+      },
+      "hop2": {
+        "title": "The agent dials out, and only out",
+        "body": "The agent holds an outbound SSE connection, and commands ride it home. No inbound port points at your house — zero router configuration."
+      },
+      "hop3": {
+        "title": "A magic packet lights it up",
+        "body": "The agent decrypts the MAC and broadcasts a magic packet on your LAN. It never scans, forwards, or proxies anything."
+      }
+    },
+    "trust": {
+      "kicker": "Trust",
+      "title": "The hard questions, asked first",
+      "q1": "What if the whole database is stolen?",
+      "a1": "Nothing useful. MACs are encrypted in the browser; the database holds only RSA-OAEP ciphertext. The private key lives on the agent's disk — and nowhere else.",
+      "q2": "Do I need open ports or a public IP at home?",
+      "a2": "Neither. The agent only dials out, so there is no inbound hole pointing at your home. Your router stays untouched.",
+      "q3": "If the server is fully compromised, what's the worst case?",
+      "a3": "At worst, replaying old ciphertexts to boot devices you already registered. It cannot read MACs, cannot forge new devices, and cannot reach into your LAN.",
+      "q4": "What about the rest of my LAN?",
+      "a4": "Untouched. The agent sends broadcast magic packets and nothing else — no scanning, no forwarding, no proxying."
+    },
+    "deploy": {
+      "kicker": "Deploy",
+      "title": "Three commands, on your own VPS",
+      "body": "One multi-arch image, fronted by Caddy. Migrations and the bootstrap admin run automatically at startup — there is no migration step to forget.",
+      "terminalLabel": "compose · a 2 GB VPS is enough",
+      "chip1": "one image · amd64 + arm64",
+      "chip2": "migrations on startup",
+      "chip3": "idempotent bootstrap admin"
+    },
+    "spec": {
+      "kicker": "Spec",
+      "title": "The numbers speak",
+      "stat1": "concurrent agents · design target",
+      "stat2": "memory per connection",
+      "stat3": "VPS is enough",
+      "stat4": "languages",
+      "item1": "Device groups & notes",
+      "item2": "Wake history audit",
+      "item3": "Bemfa voice control",
+      "item4": "One multi-arch image",
+      "item5": "Migrations on startup",
+      "item6": "PoW abuse protection",
+      "item7": "JWT + rotating refresh tokens",
+      "item8": "RSA keys generated locally",
+      "item9": "AGPL-3.0"
+    },
+    "closing": {
+      "line": "Up and running in three commands."
+    },
+    "footer": {
+      "docs": "Architecture",
+      "selfHosted": "self-hosted"
+    }
   }
 }

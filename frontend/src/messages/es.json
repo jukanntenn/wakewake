@@ -400,9 +400,7 @@
     "name": "...",
     "email": "...",
     "password": "...",
-    "mac_encrypted": "...",
-    "config.uid": "...",
-    "config.topic_prefix": "..."
+    "mac_encrypted": "..."
   },
   "device": {
     "synced": "Sincronizado",
@@ -507,5 +505,87 @@
     "adminIntegrations": "Sin integraciones encontradas",
     "adminWakes": "Sin historial encontrado",
     "searchNoResults": "Sin resultados para \"{query}\""
+  },
+  "landing": {
+    "nav": {
+      "howItWorks": "Cómo funciona",
+      "security": "Seguridad",
+      "deploy": "Despliegue",
+      "signIn": "Iniciar sesión",
+      "menu": "Menú"
+    },
+    "hero": {
+      "title": "Despierta tu red doméstica, desde cualquier lugar.",
+      "subtitle": "Un secreto cruza la nube, y la máquina de casa se enciende.",
+      "facts": "sin puertos abiertos · sin LAN expuesta · el servidor solo ve texto cifrado",
+      "ctaPrimary": "Empezar",
+      "ctaGithub": "GitHub",
+      "diagramAlt": "Topología: el navegador envía una MAC cifrada con RSA por TLS al servidor WakeWake en un VPS de 2 GB; el agente en casa mantiene una conexión SSE saliente y difunde un paquete mágico UDP para despertar el dispositivo",
+      "noteBrowser": "La MAC en claro nunca sale de tu navegador",
+      "noteServer": "El servidor solo ve texto cifrado",
+      "noteAgent": "Solo llamadas salientes — sin puertos de entrada",
+      "noteDevice": "Se enciende = despertado"
+    },
+    "hops": {
+      "kicker": "Cómo funciona",
+      "title": "Un despertar, exactamente tres saltos",
+      "hop1": {
+        "title": "Cifrado en tu navegador",
+        "body": "Tu navegador cifra la MAC con la clave pública del agente. Desde la recepción hasta la base de datos, el servidor solo ve texto cifrado."
+      },
+      "hop2": {
+        "title": "El agente solo llama hacia fuera",
+        "body": "El agente mantiene una conexión SSE saliente; los comandos llegan a casa por ahí. Ningún puerto de entrada apunta a tu casa — cero configuración del router."
+      },
+      "hop3": {
+        "title": "Un paquete mágico lo enciende",
+        "body": "El agente descifra la MAC y difunde un paquete mágico en tu LAN. Nunca escanea, reenvía ni proxifica nada."
+      }
+    },
+    "trust": {
+      "kicker": "Confianza",
+      "title": "Las preguntas difíciles, primero",
+      "q1": "¿Y si roban la base de datos entera?",
+      "a1": "Nada útil. Las MAC se cifran en el navegador; la base solo contiene texto cifrado RSA-OAEP. La clave privada vive en el disco del agente — y en ningún otro sitio.",
+      "q2": "¿Necesito abrir puertos o IP pública en casa?",
+      "a2": "Ninguno de los dos. El agente solo llama hacia fuera: no hay ningún agujero de entrada apuntando a tu casa. Tu router queda intacto.",
+      "q3": "Si el servidor se compromete por completo, ¿el peor caso?",
+      "a3": "A lo sumo, reproducir cifrados antiguos para encender dispositivos ya registrados. No puede leer MACs, ni falsificar dispositivos nuevos, ni alcanzar tu LAN.",
+      "q4": "¿Qué pasa con el resto de mi LAN?",
+      "a4": "Intacta. El agente solo envía paquetes mágicos por broadcast — sin escanear, sin reenviar, sin proxificar."
+    },
+    "deploy": {
+      "kicker": "Despliegue",
+      "title": "Tres comandos, en tu propio VPS",
+      "body": "Una sola imagen multi-arquitectura, con Caddy al frente. Las migraciones y el admin inicial se ejecutan automáticamente al arrancar — no hay paso de migración que olvidar.",
+      "terminalLabel": "compose · un VPS de 2 GB basta",
+      "chip1": "una imagen · amd64 + arm64",
+      "chip2": "migraciones al arrancar",
+      "chip3": "bootstrap admin idempotente"
+    },
+    "spec": {
+      "kicker": "Spec",
+      "title": "Los números hablan",
+      "stat1": "agentes concurrentes · objetivo de diseño",
+      "stat2": "memoria por conexión",
+      "stat3": "un VPS basta",
+      "stat4": "idiomas",
+      "item1": "Grupos de dispositivos y notas",
+      "item2": "Historial de despertares auditable",
+      "item3": "Control por voz con Bemfa",
+      "item4": "Una imagen multi-arquitectura",
+      "item5": "Migraciones al arrancar",
+      "item6": "Protección anti-abuso PoW",
+      "item7": "JWT + refresh tokens rotativos",
+      "item8": "Claves RSA generadas localmente",
+      "item9": "AGPL-3.0"
+    },
+    "closing": {
+      "line": "Funcionando en tres comandos."
+    },
+    "footer": {
+      "docs": "Arquitectura",
+      "selfHosted": "self-hosted"
+    }
   }
 }

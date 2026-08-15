@@ -400,9 +400,7 @@
     "name": "...",
     "email": "...",
     "password": "...",
-    "mac_encrypted": "...",
-    "config.uid": "...",
-    "config.topic_prefix": "..."
+    "mac_encrypted": "..."
   },
   "device": {
     "synced": "Synchronisiert",
@@ -507,5 +505,87 @@
     "adminIntegrations": "Keine Integrationen gefunden",
     "adminWakes": "Kein Aktivierungsverlauf gefunden",
     "searchNoResults": "Keine Ergebnisse für „{query}\""
+  },
+  "landing": {
+    "nav": {
+      "howItWorks": "Funktionsweise",
+      "security": "Sicherheit",
+      "deploy": "Deployment",
+      "signIn": "Anmelden",
+      "menu": "Menü"
+    },
+    "hero": {
+      "title": "Wecke dein Heimnetz, von überall.",
+      "subtitle": "Ein Geheimnis durchquert die Cloud — und der Rechner zu Hause geht an.",
+      "facts": "keine offenen Ports · kein exponiertes LAN · der Server sieht nur Chiffretext",
+      "ctaPrimary": "Jetzt starten",
+      "ctaGithub": "GitHub",
+      "diagramAlt": "Topologie: Der Browser sendet ein RSA-verschlüsseltes MAC über TLS an den WakeWake-Server auf einem 2-GB-VPS; der Agent zu Hause hält eine ausgehende SSE-Verbindung und sendet ein UDP-Magic-Paket ins LAN, um das Gerät zu wecken",
+      "noteBrowser": "Das Klartext-MAC verlässt deinen Browser nie",
+      "noteServer": "Der Server sieht nur Chiffretext",
+      "noteAgent": "Nur ausgehend — keine eingehenden Ports",
+      "noteDevice": "Licht an = geweckt"
+    },
+    "hops": {
+      "kicker": "Funktionsweise",
+      "title": "Ein Aufwecken, genau drei Hops",
+      "hop1": {
+        "title": "Verschlüsselt in deinem Browser",
+        "body": "Dein Browser verschlüsselt die MAC mit dem öffentlichen Schlüssel des Agenten. Vom Empfang bis zur Datenbank sieht der Server nur Chiffretext."
+      },
+      "hop2": {
+        "title": "Der Agent wählt nach außen — und nur nach außen",
+        "body": "Der Agent hält eine ausgehende SSE-Verbindung, über die die Befehle nach Hause reisen. Kein eingehender Port zeigt auf dein Zuhause — null Router-Konfiguration."
+      },
+      "hop3": {
+        "title": "Ein Magic-Paket bringt es zum Leuchten",
+        "body": "Der Agent entschlüsselt die MAC und sendet ein Magic-Paket in dein LAN. Er scannt, forwardet oder proxied niemals etwas."
+      }
+    },
+    "trust": {
+      "kicker": "Vertrauen",
+      "title": "Die schweren Fragen zuerst",
+      "q1": "Was, wenn die ganze Datenbank gestohlen wird?",
+      "a1": "Nichts Nützliches. MACs werden im Browser verschlüsselt; die Datenbank enthält nur RSA-OAEP-Chiffretext. Der private Schlüssel liegt ausschließlich auf der Festplatte des Agenten.",
+      "q2": "Brauche ich offene Ports oder eine öffentliche IP zu Hause?",
+      "a2": "Weder noch. Der Agent wählt nur nach außen — es gibt kein eingehendes Loch zu deinem Zuhause. Dein Router bleibt unangetastet.",
+      "q3": "Wenn der Server komplett kompromittiert wird — der Worst Case?",
+      "a3": "Schlimmstenfalls das Replay alter Chiffretexte, um bereits registrierte Geräte zu starten. MACs lassen sich nicht lesen, neue Geräte nicht fälschen, dein LAN nicht erreichen.",
+      "q4": "Was ist mit dem Rest meines LANs?",
+      "a4": "Unberührt. Der Agent sendet nur Broadcast-Magic-Pakete — kein Scannen, kein Forwarding, kein Proxying."
+    },
+    "deploy": {
+      "kicker": "Deployment",
+      "title": "Drei Befehle, auf deinem eigenen VPS",
+      "body": "Ein Multi-Arch-Image, frontal von Caddy. Migrationen und der Bootstrap-Admin laufen beim Start automatisch — es gibt keinen Migrationsschritt, den man vergessen könnte.",
+      "terminalLabel": "compose · ein 2-GB-VPS genügt",
+      "chip1": "ein Image · amd64 + arm64",
+      "chip2": "Migrationen beim Start",
+      "chip3": "idempotenter Bootstrap-Admin"
+    },
+    "spec": {
+      "kicker": "Spec",
+      "title": "Zahlen sprechen für sich",
+      "stat1": "gleichzeitige Agenten · Designziel",
+      "stat2": "Speicher pro Verbindung",
+      "stat3": "VPS genügt",
+      "stat4": "Sprachen",
+      "item1": "Gerätegruppen & Notizen",
+      "item2": "Aufweck-Historie als Audit",
+      "item3": "Bemfa-Sprachsteuerung",
+      "item4": "Ein Multi-Arch-Image",
+      "item5": "Migrationen beim Start",
+      "item6": "PoW-Missbrauchsschutz",
+      "item7": "JWT + rotierende Refresh-Tokens",
+      "item8": "RSA-Schlüssel lokal erzeugt",
+      "item9": "AGPL-3.0"
+    },
+    "closing": {
+      "line": "Mit drei Befehlen betriebsbereit."
+    },
+    "footer": {
+      "docs": "Architektur",
+      "selfHosted": "self-hosted"
+    }
   }
 }

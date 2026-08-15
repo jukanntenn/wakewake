@@ -500,9 +500,7 @@
     "name": "名称",
     "email": "邮箱",
     "password": "密码",
-    "mac_encrypted": "MAC 地址",
-    "config.uid": "巴法 UID",
-    "config.topic_prefix": "主题前缀"
+    "mac_encrypted": "MAC 地址"
   },
   "status": {
     "healthy": "系统运行正常",
@@ -548,5 +546,87 @@
     "adminIntegrations": "未找到集成",
     "adminWakes": "未找到唤醒历史",
     "searchNoResults": "没有匹配\"{query}\"的结果"
+  },
+  "landing": {
+    "nav": {
+      "howItWorks": "工作原理",
+      "security": "安全",
+      "deploy": "部署",
+      "signIn": "登录",
+      "menu": "菜单"
+    },
+    "hero": {
+      "title": "在任何地方,唤醒家里的设备。",
+      "subtitle": "人在外面,一条密文穿过云端,家里的机器就亮了。",
+      "facts": "不开端口 · 不暴露内网 · 服务器只见密文",
+      "ctaPrimary": "开始使用",
+      "ctaGithub": "GitHub",
+      "diagramAlt": "拓扑:浏览器经 TLS 将 RSA 加密的 MAC 发往 2 GB VPS 上的 WakeWake 服务器;家里的 agent 保持出站 SSE 连接,解密后向局域网广播 UDP 魔术包唤醒设备",
+      "noteBrowser": "MAC 明文不出浏览器",
+      "noteServer": "服务器只见密文",
+      "noteAgent": "只出站,零入站",
+      "noteDevice": "点亮 = 唤醒"
+    },
+    "hops": {
+      "kicker": "工作原理",
+      "title": "一次唤醒,恰好三跳",
+      "hop1": {
+        "title": "加密发生在你的浏览器里",
+        "body": "浏览器用 agent 公钥加密 MAC。从收到到落库,服务器只见过密文。"
+      },
+      "hop2": {
+        "title": "agent 只出站,而且只出不进",
+        "body": "agent 保持一条出站 SSE 长连接,命令沿它回家。没有任何入站端口指向你家——路由器零配置。"
+      },
+      "hop3": {
+        "title": "一枚魔术包点亮机器",
+        "body": "agent 解密 MAC,向局域网广播魔术包。它不扫描、不转发、不代理任何流量。"
+      }
+    },
+    "trust": {
+      "kicker": "信任",
+      "title": "把最难的问题先问了",
+      "q1": "数据库被整个拖走,会怎样?",
+      "a1": "什么也拿不到。MAC 在浏览器侧加密,库里只有 RSA-OAEP 密文;私钥只存在 agent 本地磁盘,别处没有。",
+      "q2": "家里要开端口、要公网 IP 吗?",
+      "a2": "都不用。agent 只出站拨号,没有任何入站洞指向家里,路由器一行都不用改。",
+      "q3": "服务器被完全攻破,最坏情况是什么?",
+      "a3": "至多重放旧密文,让你已登记的设备开机。读不到 MAC、伪造不了新设备、也碰不到你的内网。",
+      "q4": "内网里的其他设备会被波及吗?",
+      "a4": "不会。agent 只发广播魔术包——不扫描、不转发、不代理任何流量。"
+    },
+    "deploy": {
+      "kicker": "部署",
+      "title": "三行命令,跑在你自己的 VPS 上",
+      "body": "单镜像,Caddy 前置。迁移与初始管理员在启动时自动完成——没有会被忘记的迁移步骤。",
+      "terminalLabel": "compose · 2 GB VPS 足矣",
+      "chip1": "单镜像 · amd64 + arm64",
+      "chip2": "启动自动迁移",
+      "chip3": "bootstrap admin 幂等"
+    },
+    "spec": {
+      "kicker": "规格",
+      "title": "按数字说话",
+      "stat1": "并发 agent · 设计目标",
+      "stat2": "每连接内存",
+      "stat3": "VPS 即可",
+      "stat4": "语言",
+      "item1": "设备分组与备注",
+      "item2": "唤醒历史审计",
+      "item3": "Bemfa 语音联动",
+      "item4": "多架构单镜像",
+      "item5": "启动自动迁移",
+      "item6": "PoW 防滥用",
+      "item7": "JWT + 刷新令牌轮换",
+      "item8": "RSA 密钥本地生成",
+      "item9": "AGPL-3.0"
+    },
+    "closing": {
+      "line": "跑起来只要三行命令。"
+    },
+    "footer": {
+      "docs": "架构文档",
+      "selfHosted": "self-hosted"
+    }
   }
 }

@@ -400,9 +400,7 @@
     "name": "...",
     "email": "...",
     "password": "...",
-    "mac_encrypted": "...",
-    "config.uid": "...",
-    "config.topic_prefix": "..."
+    "mac_encrypted": "..."
   },
   "device": {
     "synced": "동기화됨",
@@ -507,5 +505,87 @@
     "adminIntegrations": "통합을 찾을 수 없습니다",
     "adminWakes": "켜기 기록을 찾을 수 없습니다",
     "searchNoResults": "\"{query}\"에 대한 결과 없음"
+  },
+  "landing": {
+    "nav": {
+      "howItWorks": "작동 방식",
+      "security": "보안",
+      "deploy": "배포",
+      "signIn": "로그인",
+      "menu": "메뉴"
+    },
+    "hero": {
+      "title": "어디서든, 집의 네트워크를 깨우세요.",
+      "subtitle": "밖에서 보낸 암호문 하나가 구름을 건너면, 집의 머신이 켜집니다.",
+      "facts": "포트 개방 없음 · 내부망 노출 없음 · 서버는 암호문만 봄",
+      "ctaPrimary": "시작하기",
+      "ctaGithub": "GitHub",
+      "diagramAlt": "토폴로지: 브라우저가 RSA로 암호화한 MAC을 TLS로 2 GB VPS의 WakeWake 서버에 보내고, 집의 agent는 아웃바운드 SSE 연결을 유지하며 UDP 매직 패킷을 LAN에 브로드캐스트해 기기를 깨웁니다",
+      "noteBrowser": "MAC 평문은 브라우저 밖으로 나가지 않음",
+      "noteServer": "서버는 암호문만 봄",
+      "noteAgent": "아웃바운드 전용 · 인바운드 포트 없음",
+      "noteDevice": "점등 = 기상"
+    },
+    "hops": {
+      "kicker": "작동 방식",
+      "title": "한 번의 wake, 정확히 세 홉",
+      "hop1": {
+        "title": "브라우저에서 암호화",
+        "body": "브라우저가 agent 공개 키로 MAC을 암호화합니다. 수신부터 저장까지 서버는 암호문만 봅니다."
+      },
+      "hop2": {
+        "title": "agent는 밖으로, 그리고 밖으로만",
+        "body": "agent는 아웃바운드 SSE 연결을 유지하고, 명령은 그 연결을 타고 집에 도착합니다. 집을 가리키는 인바운드 포트는 없습니다 — 라우터 설정 제로."
+      },
+      "hop3": {
+        "title": "매직 패킷이 불을 켭니다",
+        "body": "agent가 MAC을 복호화해 LAN에 매직 패킷을 브로드캐스트합니다. 스캔·포워딩·프록시는 결코 하지 않습니다."
+      }
+    },
+    "trust": {
+      "kicker": "신뢰",
+      "title": "가장 어려운 질문부터",
+      "q1": "데이터베이스 전체가 털리면?",
+      "a1": "가져갈 게 없습니다. MAC은 브라우저에서 암호화되고, DB에는 RSA-OAEP 암호문만 있습니다. 개인 키는 agent 로컬 디스크에만 존재합니다.",
+      "q2": "집에서 포트 개방이나 공인 IP가 필요한가요?",
+      "a2": "둘 다 필요 없습니다. agent는 아웃바운드로만 접속하므로 집을 가리키는 인바운드 구멍이 없습니다. 라우터는 그대로.",
+      "q3": "서버가 완전히 침해되면 최악은?",
+      "a3": "이미 등록된 기기의 전원을 켜기 위해 옛 암호문을 재생하는 것이 고작입니다. MAC을 읽거나, 새 기기를 위조하거나, LAN에 들어올 수 없습니다.",
+      "q4": "내부망의 다른 기기는 영향을 받나요?",
+      "a4": "받지 않습니다. agent는 브로드캐스트 매직 패킷만 보냅니다 — 스캔·포워딩·프록시 없음."
+    },
+    "deploy": {
+      "kicker": "배포",
+      "title": "세 개의 명령으로, 당신의 VPS에서",
+      "body": "하나의 멀티 아키텍처 이미지를 Caddy가 받칩니다. 마이그레이션과 초기 admin은 시작 시 자동 실행 — 잊을 단계가 없습니다.",
+      "terminalLabel": "compose · 2 GB VPS면 충분",
+      "chip1": "단일 이미지 · amd64 + arm64",
+      "chip2": "시작 시 자동 마이그레이션",
+      "chip3": "멱등적 bootstrap admin"
+    },
+    "spec": {
+      "kicker": "사양",
+      "title": "숫자가 말합니다",
+      "stat1": "동시 agent · 설계 목표",
+      "stat2": "연결당 메모리",
+      "stat3": "2 GB VPS면 충분",
+      "stat4": "개 언어",
+      "item1": "기기 그룹과 메모",
+      "item2": "기상 기록 감사",
+      "item3": "Bemfa 음성 연동",
+      "item4": "멀티 아키텍처 단일 이미지",
+      "item5": "시작 시 마이그레이션",
+      "item6": "PoW 남용 방지",
+      "item7": "JWT + 리프레시 토큰 로테이션",
+      "item8": "RSA 키 로컬 생성",
+      "item9": "AGPL-3.0"
+    },
+    "closing": {
+      "line": "세 개의 명령으로 시작하세요."
+    },
+    "footer": {
+      "docs": "아키텍처",
+      "selfHosted": "self-hosted"
+    }
   }
 }

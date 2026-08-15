@@ -400,9 +400,7 @@
     "name": "...",
     "email": "...",
     "password": "...",
-    "mac_encrypted": "...",
-    "config.uid": "...",
-    "config.topic_prefix": "..."
+    "mac_encrypted": "..."
   },
   "device": {
     "synced": "同期済み",
@@ -507,5 +505,87 @@
     "adminIntegrations": "統合が見つかりません",
     "adminWakes": "起動履歴が見つかりません",
     "searchNoResults": "\"{query}\" の結果がありません"
+  },
+  "landing": {
+    "nav": {
+      "howItWorks": "仕組み",
+      "security": "セキュリティ",
+      "deploy": "デプロイ",
+      "signIn": "ログイン",
+      "menu": "メニュー"
+    },
+    "hero": {
+      "title": "どこからでも、家のネットワークを起こす。",
+      "subtitle": "外出先から、暗号文がクラウドを越え、家のマシンが灯をともす。",
+      "facts": "ポート開放なし · 内網を晒さない · サーバーは暗号文しか見ない",
+      "ctaPrimary": "はじめる",
+      "ctaGithub": "GitHub",
+      "diagramAlt": "トポロジー:ブラウザが RSA で暗号化した MAC を TLS 経由で 2 GB VPS 上の WakeWake サーバーへ送り、家の agent がアウトバウンドの SSE 接続を保持し、UDP マジックパケットを LAN に broadcast してデバイスを起こす",
+      "noteBrowser": "MAC 平文はブラウザの外に出ない",
+      "noteServer": "サーバーは暗号文しか見ない",
+      "noteAgent": "アウトバウンドのみ · 受信ポートなし",
+      "noteDevice": "点灯 = 起動完了"
+    },
+    "hops": {
+      "kicker": "仕組み",
+      "title": "一回の wake は、ちょうど 3 ホップ",
+      "hop1": {
+        "title": "ブラウザで暗号化",
+        "body": "ブラウザが agent の公開鍵で MAC を暗号化する。受信から保存まで、サーバーは暗号文しか見ない。"
+      },
+      "hop2": {
+        "title": "agent は外へ、しかも外へだけ",
+        "body": "agent はアウトバウンドの SSE 接続を保持し、コマンドはその接続を通って家に届く。家を指す受信ポートは一切ない——ルーター設定はゼロ。"
+      },
+      "hop3": {
+        "title": "マジックパケットが灯をともす",
+        "body": "agent が MAC を復号し、LAN にマジックパケットを broadcast する。スキャンも転送もプロキシも一切しない。"
+      }
+    },
+    "trust": {
+      "kicker": "信頼",
+      "title": "一番厳しい質問から",
+      "q1": "データベースが丸ごと盗まれたら?",
+      "a1": "役に立つものは何もない。MAC はブラウザ側で暗号化され、DB にあるのは RSA-OAEP の暗号文だけ。秘密鍵は agent のローカルディスクにしか存在しない。",
+      "q2": "家でポート開放やグローバル IP は必要?",
+      "a2": "どちらも不要。agent は外へダイアルするだけなので、家を指す受信の穴は存在しない。ルーターはそのまま。",
+      "q3": "サーバーが完全に乗っ取られた場合、最悪は?",
+      "a3": "せいぜい既存の暗号文を再送して、登録済みデバイスの電源を入れること。MAC を読むことも、新しいデバイスを偽造することも、LAN に入ることもできない。",
+      "q4": "LAN 内の他のデバイスへの影響は?",
+      "a4": "ない。agent は broadcast のマジックパケットだけを送る——スキャン・転送・プロキシは一切なし。"
+    },
+    "deploy": {
+      "kicker": "デプロイ",
+      "title": "3 つのコマンドで、自分の VPS に",
+      "body": "マルチアーキの単一イメージを Caddy が前段で受け持つ。マイグレーションと初回 admin は起動時に自動実行——忘れようがない。",
+      "terminalLabel": "compose · 2 GB VPS で十分",
+      "chip1": "単一イメージ · amd64 + arm64",
+      "chip2": "起動時に自動マイグレーション",
+      "chip3": "冪等な bootstrap admin"
+    },
+    "spec": {
+      "kicker": "スペック",
+      "title": "数字が語る",
+      "stat1": "同時接続 agent · 設計目標",
+      "stat2": "接続あたりのメモリ",
+      "stat3": "2 GB VPS で十分",
+      "stat4": "言語",
+      "item1": "デバイスのグループとメモ",
+      "item2": "起動履歴の監査",
+      "item3": "Bemfa 音声連携",
+      "item4": "マルチアーキ単一イメージ",
+      "item5": "起動時マイグレーション",
+      "item6": "PoW 濫用対策",
+      "item7": "JWT + リフレッシュトークンローテーション",
+      "item8": "RSA 鍵はローカル生成",
+      "item9": "AGPL-3.0"
+    },
+    "closing": {
+      "line": "3 つのコマンドで動き出す。"
+    },
+    "footer": {
+      "docs": "アーキテクチャ",
+      "selfHosted": "self-hosted"
+    }
   }
 }
