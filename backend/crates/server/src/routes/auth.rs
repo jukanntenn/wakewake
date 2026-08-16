@@ -79,6 +79,13 @@ pub struct UserPublic {
     pub email: String,
     pub is_superuser: bool,
     pub email_verified: bool,
+    pub limits: UserLimits,
+}
+
+/// 账户级配额投影（agent-onboarding.md 真相源）：值来自 domain 常量，前端不做副本。
+#[derive(Debug, Serialize)]
+pub struct UserLimits {
+    pub max_devices: i64,
 }
 
 impl UserPublic {
@@ -89,7 +96,42 @@ impl UserPublic {
             email: u.email.clone(),
             is_superuser: u.is_superuser,
             email_verified: u.email_verified,
+            limits: UserLimits {
+                max_devices: crate::domain::MAX_DEVICES_PER_USER,
+            },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use time::OffsetDateTime;
+
+    #[test]
+    fn user_public_carries_domain_quota() {
+        let u = crate::domain::user::User {
+            id: 1,
+            email: "a@b.c".into(),
+            password: String::new(),
+            is_active: true,
+            disabled_at: None,
+            disabled_reason: None,
+            disabled_by: None,
+            is_superuser: false,
+            email_verified: true,
+            verification_sent_at: None,
+            password_reset_sent_at: None,
+            last_login: None,
+            preferred_locale: None,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+        };
+        let public = UserPublic::from_user(&u);
+        assert_eq!(
+            public.limits.max_devices,
+            crate::domain::MAX_DEVICES_PER_USER
+        );
     }
 }
 
