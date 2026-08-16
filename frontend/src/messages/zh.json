@@ -157,7 +157,25 @@
     "masked": "（已脱敏）",
     "noDescription": "—",
     "never": "—",
-    "noDrift": "—（无）"
+    "noDrift": "—（无）",
+    "viewAgent": "查看 Agent",
+    "connectorNotReadyLink": "前往 Agent 页面 →",
+    "gate": {
+      "agentPendingTitle": "需要先连接 Agent",
+      "agentPendingDesc": "设备的 MAC 地址将使用 Agent 的公钥加密，完成 Agent 配对后才能添加设备。",
+      "quotaTitle": "设备数量已达上限",
+      "quotaDesc": "每个账户最多可添加 {max} 台设备，删除不再使用的设备后即可继续添加。",
+      "insecureTitle": "需要安全连接",
+      "insecureDesc": "MAC 加密依赖浏览器的 Web Crypto API，需要通过 HTTPS 或 localhost 访问。",
+      "cta": "去连接 Agent",
+      "dismiss": "知道了"
+    },
+    "notice": {
+      "pendingTitle": "Agent 尚未配对",
+      "pendingDesc": "设备需要已配对的 Agent 才能接收唤醒指令。",
+      "offlineTitle": "Agent 当前离线",
+      "offlineDesc": "设备仍可添加，保存后将待 Agent 上线时自动同步。"
+    }
   },
   "agents": {
     "title": "Agent",
@@ -167,10 +185,7 @@
     "title": "Agent",
     "pairingCode": "配对码",
     "rotate": "轮换配对码",
-    "rotateConfirm": "轮换将立即使旧码失效，确定继续？",
     "rotateSuccess": "配对码已轮换",
-    "copyHint": "用此配对码运行 agent：",
-    "setupInstructions": "在本地网络机器上运行：",
     "status": {
       "pending": "等待 agent 连接",
       "online": "在线",
@@ -187,7 +202,35 @@
     "codeCopiedManualHint": "自动复制失败。新配对码已显示在上方，请手动选中复制。",
     "maskedCodeHint": "当前配对码已脱敏。点击\"轮换配对码\"获取可用于连接的完整码。",
     "confirmRotate": "再次点击确认",
-    "publicKeyNotAvailable": "agent 连接前不可用"
+    "publicKeyNotAvailable": "agent 连接前不可用",
+    "advanced": "高级",
+    "model": {
+      "server": "wakewake 服务器",
+      "agent": "内网 Agent",
+      "device": "被唤醒设备",
+      "linked": "已连通",
+      "missing": "尚未连接",
+      "broken": "已断开"
+    },
+    "guide": {
+      "whereTitle": "在家庭网络中一台常开的机器上运行 Agent",
+      "whereDesc": "Agent 必须与被唤醒的设备位于同一路由器下（唤醒信号不会跨路由器转发）。NAS、小主机或闲置笔记本均可。",
+      "commandLabel": "启动命令",
+      "copyCommand": "复制命令",
+      "waiting": "正在等待 Agent 连接，页面将自动更新。"
+    },
+    "online": {
+      "title": "Agent 已连接",
+      "desc": "Agent 正在运行。前往设备页添加设备，即可远程唤醒。",
+      "cta": "前往设备"
+    },
+    "offline": {
+      "title": "Agent 连接已断开",
+      "desc": "Agent 此前已配对成功。请确认运行 Agent 的机器已开机且网络可达；恢复后将自动重连，无需重新配置。",
+      "repairHint": "如需在新的机器上重新配对，请更换配对码后使用新命令。"
+    },
+    "advancedConfigTitle": "使用配置文件启动",
+    "advancedConfigDesc": "将以下内容保存为 ~/.wakewake/config.toml，之后直接运行 ./target/release/wakewake-agent，无需命令行参数。"
   },
   "integrations": {
     "title": "集成",
@@ -532,7 +575,6 @@
     "devices": "暂无设备",
     "devicesDesc": "添加你的第一台设备以开始远程唤醒",
     "addDevice": "添加设备",
-    "setupGuide": "首次使用？阅读设置指南 →",
     "wakes": "暂无唤醒历史",
     "wakesDesc": "唤醒一台设备以在此查看",
     "wakesCta": "前往设备 →",
@@ -545,7 +587,13 @@
     "adminDevices": "未找到设备",
     "adminIntegrations": "未找到集成",
     "adminWakes": "未找到唤醒历史",
-    "searchNoResults": "没有匹配\"{query}\"的结果"
+    "searchNoResults": "没有匹配\"{query}\"的结果",
+    "onboarding": {
+      "step1": "连接 Agent",
+      "step2": "添加设备",
+      "step3": "远程开机",
+      "desc": "Agent 是运行在家庭网络中的常驻程序，负责接收指令并向你的设备发送唤醒信号。"
+    }
   },
   "landing": {
     "nav": {

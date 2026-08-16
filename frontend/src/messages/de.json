@@ -108,10 +108,7 @@
     "codeCopiedManualHint": "Automatisches Kopieren fehlgeschlagen. Der neue Code wird oben angezeigt — markieren und kopieren Sie ihn manuell.",
     "maskedCodeHint": "Der Pairing-Code ist maskiert. Klicken Sie auf „Code rotieren\", um einen vollständigen Code zum Verbinden zu erhalten.",
     "rotate": "Rotate Code",
-    "rotateConfirm": "Rotating will invalidate the old code immediately. Continue?",
     "rotateSuccess": "Pairing code rotated",
-    "copyHint": "Run the agent with this pairing code:",
-    "setupInstructions": "Run on your local network machine:",
     "status": {
       "pending": "Waiting for agent connection",
       "online": "Online",
@@ -121,7 +118,35 @@
     "publicKey": "Public Key",
     "never": "Never",
     "confirmRotate": "Click again to confirm",
-    "publicKeyNotAvailable": "Not available until agent connects"
+    "publicKeyNotAvailable": "Not available until agent connects",
+    "advanced": "Erweitert",
+    "model": {
+      "server": "wakewake-Server",
+      "agent": "LAN-Agent",
+      "device": "Deine Geräte",
+      "linked": "Verbunden",
+      "missing": "Noch nicht verbunden",
+      "broken": "Getrennt"
+    },
+    "guide": {
+      "whereTitle": "Führe den Agenten auf einem dauerhaft laufenden Rechner in deinem Heimnetzwerk aus",
+      "whereDesc": "Der Agent muss hinter demselben Router wie die zu weckenden Geräte stehen — Wecksignale überqueren keine Router. Ein NAS, Mini-PC oder ein älteres Notebook eignet sich gut.",
+      "commandLabel": "Startbefehl",
+      "copyCommand": "Befehl kopieren",
+      "waiting": "Warte auf die Verbindung des Agenten — diese Seite aktualisiert sich automatisch."
+    },
+    "online": {
+      "title": "Agent verbunden",
+      "desc": "Der Agent läuft. Füge ein Gerät hinzu, um es aus der Ferne aufzuwecken.",
+      "cta": "Zu den Geräten"
+    },
+    "offline": {
+      "title": "Agent getrennt",
+      "desc": "Der Agent war zuvor gekoppelt. Prüfe, ob seine Maschine eingeschaltet und erreichbar ist — er verbindet sich danach automatisch wieder, ohne Neukonfiguration.",
+      "repairHint": "Um den Agenten auf einer neuen Maschine zu koppeln, rotiere den Pairing-Code und verwende den neuen Befehl."
+    },
+    "advancedConfigTitle": "Mit Konfigurationsdatei starten",
+    "advancedConfigDesc": "Speichere Folgendes als ~/.wakewake/config.toml und führe dann ./target/release/wakewake-agent ohne Argumente aus."
   },
   "integrations": {
     "title": "Integrationen",
@@ -461,7 +486,25 @@
     "masked": "(maskiert)",
     "noDescription": "—",
     "never": "—",
-    "noDrift": "— (keine)"
+    "noDrift": "— (keine)",
+    "viewAgent": "Agent anzeigen",
+    "connectorNotReadyLink": "Zur Agentenseite →",
+    "gate": {
+      "agentPendingTitle": "Verbinde zuerst deinen Agenten",
+      "agentPendingDesc": "MAC-Adressen von Geräten werden mit dem öffentlichen Schlüssel des Agenten verschlüsselt — ein gekoppelter Agent ist daher Voraussetzung.",
+      "quotaTitle": "Gerätelimit erreicht",
+      "quotaDesc": "Jedes Konto kann bis zu {max} Geräte haben. Entferne ein ungenutztes Gerät, um ein weiteres hinzuzufügen.",
+      "insecureTitle": "Sichere Verbindung erforderlich",
+      "insecureDesc": "Die MAC-Verschlüsselung nutzt die Web-Crypto-API des Browsers und erfordert Zugriff über HTTPS oder localhost.",
+      "cta": "Agent verbinden",
+      "dismiss": "Verstanden"
+    },
+    "notice": {
+      "pendingTitle": "Agent noch nicht gekoppelt",
+      "pendingDesc": "Geräte benötigen einen gekoppelten Agenten, um Weckbefehle zu empfangen.",
+      "offlineTitle": "Agent offline",
+      "offlineDesc": "Geräte können weiterhin hinzugefügt werden; sie synchronisieren sich, sobald der Agent wieder verbunden ist."
+    }
   },
   "status": {
     "healthy": "Alle Systeme betriebsbereit",
@@ -491,7 +534,6 @@
     "devices": "Noch keine Geräte",
     "devicesDesc": "Fügen Sie Ihr erstes Gerät hinzu, um es remote zu aktivieren",
     "addDevice": "Gerät hinzufügen",
-    "setupGuide": "Neu hier? Lesen Sie den Einrichtungsleitfaden →",
     "wakes": "Noch keine Aktivierungsverlauf",
     "wakesDesc": "Aktivieren Sie ein Gerät, um es hier zu sehen",
     "wakesCta": "Zu den Geräten →",
@@ -504,7 +546,13 @@
     "adminDevices": "Keine Geräte gefunden",
     "adminIntegrations": "Keine Integrationen gefunden",
     "adminWakes": "Kein Aktivierungsverlauf gefunden",
-    "searchNoResults": "Keine Ergebnisse für „{query}\""
+    "searchNoResults": "Keine Ergebnisse für „{query}\"",
+    "onboarding": {
+      "step1": "Agent verbinden",
+      "step2": "Gerät hinzufügen",
+      "step3": "Fern starten",
+      "desc": "Der Agent ist ein kleines Programm in deinem Heimnetzwerk, das Weckbefehle an deine Geräte zustellt."
+    }
   },
   "landing": {
     "nav": {

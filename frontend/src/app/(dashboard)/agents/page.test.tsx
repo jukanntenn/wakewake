@@ -13,20 +13,21 @@ vi.mock('sonner', () => ({ toast }))
 const mockCopyText = vi.fn()
 vi.mock('@/lib/clipboard', () => ({ copyText: (...args: unknown[]) => mockCopyText(...args) }))
 
-// Mock hooks
+// Mock hooks（可变 agent 状态：默认 pending，个别用例切 online/offline）
 const mockRotate = vi.fn()
+const agentState = vi.hoisted(() => ({
+  data: {
+    aid: 'test-aid',
+    name: 'Home Agent',
+    status: 'pending', // pending → 完整码（非脱敏）
+    pairing_code: 'a1b2c3d4e5f60718',
+    public_key: '-----BEGIN PUBLIC KEY-----\nTEST\n-----END PUBLIC KEY-----',
+    last_seen: '2026-07-16T00:00:00Z',
+    created_at: '2026-01-01T00:00:00Z',
+  },
+}))
 vi.mock('@/hooks/useAgents', () => ({
-  useDefaultAgent: () => ({
-    data: {
-      aid: 'test-aid',
-      name: 'Home Agent',
-      status: 'pending', // pending → 完整码（非脱敏）
-      pairing_code: 'a1b2c3d4e5f60718',
-      public_key: '-----BEGIN PUBLIC KEY-----\nTEST\n-----END PUBLIC KEY-----',
-      last_seen: '2026-07-16T00:00:00Z',
-      created_at: '2026-01-01T00:00:00Z',
-    },
-  }),
+  useDefaultAgent: () => ({ data: agentState.data }),
   useRotatePairingCode: () => ({ mutateAsync: mockRotate, isPending: false }),
 }))
 
@@ -126,10 +127,42 @@ describe('AgentStatus (agents page) — copy & rotate', () => {
     expect(toast.message).not.toHaveBeenCalled()
   })
 
-  it('shows setup instructions when code is full (pending)', async () => {
+  it('pending: shows launch command (origin embedded) + auto-waiting line', async () => {
     const { default: AgentsPage } = await import('./page')
     renderWithProviders(<AgentsPage />)
-    // 完整码 → 显示命令块（含 wakewake-agent 命令）
-    expect(first(screen.getAllByText(/Run on/))).toBeInTheDocument()
+    // 命令模板槽：最终命令含 --server（origin 挂载后填充）
+    await vi.waitFor(() => {
+      expect(screen.getByText(/wakewake-agent --server /)).toBeInTheDocument()
+    })
+    // 等待行（自动检测提示）
+    expect(
+      screen.getByText('Waiting for the agent to connect — this page updates automatically.'),
+    ).toBeInTheDocument()
+  })
+
+  it('online: collapsed summary with devices CTA', async () => {
+    agentState.data = { ...agentState.data, status: 'online' }
+    try {
+      const { default: AgentsPage } = await import('./page')
+      renderWithProviders(<AgentsPage />)
+      const cta = screen.getByRole('link', { name: 'Go to devices' })
+      expect(cta).toHaveAttribute('href', '/devices')
+      expect(screen.getByText('Agent connected')).toBeInTheDocument()
+    } finally {
+      agentState.data = { ...agentState.data, status: 'pending' }
+    }
+  })
+
+  it('offline: repair guidance with rotate entry', async () => {
+    agentState.data = { ...agentState.data, status: 'offline', pairing_code: 'a1b2****' }
+    try {
+      const { default: AgentsPage } = await import('./page')
+      renderWithProviders(<AgentsPage />)
+      expect(screen.getByText('Agent disconnected')).toBeInTheDocument()
+      // 脱敏码 → 不渲染命令卡（--server 命令不应出现）
+      expect(screen.queryByText(/wakewake-agent --server /)).not.toBeInTheDocument()
+    } finally {
+      agentState.data = { ...agentState.data, status: 'pending', pairing_code: 'a1b2c3d4e5f60718' }
+    }
   })
 })

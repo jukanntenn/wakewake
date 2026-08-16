@@ -108,10 +108,7 @@
     "codeCopiedManualHint": "No se pudo copiar automáticamente. El nuevo código se muestra arriba — selecciónelo y cópielo manualmente.",
     "maskedCodeHint": "El código de emparejamiento está enmascarado. Haga clic en \"Rotar código\" para obtener un código completo para conectar.",
     "rotate": "Rotate Code",
-    "rotateConfirm": "Rotating will invalidate the old code immediately. Continue?",
     "rotateSuccess": "Pairing code rotated",
-    "copyHint": "Run the agent with this pairing code:",
-    "setupInstructions": "Run on your local network machine:",
     "status": {
       "pending": "Waiting for agent connection",
       "online": "Online",
@@ -121,7 +118,35 @@
     "publicKey": "Public Key",
     "never": "Never",
     "confirmRotate": "Click again to confirm",
-    "publicKeyNotAvailable": "Not available until agent connects"
+    "publicKeyNotAvailable": "Not available until agent connects",
+    "advanced": "Avanzado",
+    "model": {
+      "server": "servidor wakewake",
+      "agent": "agente LAN",
+      "device": "Tus dispositivos",
+      "linked": "Conectado",
+      "missing": "Aún sin conectar",
+      "broken": "Desconectado"
+    },
+    "guide": {
+      "whereTitle": "Ejecuta el agente en una máquina siempre encendida de tu red doméstica",
+      "whereDesc": "El agente debe compartir router con los dispositivos que quieras despertar: la señal de encendido no cruza routers. Un NAS, un mini PC o un portátil de sobra sirven.",
+      "commandLabel": "Comando de inicio",
+      "copyCommand": "Copiar comando",
+      "waiting": "Esperando la conexión del agente: esta página se actualiza automáticamente."
+    },
+    "online": {
+      "title": "Agente conectado",
+      "desc": "El agente está en ejecución. Añade un dispositivo para despertarlo de forma remota.",
+      "cta": "Ir a dispositivos"
+    },
+    "offline": {
+      "title": "Agente desconectado",
+      "desc": "El agente se emparejó previamente. Comprueba que su máquina esté encendida y accesible: se reconectará automáticamente al volver, sin reconfigurar.",
+      "repairHint": "Para emparejar el agente en una máquina nueva, rota el código de emparejamiento y usa el nuevo comando."
+    },
+    "advancedConfigTitle": "Iniciar con un archivo de configuración",
+    "advancedConfigDesc": "Guarda lo siguiente como ~/.wakewake/config.toml y ejecuta ./target/release/wakewake-agent sin argumentos."
   },
   "integrations": {
     "title": "Integraciones",
@@ -461,7 +486,25 @@
     "masked": "(enmascarado)",
     "noDescription": "—",
     "never": "—",
-    "noDrift": "— (ninguna)"
+    "noDrift": "— (ninguna)",
+    "viewAgent": "Ver agente",
+    "connectorNotReadyLink": "Ir a la página del agente →",
+    "gate": {
+      "agentPendingTitle": "Conecta primero tu agente",
+      "agentPendingDesc": "Las direcciones MAC de los dispositivos se cifran con la clave pública del agente, por lo que se requiere un agente emparejado antes de añadir un dispositivo.",
+      "quotaTitle": "Límite de dispositivos alcanzado",
+      "quotaDesc": "Cada cuenta puede tener hasta {max} dispositivos. Elimina uno sin uso para añadir otro.",
+      "insecureTitle": "Se requiere conexión segura",
+      "insecureDesc": "El cifrado MAC usa la API Web Crypto del navegador, que requiere acceso por HTTPS o localhost.",
+      "cta": "Conectar agente",
+      "dismiss": "Entendido"
+    },
+    "notice": {
+      "pendingTitle": "Agente aún sin emparejar",
+      "pendingDesc": "Los dispositivos necesitan un agente emparejado para recibir comandos de encendido.",
+      "offlineTitle": "Agente sin conexión",
+      "offlineDesc": "Aún puedes añadir dispositivos; se sincronizarán cuando el agente se reconecte."
+    }
   },
   "status": {
     "healthy": "Todos los sistemas operativos",
@@ -491,7 +534,6 @@
     "devices": "Sin dispositivos aún",
     "devicesDesc": "Añade tu primer dispositivo para activarlo remotamente",
     "addDevice": "Añadir dispositivo",
-    "setupGuide": "¿Primera vez? Lee la guía →",
     "wakes": "Sin historial aún",
     "wakesDesc": "Activa un dispositivo para verlo aquí",
     "wakesCta": "Ir a dispositivos →",
@@ -504,7 +546,13 @@
     "adminDevices": "Sin dispositivos encontrados",
     "adminIntegrations": "Sin integraciones encontradas",
     "adminWakes": "Sin historial encontrado",
-    "searchNoResults": "Sin resultados para \"{query}\""
+    "searchNoResults": "Sin resultados para \"{query}\"",
+    "onboarding": {
+      "step1": "Conectar agente",
+      "step2": "Añadir dispositivo",
+      "step3": "Encender de forma remota",
+      "desc": "El agente es un pequeño programa de tu red doméstica que entrega comandos de encendido a tus dispositivos."
+    }
   },
   "landing": {
     "nav": {

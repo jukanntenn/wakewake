@@ -108,10 +108,7 @@
     "codeCopiedManualHint": "Impossible de copier automatiquement. Le nouveau code est affiché ci-dessus — sélectionnez-le et copiez-le manuellement.",
     "maskedCodeHint": "Le code d'appairage est masqué. Cliquez sur « Rotation du code » pour obtenir un code complet pour la connexion.",
     "rotate": "Rotate Code",
-    "rotateConfirm": "Rotating will invalidate the old code immediately. Continue?",
     "rotateSuccess": "Pairing code rotated",
-    "copyHint": "Run the agent with this pairing code:",
-    "setupInstructions": "Run on your local network machine:",
     "status": {
       "pending": "Waiting for agent connection",
       "online": "Online",
@@ -121,7 +118,35 @@
     "publicKey": "Public Key",
     "never": "Never",
     "confirmRotate": "Click again to confirm",
-    "publicKeyNotAvailable": "Not available until agent connects"
+    "publicKeyNotAvailable": "Not available until agent connects",
+    "advanced": "Avancé",
+    "model": {
+      "server": "serveur wakewake",
+      "agent": "agent LAN",
+      "device": "Vos appareils",
+      "linked": "Connecté",
+      "missing": "Pas encore connecté",
+      "broken": "Déconnecté"
+    },
+    "guide": {
+      "whereTitle": "Exécutez l'agent sur une machine toujours allumée de votre réseau domestique",
+      "whereDesc": "L'agent doit partager le même routeur que les appareils à réveiller — les signaux de réveil ne traversent pas les routeurs. Un NAS, un mini-PC ou un portable de rechange convient.",
+      "commandLabel": "Commande de lancement",
+      "copyCommand": "Copier la commande",
+      "waiting": "En attente de la connexion de l'agent — cette page se met à jour automatiquement."
+    },
+    "online": {
+      "title": "Agent connecté",
+      "desc": "L'agent est en cours d'exécution. Ajoutez un appareil pour le réveiller à distance.",
+      "cta": "Aller aux appareils"
+    },
+    "offline": {
+      "title": "Agent déconnecté",
+      "desc": "L'agent était appairé auparavant. Vérifiez que sa machine est allumée et accessible — il se reconnecte automatiquement dès son retour, sans reconfiguration.",
+      "repairHint": "Pour jumeler l'agent sur une nouvelle machine, renouvelez le code d'appairage et utilisez la nouvelle commande."
+    },
+    "advancedConfigTitle": "Lancer avec un fichier de configuration",
+    "advancedConfigDesc": "Enregistrez ce qui suit dans ~/.wakewake/config.toml, puis exécutez ./target/release/wakewake-agent sans arguments."
   },
   "integrations": {
     "title": "Intégrations",
@@ -461,7 +486,25 @@
     "masked": "(masqué)",
     "noDescription": "—",
     "never": "—",
-    "noDrift": "— (aucune)"
+    "noDrift": "— (aucune)",
+    "viewAgent": "Voir l'agent",
+    "connectorNotReadyLink": "Vers la page de l'agent →",
+    "gate": {
+      "agentPendingTitle": "Connectez d'abord votre agent",
+      "agentPendingDesc": "Les adresses MAC des appareils sont chiffrées avec la clé publique de l'agent ; un agent appairé est donc requis avant d'ajouter un appareil.",
+      "quotaTitle": "Limite d'appareils atteinte",
+      "quotaDesc": "Chaque compte peut avoir jusqu'à {max} appareils. Supprimez un appareil inutilisé pour en ajouter un autre.",
+      "insecureTitle": "Connexion sécurisée requise",
+      "insecureDesc": "Le chiffrement MAC utilise l'API Web Crypto du navigateur, qui nécessite un accès via HTTPS ou localhost.",
+      "cta": "Connecter l'agent",
+      "dismiss": "Compris"
+    },
+    "notice": {
+      "pendingTitle": "Agent pas encore appairé",
+      "pendingDesc": "Les appareils ont besoin d'un agent appairé pour recevoir les commandes de réveil.",
+      "offlineTitle": "Agent hors ligne",
+      "offlineDesc": "Les appareils peuvent encore être ajoutés ; ils se synchroniseront dès que l'agent se reconnectera."
+    }
   },
   "status": {
     "healthy": "Tous les systèmes opérationnels",
@@ -491,7 +534,6 @@
     "devices": "Aucun appareil",
     "devicesDesc": "Ajoutez votre premier appareil pour le réveiller à distance",
     "addDevice": "Ajouter un appareil",
-    "setupGuide": "Première fois ? Lisez le guide →",
     "wakes": "Pas encore d'historique",
     "wakesDesc": "Réveillez un appareil pour le voir ici",
     "wakesCta": "Vers les appareils →",
@@ -504,7 +546,13 @@
     "adminDevices": "Aucun appareil trouvé",
     "adminIntegrations": "Aucune intégration trouvée",
     "adminWakes": "Aucun historique trouvé",
-    "searchNoResults": "Aucun résultat pour « {query} »"
+    "searchNoResults": "Aucun résultat pour « {query} »",
+    "onboarding": {
+      "step1": "Connecter l'agent",
+      "step2": "Ajouter un appareil",
+      "step3": "Réveiller à distance",
+      "desc": "L'agent est un petit programme de votre réseau domestique qui transmet les commandes de réveil à vos appareils."
+    }
   },
   "landing": {
     "nav": {

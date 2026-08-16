@@ -157,7 +157,25 @@
     "masked": "(masked)",
     "noDescription": "—",
     "never": "—",
-    "noDrift": "— (none)"
+    "noDrift": "— (none)",
+    "viewAgent": "View agent",
+    "connectorNotReadyLink": "Go to the agent page →",
+    "gate": {
+      "agentPendingTitle": "Connect your agent first",
+      "agentPendingDesc": "Device MAC addresses are encrypted with the agent's public key, so a paired agent is required before adding a device.",
+      "quotaTitle": "Device limit reached",
+      "quotaDesc": "Each account can have up to {max} devices. Remove an unused device to add another.",
+      "insecureTitle": "Secure connection required",
+      "insecureDesc": "MAC encryption uses the browser's Web Crypto API, which requires access over HTTPS or localhost.",
+      "cta": "Connect agent",
+      "dismiss": "Got it"
+    },
+    "notice": {
+      "pendingTitle": "Agent not paired yet",
+      "pendingDesc": "Devices need a paired agent to receive wake commands.",
+      "offlineTitle": "Agent offline",
+      "offlineDesc": "Devices can still be added; they will sync once the agent reconnects."
+    }
   },
   "agents": {
     "title": "Agent",
@@ -167,10 +185,7 @@
     "title": "Agent",
     "pairingCode": "Pairing Code",
     "rotate": "Rotate Code",
-    "rotateConfirm": "Rotating will invalidate the old code immediately. Continue?",
     "rotateSuccess": "Pairing code rotated",
-    "copyHint": "Run the agent with this pairing code:",
-    "setupInstructions": "Run on your local network machine:",
     "status": {
       "pending": "Waiting for agent connection",
       "online": "Online",
@@ -187,7 +202,35 @@
     "codeCopiedManualHint": "Couldn't copy automatically. The new code is shown above — select and copy it manually.",
     "maskedCodeHint": "The pairing code is masked. Click \"Rotate Code\" to get a full code for connecting.",
     "confirmRotate": "Click again to confirm",
-    "publicKeyNotAvailable": "Not available until agent connects"
+    "publicKeyNotAvailable": "Not available until agent connects",
+    "advanced": "Advanced",
+    "model": {
+      "server": "wakewake server",
+      "agent": "LAN agent",
+      "device": "Your devices",
+      "linked": "Connected",
+      "missing": "Not connected yet",
+      "broken": "Disconnected"
+    },
+    "guide": {
+      "whereTitle": "Run the agent on an always-on machine in your home network",
+      "whereDesc": "The agent must share a router with the devices you want to wake — wake signals do not cross routers. A NAS, mini PC, or spare laptop works well.",
+      "commandLabel": "Launch command",
+      "copyCommand": "Copy command",
+      "waiting": "Waiting for the agent to connect — this page updates automatically."
+    },
+    "online": {
+      "title": "Agent connected",
+      "desc": "The agent is running. Add a device to wake it remotely.",
+      "cta": "Go to devices"
+    },
+    "offline": {
+      "title": "Agent disconnected",
+      "desc": "The agent was paired before. Check that its machine is powered on and reachable — it reconnects automatically once back, no reconfiguration needed.",
+      "repairHint": "To pair the agent on a new machine, rotate the pairing code and use the new command."
+    },
+    "advancedConfigTitle": "Launch with a config file",
+    "advancedConfigDesc": "Save the following as ~/.wakewake/config.toml, then run ./target/release/wakewake-agent with no arguments."
   },
   "integrations": {
     "title": "Integrations",
@@ -532,7 +575,6 @@
     "devices": "No devices yet",
     "devicesDesc": "Add your first device to start waking it remotely",
     "addDevice": "Add device",
-    "setupGuide": "First time? Read the setup guide →",
     "wakes": "No wake history yet",
     "wakesDesc": "Wake a device to see it here",
     "wakesCta": "Go to devices →",
@@ -545,7 +587,13 @@
     "adminDevices": "No devices found",
     "adminIntegrations": "No integrations found",
     "adminWakes": "No wake history found",
-    "searchNoResults": "No results for \"{query}\""
+    "searchNoResults": "No results for \"{query}\"",
+    "onboarding": {
+      "step1": "Connect agent",
+      "step2": "Add device",
+      "step3": "Wake remotely",
+      "desc": "The agent is a small program that runs in your home network and delivers wake commands to your devices."
+    }
   },
   "landing": {
     "nav": {

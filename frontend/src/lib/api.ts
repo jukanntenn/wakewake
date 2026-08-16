@@ -29,11 +29,17 @@ export class ApiError extends Error {
 
 // ---- 类型（对齐后端响应信封：单资源直接返回，列表 {items,page,page_size,total}）----
 
+export interface UserLimits {
+  max_devices: number
+}
+
 export interface User {
   id: number
   email: string
   is_superuser: boolean
   email_verified?: boolean
+  // domain 常量投影（agent-onboarding.md）：旧持久化会话缺失时跳过前置配额判断，服务端兜底。
+  limits?: UserLimits
 }
 
 // 管理后台用户（GET /admin/users 返回，比 User 多 is_active/disabled_at/last_login/created_at）。

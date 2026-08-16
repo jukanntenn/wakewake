@@ -108,10 +108,7 @@
     "codeCopiedManualHint": "Não foi possível copiar automaticamente. O novo código é exibido acima — selecione e copie manualmente.",
     "maskedCodeHint": "O código de pareamento está mascarado. Clique em \"Girar código\" para obter um código completo para conectar.",
     "rotate": "Rotate Code",
-    "rotateConfirm": "Rotating will invalidate the old code immediately. Continue?",
     "rotateSuccess": "Pairing code rotated",
-    "copyHint": "Run the agent with this pairing code:",
-    "setupInstructions": "Run on your local network machine:",
     "status": {
       "pending": "Waiting for agent connection",
       "online": "Online",
@@ -121,7 +118,35 @@
     "publicKey": "Public Key",
     "never": "Never",
     "confirmRotate": "Click again to confirm",
-    "publicKeyNotAvailable": "Not available until agent connects"
+    "publicKeyNotAvailable": "Not available until agent connects",
+    "advanced": "Avançado",
+    "model": {
+      "server": "servidor wakewake",
+      "agent": "agente LAN",
+      "device": "Seus dispositivos",
+      "linked": "Conectado",
+      "missing": "Ainda não conectado",
+      "broken": "Desconectado"
+    },
+    "guide": {
+      "whereTitle": "Execute o agente em uma máquina sempre ligada na sua rede doméstica",
+      "whereDesc": "O agente deve estar no mesmo roteador dos dispositivos que você deseja acordar — o sinal de wake não atravessa roteadores. Um NAS, mini PC ou notebook reserva serve.",
+      "commandLabel": "Comando de inicialização",
+      "copyCommand": "Copiar comando",
+      "waiting": "Aguardando a conexão do agente — esta página é atualizada automaticamente."
+    },
+    "online": {
+      "title": "Agente conectado",
+      "desc": "O agente está em execução. Adicione um dispositivo para acordá-lo remotamente.",
+      "cta": "Ir para dispositivos"
+    },
+    "offline": {
+      "title": "Agente desconectado",
+      "desc": "O agente foi pareado anteriormente. Verifique se a máquina está ligada e acessível — ele reconecta automaticamente ao voltar, sem reconfiguração.",
+      "repairHint": "Para parear o agente em uma nova máquina, troque o código de pareamento e use o novo comando."
+    },
+    "advancedConfigTitle": "Iniciar com um arquivo de configuração",
+    "advancedConfigDesc": "Salve o conteúdo a seguir em ~/.wakewake/config.toml e execute ./target/release/wakewake-agent sem argumentos."
   },
   "integrations": {
     "title": "Integrações",
@@ -461,7 +486,25 @@
     "masked": "(mascarado)",
     "noDescription": "—",
     "never": "—",
-    "noDrift": "— (nenhuma)"
+    "noDrift": "— (nenhuma)",
+    "viewAgent": "Ver agente",
+    "connectorNotReadyLink": "Ir para a página do agente →",
+    "gate": {
+      "agentPendingTitle": "Conecte primeiro o agente",
+      "agentPendingDesc": "Os endereços MAC dos dispositivos são criptografados com a chave pública do agente, por isso é preciso um agente pareado antes de adicionar um dispositivo.",
+      "quotaTitle": "Limite de dispositivos atingido",
+      "quotaDesc": "Cada conta pode ter até {max} dispositivos. Remova um dispositivo sem uso para adicionar outro.",
+      "insecureTitle": "Conexão segura necessária",
+      "insecureDesc": "A criptografia MAC usa a API Web Crypto do navegador, que exige acesso via HTTPS ou localhost.",
+      "cta": "Conectar agente",
+      "dismiss": "Entendi"
+    },
+    "notice": {
+      "pendingTitle": "Agente ainda não pareado",
+      "pendingDesc": "Os dispositivos precisam de um agente pareado para receber comandos de wake.",
+      "offlineTitle": "Agente offline",
+      "offlineDesc": "Ainda é possível adicionar dispositivos; eles serão sincronizados quando o agente reconectar."
+    }
   },
   "status": {
     "healthy": "Todos os sistemas operacionais",
@@ -491,7 +534,6 @@
     "devices": "Sem dispositivos ainda",
     "devicesDesc": "Adicione seu primeiro dispositivo para iniciá-lo remotamente",
     "addDevice": "Adicionar dispositivo",
-    "setupGuide": "Primeira vez? Leia o guia →",
     "wakes": "Sem histórico ainda",
     "wakesDesc": "Inicie um dispositivo para vê-lo aqui",
     "wakesCta": "Ir para dispositivos →",
@@ -504,7 +546,13 @@
     "adminDevices": "Sem dispositivos encontrados",
     "adminIntegrations": "Sem integrações encontradas",
     "adminWakes": "Sem histórico encontrado",
-    "searchNoResults": "Sem resultados para \"{query}\""
+    "searchNoResults": "Sem resultados para \"{query}\"",
+    "onboarding": {
+      "step1": "Conectar agente",
+      "step2": "Adicionar dispositivo",
+      "step3": "Ligar remotamente",
+      "desc": "O agente é um pequeno programa da sua rede doméstica que entrega comandos de wake aos seus dispositivos."
+    }
   },
   "landing": {
     "nav": {

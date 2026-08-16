@@ -1,13 +1,9 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import type { User } from '@/lib/api'
 
-// User 含 is_superuser（routing-and-guards.md §isAdmin 来源，DB schema users.is_superuser）。
-export interface User {
-  id: number
-  email: string
-  is_superuser: boolean
-  email_verified?: boolean
-}
+// User 类型单一来源在 lib/api.ts（含 is_superuser 与 limits 投影）。
+export type { User }
 
 interface AuthState {
   // access token 不 persist（内存，降 XSS 偷取窗口，authentication.md §九）

@@ -6,6 +6,7 @@
 // 删除走 L3 ConfirmDialog（§5.4），唤醒按钮 text-ink（共识 3，a11y 达标）。
 
 import { useCallback, useState } from 'react'
+import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import { Pencil, Trash2, Power, MoreHorizontal } from 'lucide-react'
@@ -102,10 +103,13 @@ export function DeviceList({ devices, onEdit }: DeviceListProps) {
               </>
             )}
 
-            {/* 离线态状态行 */}
+            {/* 离线态状态行（附 Agent 页去向，agent-onboarding.md） */}
             {!device.agent_online && (
               <p className="text-ink-subtle mt-3 text-xs">
-                ○ {t('agentOffline')} · {t('wakeUnavailable' as never)}
+                ○ {t('agentOffline')} · {t('wakeUnavailable' as never)} ·{' '}
+                <Link href="/agents" className="hover:text-ink underline underline-offset-2">
+                  {t('viewAgent')}
+                </Link>
               </p>
             )}
 

@@ -108,10 +108,7 @@
     "codeCopiedManualHint": "자동 복사에 실패했습니다. 새 코드가 위에 표시되어 있습니다 — 직접 선택하여 복사하세요.",
     "maskedCodeHint": "페어링 코드가 마스킹되어 있습니다. \"코드 교체\"를 클릭하여 연결에 사용할 전체 코드를 받으세요.",
     "rotate": "Rotate Code",
-    "rotateConfirm": "Rotating will invalidate the old code immediately. Continue?",
     "rotateSuccess": "Pairing code rotated",
-    "copyHint": "Run the agent with this pairing code:",
-    "setupInstructions": "Run on your local network machine:",
     "status": {
       "pending": "Waiting for agent connection",
       "online": "Online",
@@ -121,7 +118,35 @@
     "publicKey": "Public Key",
     "never": "Never",
     "confirmRotate": "Click again to confirm",
-    "publicKeyNotAvailable": "Not available until agent connects"
+    "publicKeyNotAvailable": "Not available until agent connects",
+    "advanced": "고급",
+    "model": {
+      "server": "wakewake 서버",
+      "agent": "LAN 에이전트",
+      "device": "대상 기기",
+      "linked": "연결됨",
+      "missing": "미연결",
+      "broken": "연결 끊김"
+    },
+    "guide": {
+      "whereTitle": "홈 네트워크의 상시 켜둔 머신에서 에이전트를 실행하세요",
+      "whereDesc": "에이전트는 깨울 기기와 같은 공유기에 연결되어 있어야 합니다(웨이크 신호는 공유기를 넘지 못합니다). NAS, 미니 PC, 여분의 노트북이 적합합니다.",
+      "commandLabel": "실행 명령",
+      "copyCommand": "명령 복사",
+      "waiting": "에이전트 연결을 기다리는 중입니다. 페이지는 자동으로 갱신됩니다."
+    },
+    "online": {
+      "title": "에이전트가 연결되었습니다",
+      "desc": "에이전트가 실행 중입니다. 기기를 추가하면 원격으로 깨울 수 있습니다.",
+      "cta": "기기로 이동"
+    },
+    "offline": {
+      "title": "에이전트 연결이 끊겼습니다",
+      "desc": "에이전트는 이전에 페어링되었습니다. 실행 머신의 전원과 네트워크를 확인하세요. 복구되면 자동으로 재연결되며 재설정이 필요 없습니다.",
+      "repairHint": "새 머신에서 다시 페어링하려면 페어링 코드를 교체한 뒤 새 명령을 사용하세요."
+    },
+    "advancedConfigTitle": "설정 파일로 실행",
+    "advancedConfigDesc": "아래 내용을 ~/.wakewake/config.toml로 저장하면 명령줄 인자 없이 ./target/release/wakewake-agent 를 실행할 수 있습니다."
   },
   "integrations": {
     "title": "연동",
@@ -461,7 +486,25 @@
     "masked": "(마스킹됨)",
     "noDescription": "—",
     "never": "—",
-    "noDrift": "— (없음)"
+    "noDrift": "— (없음)",
+    "viewAgent": "에이전트 보기",
+    "connectorNotReadyLink": "에이전트 페이지로 →",
+    "gate": {
+      "agentPendingTitle": "먼저 에이전트를 연결하세요",
+      "agentPendingDesc": "기기의 MAC 주소는 에이전트 공개 키로 암호화되므로, 기기를 추가하려면 에이전트 페어링이 필요합니다.",
+      "quotaTitle": "기기 수가 상한에 도달했습니다",
+      "quotaDesc": "각 계정은 최대 {max}대까지 기기를 추가할 수 있습니다. 사용하지 않는 기기를 삭제하면 다시 추가할 수 있습니다.",
+      "insecureTitle": "보안 연결이 필요합니다",
+      "insecureDesc": "MAC 암호화는 브라우저의 Web Crypto API를 사용하므로 HTTPS 또는 localhost 접근이 필요합니다.",
+      "cta": "에이전트 연결",
+      "dismiss": "확인"
+    },
+    "notice": {
+      "pendingTitle": "에이전트가 아직 페어링되지 않았습니다",
+      "pendingDesc": "기기가 웨이크 명령을 수신하려면 페어링된 에이전트가 필요합니다.",
+      "offlineTitle": "에이전트가 오프라인입니다",
+      "offlineDesc": "기기는 계속 추가할 수 있으며, 에이전트가 다시 연결되면 자동 동기화됩니다."
+    }
   },
   "status": {
     "healthy": "시스템 정상",
@@ -491,7 +534,6 @@
     "devices": "기기이 없습니다",
     "devicesDesc": "첫 기기를 추가하여 원격 켜기를 시작하세요",
     "addDevice": "기기 추가",
-    "setupGuide": "처음이신가요? 설정 가이드 읽기 →",
     "wakes": "켜기 기록이 없습니다",
     "wakesDesc": "기기를 켜면 여기에 표시됩니다",
     "wakesCta": "기기로 →",
@@ -504,7 +546,13 @@
     "adminDevices": "기기를 찾을 수 없습니다",
     "adminIntegrations": "통합을 찾을 수 없습니다",
     "adminWakes": "켜기 기록을 찾을 수 없습니다",
-    "searchNoResults": "\"{query}\"에 대한 결과 없음"
+    "searchNoResults": "\"{query}\"에 대한 결과 없음",
+    "onboarding": {
+      "step1": "에이전트 연결",
+      "step2": "기기 추가",
+      "step3": "원격 부팅",
+      "desc": "에이전트는 홈 네트워크에서 실행되며 웨이크 명령을 기기에 전달하는 상주 프로그램입니다."
+    }
   },
   "landing": {
     "nav": {
