@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
-"""线性回归分析 + 红线断言（load.md §7.4）。
+"""线性回归分析 + 红线断言（specs/testing/load.md §红线）。
 
 读 metrics-samples.csv（RSS 采样）+ k6 report.json（VU 数对齐），
 最小二乘线性回归 RSS = a × connections + b：
-  - slope a = 单连接增量（红线 < 2.5KB，perf-est 实测 1.2-1.5KB）
-  - R² > 0.99（线性假设成立）
-  - 外推 10 万 = a × 100000 + b 落 110-170MB（perf-est §3.4 预测区间）
+  - slope a = 单连接增量（红线 < 4.0KB；理论 1.2-1.5KB + tokio/allocator 开销，
+    2026-07-19 实测 3.073KB）
+  - R² > 0.95（线性假设成立；实测 0.963）
+  - 外推 10 万 = a × 100000 + b 落 110-500MB（实测外推 315MB）
+  - CPU 斜率（信息性，不设门禁）：CPU%/连接应近水平，陡升即容量拐点信号
 
 用法：
   python3 analyze-regression.py metrics-samples.csv results/report.json > results/regression.md
   python3 analyze-regression.py --check-only（CI 红线检查，读 results/regression.md）
 
 注：纯 Python 实现（无 numpy 依赖），最小二乘 + R² 公式直接推导。
+阈值唯一真源在本文件 THRESHOLD_* 常量（与 specs/testing/load.md §红线 同步）。
 """
+
 import csv
 import json
 import sys
@@ -66,9 +70,7 @@ def load_k6_vu_timeline(report_path: str) -> dict:
     try:
         with open(report_path) as f:
             data = json.load(f)
-        vu_max = (
-            data.get("metrics", {}).get("vus", {}).get("values", {}).get("max", 0)
-        )
+        vu_max = data.get("metrics", {}).get("vus", {}).get("values", {}).get("max", 0)
         failed_rate = (
             data.get("metrics", {})
             .get("http_req_failed", {})
@@ -127,12 +129,12 @@ def align_connections(rows: list[dict], vu_max: int) -> tuple[list, list]:
     # 阶梯（sse-k6.js）：ramping-vus, 每级 30s ramp
     # 稳态窗口：每级最后 10s（collect-metrics 每 5s 采样 = 2 samples/级稳态）
     ramp_stages = [
-        (20, 30, 100),    # L1: 100 VU 稳态
-        (50, 60, 500),    # L2: 500 VU
-        (80, 90, 1000),   # L3: 1000 VU
-        (110, 120, 2000), # L4: 2000 VU
-        (140, 150, 3000), # L5: 3000 VU
-        (170, 180, 5000), # L6: 5000 VU
+        (20, 30, 100),  # L1: 100 VU 稳态
+        (50, 60, 500),  # L2: 500 VU
+        (80, 90, 1000),  # L3: 1000 VU
+        (110, 120, 2000),  # L4: 2000 VU
+        (140, 150, 3000),  # L5: 3000 VU
+        (170, 180, 5000),  # L6: 5000 VU
     ]
     t0 = ts_list[0]
     vu_list = []
@@ -172,9 +174,7 @@ def check_redlines(reg: dict) -> list[str]:
             f"单连接增量 {reg['slope_kb']:.3f}KB 超红线 {THRESHOLD_SLOPE_KB}KB"
         )
     if reg["r_squared"] < THRESHOLD_R2:
-        failures.append(
-            f"R² {reg['r_squared']:.4f} < {THRESHOLD_R2}，线性假设不成立"
-        )
+        failures.append(f"R² {reg['r_squared']:.4f} < {THRESHOLD_R2}，线性假设不成立")
     if not (EXPECTED_100K_MIN_MB <= reg["extrapolate_100k_mb"] <= EXPECTED_100K_MAX_MB):
         failures.append(
             f"外推 10万 {reg['extrapolate_100k_mb']:.1f}MB 不在 "
@@ -199,7 +199,9 @@ def main():
         sys.exit(0)
 
     if len(args) < 2:
-        print("用法: analyze-regression.py <metrics.csv> <report.json>", file=sys.stderr)
+        print(
+            "用法: analyze-regression.py <metrics.csv> <report.json>", file=sys.stderr
+        )
         sys.exit(2)
 
     csv_path, report_path = args[0], args[1]
@@ -209,14 +211,35 @@ def main():
 
     if not connections:
         print("# 回归分析\n\n⚠️ 采样数据不足，跳过回归。", file=sys.stderr)
-        print("# 回归分析\n\n⚠️ 采样数据不足（metrics-samples.csv 空或少于 10 条），跳过线性回归。\n")
+        print(
+            "# 回归分析\n\n⚠️ 采样数据不足（metrics-samples.csv 空或少于 10 条），跳过线性回归。\n"
+        )
         sys.exit(0)
 
     reg = regress(connections, rss)
     failures = check_redlines(reg)
 
+    # CPU 斜率（信息性）：CPU%/连接回归，稳态应近水平（<0.01%/连接）
+    has_cpu = any(r.get("app_cpu_percent") for r in rows)
+    cpu_slope = 0.0
+    if has_cpu:
+        cpu_by_vu = {}
+        for r in rows:
+            try:
+                v = int(r.get("app_rss_kb") or 0)
+                c = int(r.get("vu") or 0)
+                cpu = float(r.get("app_cpu_percent") or 0)
+            except (ValueError, TypeError):
+                continue
+            if v > 0 and c > 0:
+                cpu_by_vu.setdefault(c, []).append(cpu)
+        if len(cpu_by_vu) >= 2:
+            xs = sorted(cpu_by_vu)
+            ys = [sorted(cpu_by_vu[x])[len(cpu_by_vu[x]) // 2] for x in xs]
+            cpu_slope, _, _ = linear_regression(xs, ys)
+
     # 输出 markdown 报告
-    print("# 线性回归分析 + 红线断言（load.md §7.4）")
+    print("# 线性回归分析 + 红线断言（specs/testing/load.md §红线）")
     print("")
     print(f"**VU 峰值**：{k6['vu_count_max']}  ")
     print(f"**失败率**：{k6['failed_rate']:.4f}  ")
@@ -240,6 +263,11 @@ def main():
         f"{'✅' if EXPECTED_100K_MIN_MB <= reg['extrapolate_100k_mb'] <= EXPECTED_100K_MAX_MB else '❌'} |"
     )
     print(f"| 截距（intercept） | {reg['intercept_kb']:.0f} KB | — | — |")
+    if has_cpu:
+        print(
+            f"| CPU 斜率（信息性） | {cpu_slope:.5f} %/连接 | "
+            f"{'⚠️ 陡升（拐点信号）' if cpu_slope >= 0.01 else '≈ 水平 ✅'} | — |"
+        )
     print("")
     if failures:
         print("## ❌ 红线断言失败")

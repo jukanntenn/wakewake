@@ -1,6 +1,7 @@
 //! wakewake-seed：压测数据 DB 直灌（load.md §5）。
 //!
-//! 10 万 users + 10 万 agents，PG COPY FROM STDIN 批量灌入（比 INSERT 快 10-100 倍）。
+//! users + agents + devices（每用户 2 台）+ integrations（比例用户带 bemfa），
+//! PG COPY FROM STDIN 批量灌入（比 INSERT 快 10-100 倍）。
 //! 复用 `wakewake_server::service::secrets::generate_pairing_code（16` hex 零漂移）。
 //!
 //! 数据一致性（load.md §5.3）：
@@ -18,7 +19,7 @@ use std::time::Instant;
 use anyhow::{Context, Result};
 use clap::Parser;
 use sqlx::PgPool;
-use sqlx::postgres::{PgCopyIn, PgPoolOptions};
+use sqlx::postgres::{PgCopyIn, PgPoolCopyExt, PgPoolOptions};
 use time::OffsetDateTime;
 use uuid::Uuid;
 use wakewake_server::service::secrets::generate_pairing_code;
@@ -36,6 +37,9 @@ struct Cli {
     /// 固定密码（所有压测用户共用）
     #[arg(long, default_value = "TestPass123!")]
     password: String,
+    /// 带 bemfa 集成的用户比例（0 = 不灌 integrations）
+    #[arg(long, default_value_t = 0.3)]
+    intg_fraction: f64,
 }
 
 #[tokio::main]
@@ -64,7 +68,6 @@ async fn main() -> Result<()> {
 
     // ---- 1. COPY users ----
     // 用 sqlx 0.9 PgPoolCopyExt::copy_in_raw + PgCopyIn::send/finish（load.md §5.4）
-    use sqlx::postgres::PgPoolCopyExt;
     let mut user_copy: PgCopyIn<_> = pool
         .copy_in_raw(
             "COPY users (email, password, is_active, is_superuser, created_at, updated_at) FROM STDIN WITH (FORMAT csv)",
@@ -125,6 +128,19 @@ async fn main() -> Result<()> {
     let agent_rows = agent_copy.finish().await?;
     tracing::info!(agent_rows, "agents COPY done");
 
+    // ---- 2b. COPY devices + integrations ----
+    let agent_ids: Vec<(i64, i64)> = sqlx::query_as(
+        "SELECT id, user_id FROM agents WHERE user_id IN \
+         (SELECT id FROM users WHERE email LIKE 'seed-%@load.wakewake.local') ORDER BY user_id",
+    )
+    .fetch_all(&pool)
+    .await
+    .context("fetch seed agent ids")?;
+    let device_rows = seed_devices(&pool, &agent_ids, &now_rfc).await?;
+    tracing::info!(device_rows, "devices COPY done");
+    let intg_rows = seed_integrations(&pool, &agent_ids, cli.intg_fraction, &now_rfc).await?;
+    tracing::info!(intg_rows, "integrations COPY done");
+
     let elapsed = started.elapsed();
     tracing::info!(?elapsed, user_rows, agent_rows, "seed complete");
 
@@ -132,6 +148,80 @@ async fn main() -> Result<()> {
     consistency_check(&pool).await?;
 
     Ok(())
+}
+
+/// RSA-2048 OAEP 密文的 base64 长度（mac_encrypted / bemfa config.uid 占位口径）。
+const CIPHER_B64_LEN: usize = 344;
+
+/// COPY devices：每用户 2 台（MAX_DEVICES_PER_USER 口径）。
+/// mac_encrypted 用 344 字符 base64 占位——保证 state snapshot payload /
+/// 重连风暴带宽不失真（k6 假 agent 不解密；load.md §5.7）。
+async fn seed_devices(pool: &PgPool, agent_ids: &[(i64, i64)], now_rfc: &str) -> Result<u64> {
+    let cipher_placeholder = "A".repeat(CIPHER_B64_LEN);
+    let mut csv = String::with_capacity(agent_ids.len() * 2 * 480);
+    for (i, (agent_id, user_id)) in agent_ids.iter().enumerate() {
+        for d in 0..2 {
+            let mac = format!(
+                "AA:BB:CC:{:02X}:{:02X}:{:02X}",
+                (i >> 8) & 0xFF,
+                i & 0xFF,
+                d
+            );
+            csv.push_str(&format!(
+                "{},{},{},\"PC-{}\",{},{},{},{}\n",
+                Uuid::new_v4(),
+                user_id,
+                agent_id,
+                d,
+                cipher_placeholder,
+                mac,
+                now_rfc,
+                now_rfc,
+            ));
+        }
+    }
+    // 列以线上 schema 为准（后续迁移已去 sync_status，bemfa 观测列均可空默认）
+    let mut copy: PgCopyIn<_> = pool
+        .copy_in_raw(
+            "COPY devices (did, user_id, agent_id, name, mac_encrypted, mac_display, created_at, updated_at) FROM STDIN WITH (FORMAT csv)",
+        )
+        .await
+        .context("COPY devices init")?;
+    copy.send(csv.as_bytes()).await?;
+    copy.finish().await.context("COPY devices finish")
+}
+
+/// COPY integrations：前 fraction 比例用户带 bemfa（config.uid 同为密文占位）。
+async fn seed_integrations(
+    pool: &PgPool,
+    agent_ids: &[(i64, i64)],
+    fraction: f64,
+    now_rfc: &str,
+) -> Result<u64> {
+    let n = (fraction * agent_ids.len() as f64) as usize;
+    if n == 0 {
+        return Ok(0);
+    }
+    let cipher_placeholder = "A".repeat(CIPHER_B64_LEN);
+    let mut csv = String::with_capacity(n * 460);
+    for (agent_id, user_id) in agent_ids.iter().take(n) {
+        let config = format!("{{\"uid\":\"{cipher_placeholder}\"}}");
+        csv.push_str(&format!(
+            "{},{agent_id},bemfa,{},t,{},{}\n",
+            user_id,
+            csv_quote(&config),
+            now_rfc,
+            now_rfc,
+        ));
+    }
+    let mut copy: PgCopyIn<_> = pool
+        .copy_in_raw(
+            "COPY integrations (user_id, agent_id, provider, config, enabled, created_at, updated_at) FROM STDIN WITH (FORMAT csv)",
+        )
+        .await
+        .context("COPY integrations init")?;
+    copy.send(csv.as_bytes()).await?;
+    copy.finish().await.context("COPY integrations finish")
 }
 
 /// CSV 字段引号包装（含 `$`/`,` 的值用双引号包裹，内部双引号转义为两个）。
@@ -163,12 +253,24 @@ async fn consistency_check(pool: &PgPool) -> Result<()> {
         sqlx::query_scalar("SELECT COUNT(*) - COUNT(DISTINCT pairing_code) FROM agents")
             .fetch_one(pool)
             .await?;
+    let orphan_devices: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM devices d LEFT JOIN agents a ON d.agent_id = a.id WHERE a.id IS NULL",
+    )
+    .fetch_one(pool)
+    .await?;
+    let bad_mac_cipher: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM devices WHERE length(mac_encrypted) <> 344 OR mac_encrypted !~ '^[A-Za-z0-9+/=]+$'",
+    )
+    .fetch_one(pool)
+    .await?;
 
     tracing::info!(
         user_count,
         bad_codes,
         orphan_agents,
         dup_codes,
+        orphan_devices,
+        bad_mac_cipher,
         "consistency check"
     );
     assert!(
@@ -180,6 +282,14 @@ async fn consistency_check(pool: &PgPool) -> Result<()> {
         "orphan agents (FK broken): {orphan_agents}"
     );
     assert!(dup_codes == 0, "duplicate pairing_codes: {dup_codes}");
+    assert!(
+        orphan_devices == 0,
+        "orphan devices (FK broken): {orphan_devices}"
+    );
+    assert!(
+        bad_mac_cipher == 0,
+        "devices with malformed mac_encrypted: {bad_mac_cipher}"
+    );
     Ok(())
 }
 

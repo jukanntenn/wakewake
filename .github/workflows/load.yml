@@ -1,0 +1,69 @@
+# Load test workflow（specs/testing/load.md §CI）。
+# 手动触发（workflow_dispatch）：prod-sim 环境 + 指定场景。
+# 默认小规模 R4（限流开启的校准档）；完整容量探测请在本地 12 核 dev box 跑
+# （CI runner 4 vCPU，资源限制语义仍在但 loader 能力有限）。
+name: Load Test
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: 'k6 scenario (tests/load/<name>.js)'
+        required: true
+        default: r4-dashboard-mix
+        type: choice
+        options:
+          - r4-dashboard-mix
+          - r3-reconnect-storm
+          - r1-sse-knee
+          - r2-login-staircase
+          - r7-static
+          - sse-connections
+          - r5-wol-e2e
+      seed_count:
+        description: 'seed users/agents'
+        required: true
+        default: '300'
+        type: string
+      duration:
+        description: 'scenario duration (e.g. 4m)'
+        required: true
+        default: '4m'
+        type: string
+      disable_rate_limit:
+        description: '关闭限流（仅硬件天花板探测：R2 必须）'
+        required: true
+        default: false
+        type: boolean
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  prod-sim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Run prod-sim scenario
+        env:
+          SCENARIO: ${{ inputs.scenario }}
+          SEED_COUNT: ${{ inputs.seed_count }}
+          DURATION: ${{ inputs.duration }}
+          LOAD_DISABLE_RATE_LIMIT: ${{ inputs.disable_rate_limit && '1' || '0' }}
+          # CI 无 Rust 工具链：seed 在 rust 容器内编译运行（SQLX_OFFLINE 由镜像内
+          # 环境保证——workspace 提交了 .sqlx 离线数据）
+          SEED_DOCKER_IMAGE: rust:1.95-slim
+        run: bash tests/load/run-prod-sim.sh
+      - name: Redline check
+        run: python3 tests/load/analyze-regression.py --check-only
+        if: always()
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: load-results-${{ inputs.scenario }}
+          path: tests/load/results/
+          if-no-files-found: ignore

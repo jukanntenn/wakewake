@@ -1,0 +1,71 @@
+# prod-sim：模拟 2c/2g/3Mbps VPS 的生产保真压测环境（叠加在 e2e compose 上）。
+# 与 docker-compose.load.yml（裸机不限资源）互补——本文件追求生产口径。
+#
+#   docker compose -f ../e2e/docker-compose.e2e.yml -f docker-compose.prod-sim.yml up -d --build
+#
+# 资源预算（2c/2g VPS）：app 1.8 CPU / 1400MB + postgres 0.2 CPU / 550MB，
+# 禁 swap 让 OOM 行为可观测。3Mbps 出口整形由 run-prod-sim.sh 经 wan-shaper
+# 注入 app netns（compose 无法表达 tc）。
+#
+# 与生产的已知保真度损失（specs/testing/load.md §prod-sim）：
+#   - Caddy plain HTTP（生产 TLS 由 CF 终结 + Origin Cert；TLS 终结 CPU 未计入）
+#   - k6 与 SUT 同宿主 bridge（生产跨公网；WAN_DELAY=40ms 可补偿 RTT）
+services:
+  app:
+    # cpuset 钉 2 个专核自然竞争（markpost 先例：比 CFS 配额更接近真 VPS 的争抢行为）
+    cpuset: "${LOAD_CPUSET:-0,1}"
+    mem_limit: 1400m
+    memswap_limit: 1400m
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+    environment:
+      # 限流默认开启（生产口径，全局限流 per-IP 600/min）。
+      # LOAD_DISABLE_RATE_LIMIT=1 仅在探测硬件天花板时显式使用。
+      WAKEWAKE_RATE_LIMIT__DISABLED: "${LOAD_DISABLE_RATE_LIMIT:-false}"
+      # 压测不测邮件链路，关掉 mailer（e2e 指向 mailpit，此处不存在）
+      WAKEWAKE_MAILER__ENABLED: "false"
+    volumes:
+      # plain HTTP 变体：同目标挂载覆盖 e2e 的 Caddyfile.local（tls internal）。
+      # 注意：相对路径按【第一个】compose 文件（e2e/）的目录解析 → e2e/../docker/
+      - ../docker/Caddyfile:/app/Caddyfile:ro
+    healthcheck:
+      # plain HTTP 对应的探活口径
+      test: ["CMD", "curl", "-fs", "http://localhost:8443/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  postgres:
+    # 生产 GUC（ansible 模板口径）——不是旧 load override 的 512MB/max_connections=200
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - max_connections=50
+      - -c
+      - effective_cache_size=1GB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - synchronous_commit=off
+    cpuset: "${LOAD_CPUSET:-0,1}"
+    mem_limit: 550m
+    ports:
+      # 5432 常被 dev compose 占用，用 15432（seed 从宿主连）
+      - "15432:5432"
+
+  # R5 真实 wake 端到端（run-prod-sim.sh 注入 WAKEWAKE_PAIRING_CODE 后 --profile agent 启动）
+  agent:
+    environment:
+      # prod-sim 是 plain HTTP 源站（e2e 默认 https://app:8443 指向 tls internal）
+      WAKEWAKE_SERVER_URL: http://app:8443
+      RUST_LOG: info
+
+networks:
+  e2e-net:
+    # 稳定网络名：k6 与 wan-shaper 直接引用
+    name: wakewake-load-net
