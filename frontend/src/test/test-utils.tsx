@@ -287,6 +287,30 @@ const enMessages = {
     devicesNeedAttention:
       '{count, plural, one {# device needs attention} other {# devices need attention}}',
   },
+  auth: {
+    createAccount: 'Create your account',
+    createAccountSubtitle: 'Start managing your devices in seconds.',
+    email: 'Email',
+    password: 'Password',
+    passwordHint: '8+ characters',
+    register: 'Sign up',
+    signingUp: 'Signing up...',
+    hasAccount: 'Already have an account?',
+    signInLink: 'Sign in',
+    registrationClosed: 'Registration is temporarily closed. Please try again later.',
+    creatingAccount: 'Creating account...',
+    verificationSent: 'sent',
+    error: {
+      INVALID_CREDENTIALS: 'bad creds',
+      USER_EXISTS: 'exists',
+      RATE_LIMITED: 'slow down',
+      MAINTENANCE_REGISTRATION_CLOSED: 'closed',
+      INTERNAL_ERROR: 'internal',
+    },
+  },
+  maintenance: {
+    banner: 'Scheduled maintenance in progress',
+  },
   common: {
     cancel: 'Cancel',
     confirm: 'Confirm',
