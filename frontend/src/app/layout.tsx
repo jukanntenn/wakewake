@@ -1,11 +1,12 @@
 import type { Metadata } from 'next'
-// Geist（Vercel 原版字体，MIT，DESIGN.md）。next/font/google 自托管，构建期嵌入 out/。
-import { Geist, Geist_Mono } from 'next/font/google'
+// Geist（Vercel 原版字体，OFL 许可随字体入库于 src/fonts/）。next/font/local
+// 从仓库内 woff2 加载，构建期嵌入 out/ —— 不访问 fonts.googleapis.com，离线可构建。
+import localFont from 'next/font/local'
 import './globals.css'
 import { Providers } from './providers'
 
-const geist = Geist({ variable: '--font-sans', subsets: ['latin'] })
-const geistMono = Geist_Mono({ variable: '--font-mono', subsets: ['latin'] })
+const geist = localFont({ src: '../fonts/Geist-Variable.woff2', variable: '--font-sans' })
+const geistMono = localFont({ src: '../fonts/GeistMono-Variable.woff2', variable: '--font-mono' })
 
 export const metadata: Metadata = {
   title: 'WakeWake - Wake-on-LAN Management',
