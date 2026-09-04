@@ -15,21 +15,12 @@ import {
   confirmPasswordReset,
   getPowChallenge,
   refreshTokens,
+  solvePow,
 } from '../utils/api'
 import { execSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
 import { uniqueEmail } from '../utils/shared'
 
 const MAILPIT_CONTAINER = 'e2e-mailpit-1'
-
-/** 本地解 PoW（SHA-256 前导零，authentication.md §六）。 */
-function solvePow(challenge: string, difficulty: number): string {
-  const target = '0'.repeat(difficulty)
-  for (let nonce = 0; ; nonce++) {
-    const hash = createHash('sha256').update(challenge + nonce).digest('hex')
-    if (hash.startsWith(target)) return nonce.toString()
-  }
-}
 
 /** 从 mailpit 取最新邮件，提取 reset token。 */
 function extractResetTokenFromMailpit(toEmail: string): string | null {

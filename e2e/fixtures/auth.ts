@@ -22,7 +22,9 @@ export const base = dataBase.extend<{
 }>({
   adminUser: async ({}, use) => {
     const client = createBrowserClient()
-    const email = uniqueEmail('admin-')
+    // 邮箱域必须是 garde 合法格式（尾连字符域名如 "admin-" 会被 422 拒绝）：
+    // admin 标记放子域，与 global-setup 的 admin-<uuid>@e2e.wakewake.local 同域。
+    const email = uniqueEmail('admin.e2e.wakewake.local')
     const auth = await registerUser(client, { email, password: ADMIN_PASSWORD })
     // is_superuser 无法通过 API 注册获得（auth_service 硬编码 false），DB 直改
     execSql(`UPDATE users SET is_superuser = true WHERE id = ${auth.user.id};`)

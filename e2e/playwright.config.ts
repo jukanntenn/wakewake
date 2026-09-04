@@ -35,10 +35,16 @@ export default defineConfig({
     storageState: '.auth/user.json', // 默认复用登录态（§5）
   },
   projects: [
-    // 未登录：登录/注册页测试（不加载 storageState）
+    // 未登录：登录/注册页测试（不加载 storageState）。
+    // 注意：`storageState: undefined` 在 project use 合并时会被丢弃（继承顶层
+    // user.json，实测页面带登录态被 PublicRoute 重定向）——空状态对象才是
+    // Playwright 文档口径的「干净上下文」。
     {
       name: 'anonymous',
-      use: { ...devices['Desktop Chrome'], storageState: undefined },
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: { cookies: [], origins: [] },
+      },
     },
     // 默认登录（globalSetup 注册的用户）
     {
