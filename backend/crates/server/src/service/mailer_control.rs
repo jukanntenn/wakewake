@@ -248,7 +248,7 @@ impl MailerControl {
     /// 请求都在 blocked 计数与 OTel 指标上可见。
     pub fn record_rejected(&self, path: MailPath) {
         let today = utc_today((self.clock)());
-        let changed = {
+        {
             let Ok(mut g) = self.inner.write() else {
                 return;
             };
@@ -258,11 +258,8 @@ impl MailerControl {
                 g.blocked = DailyCounters::default();
             }
             g.blocked.incr(path);
-            true
-        };
-        if changed {
-            self.persist();
         }
+        self.persist();
     }
 
     /// 只读预检（不计数）：reset 路由的 503 判定 / admin 展示用。

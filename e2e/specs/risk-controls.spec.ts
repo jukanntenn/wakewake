@@ -95,6 +95,41 @@ test.describe('风控运行时控制（admin-risk-controls）', () => {
     }
   })
 
+  test('注册预算耗尽：注册仍成功（静默降级）且拒绝可见', async ({ adminUser }) => {
+    const admin = createBrowserClient(adminUser.accessToken)
+    const client = createBrowserClient()
+    const original = await getMailer(admin)
+
+    // 把注册预算压到当前已用 → 下一次注册的验证邮件必被拒
+    await setMailer(admin, {
+      limits: { ...original.limits, register: original.sent.register },
+    })
+
+    try {
+      const email = uniqueEmail()
+      const password = 'TestPass123!'
+      const ch = await getPowChallenge(client)
+      // 直接调 register（不经 registerUser：未验证账号无法登录，恰好验证
+      // 「预算耗尽时注册照常、账号停留未验证」的降级语义）
+      const user = await client
+        .post('auth/register', {
+          json: { email, password, challenge: ch.id, nonce: solvePow(ch.challenge, ch.difficulty) },
+        })
+        .json<{ id: number; email_verified?: boolean }>()
+      expect(user.id).toBeGreaterThan(0)
+
+      const snap = await getMailer(admin)
+      expect(snap.sent.register).toBe(original.sent.register)
+      expect(snap.blocked.register).toBeGreaterThanOrEqual(1)
+
+      // 未验证堆积在 risk 面板可见
+      const risk = await getRisk(admin)
+      expect(risk.unverified_count).toBeGreaterThanOrEqual(1)
+    } finally {
+      await setMailer(admin, { limits: original.limits })
+    }
+  })
+
   test('PoW 难度旋钮：上调对新 challenge 生效', async ({ adminUser }) => {
     const admin = createBrowserClient(adminUser.accessToken)
     const original = await getPow(admin)

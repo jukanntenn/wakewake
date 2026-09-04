@@ -85,13 +85,6 @@ impl MailerService {
         }
     }
 
-    /// 只读预检：配置启用 && 运行时总闸开 && 当日预算有余。
-    /// reset 路由的 503 判定与注册路径的「跳过发信」判定共用（不计数）。
-    #[must_use]
-    pub fn would_send(&self, path: MailPath) -> bool {
-        self.inner.enabled && self.control.would_send(path)
-    }
-
     /// 占用一个发送名额：配置/总闸/预算三重判定。
     fn acquire(&self, path: MailPath) -> Result<(), MailerError> {
         if !self.inner.enabled {
@@ -228,4 +221,82 @@ fn build_transport(
         builder = builder.credentials(Credentials::new(u.to_string(), p.to_string()));
     }
     builder.build()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::service::mailer_control::{AcquireOutcome, MailLimits, MailPath, MailerControl};
+
+    fn tmp_path(tag: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!(
+            "wakewake_mailsvc_test_{tag}_{}",
+            uuid::Uuid::new_v4()
+        ))
+    }
+
+    fn enabled_cfg() -> MailerSettings {
+        // 无 smtp_host：transport 缺失，但 acquire 在 transport 查找之前——
+        // 足以覆盖预算/总闸的拒绝路径。
+        serde_json::from_str(r#"{"enabled": true, "smtp_port": 587, "from_name": "t"}"#)
+            .expect("test mailer settings")
+    }
+
+    #[tokio::test]
+    async fn send_rejects_with_budget_exhausted_and_counts_blocked() {
+        let control = MailerControl::load_or_init(
+            MailLimits {
+                register: 1,
+                ..MailLimits::default()
+            },
+            tmp_path("exhaust"),
+        );
+        // 预先占掉唯一的名额
+        assert_eq!(
+            control.try_acquire(MailPath::Register),
+            AcquireOutcome::Allowed
+        );
+        let svc = MailerService::new(&enabled_cfg(), control.clone());
+        let err = svc
+            .send_email_verification(MailPath::Register, "a@b.co", "en", "https://x/verify")
+            .await
+            .expect_err("must be rejected");
+        assert!(
+            matches!(err, MailerError::BudgetExhausted("register")),
+            "got {err:?}"
+        );
+        let snap = control.snapshot();
+        assert_eq!(snap.sent.register, 1, "exhausted attempt must not consume");
+        assert_eq!(snap.blocked.register, 1, "rejection is visible");
+    }
+
+    #[tokio::test]
+    async fn send_rejects_with_disabled_when_config_off() {
+        let control = MailerControl::load_or_init(MailLimits::default(), tmp_path("off"));
+        let cfg: MailerSettings =
+            serde_json::from_str(r#"{"enabled": false, "smtp_port": 587, "from_name": "t"}"#)
+                .expect("test mailer settings");
+        let svc = MailerService::new(&cfg, control.clone());
+        let err = svc
+            .send_password_reset("a@b.co", "en", "https://x/reset")
+            .await
+            .expect_err("must be rejected");
+        assert!(matches!(err, MailerError::Disabled), "got {err:?}");
+        // 配置态拒绝不进风控计数
+        let snap = control.snapshot();
+        assert_eq!(snap.blocked.reset, 0);
+    }
+
+    #[tokio::test]
+    async fn runtime_gate_off_rejects_and_counts() {
+        let control = MailerControl::load_or_init(MailLimits::default(), tmp_path("gate"));
+        control.set_enabled(false, None);
+        let svc = MailerService::new(&enabled_cfg(), control.clone());
+        let err = svc
+            .send_email_verification(MailPath::Resend, "a@b.co", "en", "https://x/verify")
+            .await
+            .expect_err("must be rejected");
+        assert!(matches!(err, MailerError::Disabled), "got {err:?}");
+        assert_eq!(control.snapshot().blocked.resend, 1);
+    }
 }

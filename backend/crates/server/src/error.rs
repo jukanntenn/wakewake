@@ -323,5 +323,11 @@ mod tests {
         assert_eq!(ErrorCode::AgentOffline.code(), "AGENT_OFFLINE");
         assert_eq!(ErrorCode::QuotaExceeded.code(), "QUOTA_EXCEEDED");
         assert_eq!(ErrorCode::ProviderNotFound.code(), "PROVIDER_NOT_FOUND");
+        assert_eq!(ErrorCode::IpBlocked.code(), "IP_BLOCKED");
+        assert_eq!(ErrorCode::IpBlocked.status(), StatusCode::FORBIDDEN);
+        assert_eq!(
+            ErrorCode::IpBlocked.fallback_message(),
+            "Your IP address has been blocked"
+        );
     }
 }
