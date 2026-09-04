@@ -158,6 +158,50 @@ export interface MaintenanceStatus {
   message: string
 }
 
+// 邮件发信运行态（GET/POST /admin/mailer，admin-risk-controls WRFC）。
+// sent/blocked 为当日 UTC 分路计数；limits 0 = 不限。
+export interface MailerControlStatus {
+  enabled: boolean
+  limits: { register: number; resend: number; reset: number }
+  day: string
+  sent: { register: number; resend: number; reset: number }
+  blocked: { register: number; resend: number; reset: number }
+}
+
+// PoW 难度旋钮（GET/POST /admin/pow）。
+export interface PowStatus {
+  difficulty: number
+  max_difficulty: number
+}
+
+// 应用层 IP 封禁条目（GET/POST /admin/ip-bans）。
+export interface IpBanEntry {
+  id: string
+  target: string
+  kind: 'ip' | 'cidr'
+  reason: string
+  created_by: number
+  created_at: string
+  expires_at: string | null
+  expired: boolean
+}
+
+// 风控聚合面板（GET /admin/risk）。
+export interface RiskOverview {
+  registrations_24h: number
+  registrations_7d: number
+  unverified_count: number
+  oldest_unverified_age_hours: number | null
+  failed_logins_24h: number
+  top_failed_ips: { ip: string; failures: number; distinct_emails: number }[]
+  top_failed_emails: { email: string; failures: number; distinct_ips: number }[]
+  mailer: MailerControlStatus
+  pow_difficulty: number
+  ip_ban_count: number
+  rate_limited_since_start: number
+  rate_limited_uptime_secs: number
+}
+
 export interface AuthResponse {
   access_token: string
   refresh_token: string
@@ -506,6 +550,20 @@ export const api = {
     getMaintenance: () => request<MaintenanceStatus>('/admin/maintenance'),
     setMaintenance: (data: { enabled: boolean; mode: string; message?: string }) =>
       request<MaintenanceStatus>('/admin/maintenance', { method: 'POST', body: data }),
+    // 风控运行时控制（admin-risk-controls WRFC）
+    getMailer: () => request<MailerControlStatus>('/admin/mailer'),
+    setMailer: (data: {
+      enabled?: boolean
+      limits?: { register: number; resend: number; reset: number }
+    }) => request<MailerControlStatus>('/admin/mailer', { method: 'POST', body: data }),
+    getPow: () => request<PowStatus>('/admin/pow'),
+    setPow: (difficulty: number) =>
+      request<PowStatus>('/admin/pow', { method: 'POST', body: { difficulty } }),
+    listIpBans: () => request<IpBanEntry[]>('/admin/ip-bans'),
+    addIpBan: (data: { target: string; reason?: string; ttl_hours?: number | null }) =>
+      request<IpBanEntry>('/admin/ip-bans', { method: 'POST', body: data }),
+    removeIpBan: (id: string) => request<void>(`/admin/ip-bans/${id}`, { method: 'DELETE' }),
+    risk: () => request<RiskOverview>('/admin/risk'),
     resyncDevice: (did: string) =>
       request<void>(`/admin/devices/${did}/resync`, { method: 'POST' }),
     resyncIntegration: (id: number) =>

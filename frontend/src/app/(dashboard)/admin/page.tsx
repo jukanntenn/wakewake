@@ -3,18 +3,47 @@
 // Admin 概览页（ui-ux-risk-control §9.2）。
 // 三层信息架构：概览层（健康仪表盘）+ 管理层（治理/运维入口）+ 系统层（维护）。
 // 健康时展示聚合 stats；异常时替换为告警列表 + 预设过滤跳转。
+// 风控区块（admin-risk-controls WRFC）：注册速率 / 发信消耗 / 失败登录聚合
+// 一眼扫见，top 失败 IP 直连封禁（看见 → 处置一条流）。
 
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
-import { ChevronRight, Activity, Users, Cpu, HardDrive, Zap, Wrench } from 'lucide-react'
-import { useAdminStats } from '@/hooks/useAdmin'
+import { toast } from 'sonner'
+import {
+  ChevronRight,
+  Activity,
+  Users,
+  Cpu,
+  HardDrive,
+  Zap,
+  Wrench,
+  ShieldAlert,
+  ShieldBan,
+  Mail,
+} from 'lucide-react'
+import { ApiError } from '@/lib/api'
+import { useAdminStats, useRiskOverview, useAddIpBan } from '@/hooks/useAdmin'
 import { StatusIndicator } from '@/components/ui/status-indicator'
 import { LoadingState } from '@/components/ui/loading-state'
+import { Button } from '@/components/ui/button'
 
 export default function AdminOverviewPage() {
   const t = useTranslations('admin')
   const tHealth = useTranslations('health')
+  const tErr = useTranslations('error')
   const { data: stats, isLoading } = useAdminStats()
+  const { data: risk } = useRiskOverview()
+  const banMut = useAddIpBan()
+
+  const onBan = async (ip: string) => {
+    try {
+      // 默认 24h TTL：处置快、误伤可自愈；确属长期恶意再在封禁页升级为永久。
+      await banMut.mutateAsync({ target: ip, ttl_hours: 24 })
+      toast.success(t('ipBans.added'))
+    } catch (err) {
+      toast.error(err instanceof ApiError ? tErr(err.code as never) : tErr('INTERNAL_ERROR'))
+    }
+  }
 
   if (isLoading || !stats) {
     return (
@@ -70,6 +99,132 @@ export default function AdminOverviewPage() {
           </div>
         )}
       </div>
+
+      {/* 风控区块：滥用信号一览 + top 失败 IP 一键封禁 */}
+      <section className="space-y-2">
+        <h2 className="text-ink-muted flex items-center gap-1.5 text-xs font-medium tracking-wider uppercase">
+          <ShieldAlert className="h-3.5 w-3.5" />
+          {t('risk')}
+        </h2>
+        <div className="border-hairline bg-surface-1 space-y-4 rounded-lg border p-5">
+          {risk ? (
+            <>
+              <div className="text-ink-muted grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-4">
+                <span>
+                  {t('riskRegistrations24h')}:{' '}
+                  <span className="text-ink font-medium">{risk.registrations_24h}</span>
+                </span>
+                <span>
+                  {t('riskRegistrations7d')}:{' '}
+                  <span className="text-ink font-medium">{risk.registrations_7d}</span>
+                </span>
+                <span>
+                  {t('riskUnverified')}:{' '}
+                  <span className="text-ink font-medium">{risk.unverified_count}</span>
+                  {risk.oldest_unverified_age_hours !== null && (
+                    <span className="text-ink-subtle">
+                      {' '}
+                      ({t('riskOldest', { n: risk.oldest_unverified_age_hours })})
+                    </span>
+                  )}
+                </span>
+                <span>
+                  {t('riskFailedLogins')}:{' '}
+                  <span className="text-ink font-medium">{risk.failed_logins_24h}</span>
+                </span>
+                <span>
+                  {t('riskEmailsToday')}:{' '}
+                  <span className="text-ink font-medium">
+                    {risk.mailer.sent.register + risk.mailer.sent.resend + risk.mailer.sent.reset}
+                  </span>
+                  {risk.mailer.blocked.register +
+                    risk.mailer.blocked.resend +
+                    risk.mailer.blocked.reset >
+                    0 && (
+                    <span className="text-warning">
+                      {' '}
+                      (
+                      {risk.mailer.blocked.register +
+                        risk.mailer.blocked.resend +
+                        risk.mailer.blocked.reset}{' '}
+                      {t('riskBlocked')})
+                    </span>
+                  )}
+                  {!risk.mailer.enabled && (
+                    <span className="text-destructive"> · {t('mailer.off')}</span>
+                  )}
+                </span>
+                <span>
+                  {t('riskPow')}:{' '}
+                  <span className="text-ink font-medium">{risk.pow_difficulty}</span>
+                </span>
+                <span>
+                  {t('riskIpBans')}:{' '}
+                  <span className="text-ink font-medium">{risk.ip_ban_count}</span>
+                </span>
+                <span>
+                  {t('riskRateLimited')}:{' '}
+                  <span className="text-ink font-medium">{risk.rate_limited_since_start}</span>
+                </span>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <p className="text-ink-muted text-xs font-medium">{t('riskTopIps')}</p>
+                  {risk.top_failed_ips.length === 0 ? (
+                    <p className="text-ink-subtle text-xs">{t('riskNoData')}</p>
+                  ) : (
+                    risk.top_failed_ips.map((r) => (
+                      <div key={r.ip} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="text-ink font-mono">{r.ip}</span>
+                        <span className="text-ink-muted text-xs">
+                          {r.failures} · {r.distinct_emails} {t('riskTargets')}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onBan(r.ip)}
+                          disabled={banMut.isPending}
+                        >
+                          {t('riskBan')}
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-ink-muted text-xs font-medium">{t('riskTopEmails')}</p>
+                  {risk.top_failed_emails.length === 0 ? (
+                    <p className="text-ink-subtle text-xs">{t('riskNoData')}</p>
+                  ) : (
+                    risk.top_failed_emails.map((r) => (
+                      <div
+                        key={r.email}
+                        className="flex items-center justify-between gap-2 text-sm"
+                      >
+                        <span className="text-ink max-w-56 truncate">{r.email}</span>
+                        <span className="text-ink-muted text-xs">
+                          {r.failures} · {r.distinct_ips} IP
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <Link
+                href="/admin/ip-bans"
+                className="text-ink-muted hover:text-ink flex items-center gap-1 text-sm"
+              >
+                {t('riskViewAll')}
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+            </>
+          ) : (
+            <LoadingState variant="rows" count={2} />
+          )}
+        </div>
+      </section>
 
       {/* 治理层 */}
       <section className="space-y-2">
@@ -130,12 +285,24 @@ export default function AdminOverviewPage() {
         <h2 className="text-ink-muted text-xs font-medium tracking-wider uppercase">
           {t('systemTitle')}
         </h2>
-        <div className="border-hairline bg-surface-1 overflow-hidden rounded-lg border">
+        <div className="border-hairline bg-surface-1 divide-y divide-[var(--color-hairline)] overflow-hidden rounded-lg border">
           <AdminEntry
             href="/admin/maintenance"
             icon={<Wrench className="h-4 w-4" />}
             title={t('maintenance.title')}
             desc={t('maintenanceDesc')}
+          />
+          <AdminEntry
+            href="/admin/mailer"
+            icon={<Mail className="h-4 w-4" />}
+            title={t('mailer.title')}
+            desc={t('mailer.desc')}
+          />
+          <AdminEntry
+            href="/admin/ip-bans"
+            icon={<ShieldBan className="h-4 w-4" />}
+            title={t('ipBans.title')}
+            desc={t('ipBans.desc')}
           />
         </div>
       </section>

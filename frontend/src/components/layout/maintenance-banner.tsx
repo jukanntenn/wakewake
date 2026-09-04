@@ -1,8 +1,9 @@
 'use client'
 
 // MaintenanceBanner：维护模式全局横幅（ui-ux-risk-control §2.4/§12.15）。
-// 仅在 maintenance.enabled 且 mode !== 'full' 时展示（full 模式用户被拦截看不到）。
-// 数据来自 GET /health/maintenance（公开端点）。
+// 仅 readonly 档展示：横幅挂在登录后的 dashboard，受众是存量用户——
+// registration_disabled 不影响他们（关注册的受众在注册页，由页面主动联动提示），
+// full 档用户被拦截看不到。数据来自 GET /health/maintenance（公开端点）。
 
 import { useQuery } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
@@ -18,7 +19,7 @@ export function MaintenanceBanner() {
     staleTime: 30_000,
   })
 
-  if (!data?.enabled || data.mode === 'full') {
+  if (!data?.enabled || data.mode !== 'readonly') {
     return null
   }
 

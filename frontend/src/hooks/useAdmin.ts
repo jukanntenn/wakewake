@@ -16,6 +16,10 @@ export const adminKeys = {
   activity: ['admin', 'activity'] as const,
   maintenance: ['admin', 'maintenance'] as const,
   auditLog: ['admin', 'audit-log'] as const,
+  mailer: ['admin', 'mailer'] as const,
+  pow: ['admin', 'pow'] as const,
+  ipBans: ['admin', 'ip-bans'] as const,
+  risk: ['admin', 'risk'] as const,
 }
 
 // ---- 统计 ----
@@ -177,5 +181,76 @@ export function useDisconnectAgent() {
   return useMutation({
     mutationFn: (id: number) => api.admin.disconnectAgent(id),
     onSuccess: invalidate,
+  })
+}
+
+// ---- 风控运行时控制（admin-risk-controls WRFC）----
+
+export function useMailerStatus() {
+  return useQuery({ queryKey: adminKeys.mailer, queryFn: () => api.admin.getMailer() })
+}
+
+export function useSetMailer() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: {
+      enabled?: boolean
+      limits?: { register: number; resend: number; reset: number }
+    }) => api.admin.setMailer(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminKeys.mailer })
+      qc.invalidateQueries({ queryKey: adminKeys.risk })
+    },
+  })
+}
+
+export function usePowStatus() {
+  return useQuery({ queryKey: adminKeys.pow, queryFn: () => api.admin.getPow() })
+}
+
+export function useSetPow() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (difficulty: number) => api.admin.setPow(difficulty),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminKeys.pow })
+      qc.invalidateQueries({ queryKey: adminKeys.risk })
+    },
+  })
+}
+
+export function useIpBans() {
+  return useQuery({ queryKey: adminKeys.ipBans, queryFn: () => api.admin.listIpBans() })
+}
+
+export function useAddIpBan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { target: string; reason?: string; ttl_hours?: number | null }) =>
+      api.admin.addIpBan(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminKeys.ipBans })
+      qc.invalidateQueries({ queryKey: adminKeys.risk })
+    },
+  })
+}
+
+export function useRemoveIpBan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.admin.removeIpBan(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminKeys.ipBans })
+      qc.invalidateQueries({ queryKey: adminKeys.risk })
+    },
+  })
+}
+
+export function useRiskOverview() {
+  return useQuery({
+    queryKey: adminKeys.risk,
+    queryFn: () => api.admin.risk(),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   })
 }
