@@ -172,17 +172,22 @@ fn build_router(state: Arc<AppState>, settings: Arc<Settings>) -> Router {
     // rate_limit.disabled=true（e2e.md §2.5/§4.6 + load.md §9.2）：旁路 governor 速率限制。
     // 仅旁路 per-IP/per-user 频率，不旁路业务配额（MAX_DEVICES_PER_USER 等硬编码 const）。
     let rate_limit_disabled = settings.rate_limit.disabled;
-    // 限流 key 口径（A-05B）：trust_proxy=true 时读 XFF 首跳，与 §11.C.2 extract_client_ip 对齐。
+    // 限流 key 口径（A-05B + cloudflare-edge WRFC）：trust_proxy + 权威头（如
+    // CF-Connecting-IP）与 §11.C.2 extract_client_ip 同口径。
     let trust_proxy = settings.server.trust_proxy;
+    let client_ip_header = settings.server.client_ip_header.clone();
 
     // 公开认证端点（per-IP 限流：register/login/refresh 10/min、password-reset 3/hour）。
     // 维护中间件挂 public_auth 域：拦截 register（§0.4）。
-    let public_auth = routes::auth::routes_with_rate_limit(rate_limit_disabled, trust_proxy).layer(
-        from_fn_with_state(
-            state.clone(),
-            wakewake_server::middleware::maintenance::maintenance_public,
-        ),
-    );
+    let public_auth = routes::auth::routes_with_rate_limit(
+        rate_limit_disabled,
+        trust_proxy,
+        client_ip_header.as_deref(),
+    )
+    .layer(from_fn_with_state(
+        state.clone(),
+        wakewake_server::middleware::maintenance::maintenance_public,
+    ));
 
     // JWT 域（浏览器用户端点）。
     // jwt_middleware 现在用 State<Arc<AppState>>（is_active moka 缓存，authentication.md §十）。
@@ -219,18 +224,68 @@ fn build_router(state: Arc<AppState>, settings: Arc<Settings>) -> Router {
         .merge(public_auth)
         .merge(jwt_routes)
         .merge(admin_routes)
-        .merge(agent_routes)
-        .merge(routes::health::routes());
-    // 全局兜底限流（disabled=true 时跳过）
+        .merge(agent_routes);
+    // 全局兜底限流（disabled=true 时跳过）。health 后置 merge 豁免：
+    // Docker healthcheck（10s）+ Caddy upstream 探测（10s）合计 12 req/min，
+    // 不应占用限流预算，且限流故障时探活必须永远可用。
     let router = wakewake_server::middleware::rate_limit::apply_global_rate_limit(
         router,
         rate_limit_disabled,
-    );
+        trust_proxy,
+        client_ip_header.as_deref(),
+    )
+    .merge(routes::health::routes());
     // 所有 API 路由挂载在 /api/v1 前缀下（api-design.md §0.3 版本策略）。
     // routes 用相对路径定义（/devices, /health），统一 nest 到 /api/v1。
+    //
+    // TraceLayer（cloudflare-edge WRFC）：默认 span/响应事件均 DEBUG 级且不含 IP，
+    // 生产 log.level=info 下请求日志不可见——定制为 INFO 级 span，带 client_ip
+    // （与限流/审计同口径）+ cf-ray（CF 侧对账键，无 CF 时为 "-"）。
+    let span_trust_proxy = trust_proxy;
+    let span_ip_header = client_ip_header;
     Router::new()
         .nest("/api/v1", router)
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(move |req: &axum::http::Request<axum::body::Body>| {
+                    let client_ip = req
+                        .extensions()
+                        .get::<axum::extract::ConnectInfo<SocketAddr>>()
+                        .map(|ci| ci.0)
+                        .and_then(|peer| {
+                            wakewake_server::util::client_ip_from_headers(
+                                req.headers(),
+                                peer,
+                                span_ip_header.as_deref(),
+                                span_trust_proxy,
+                            )
+                        })
+                        .map_or_else(|| "-".to_string(), |ip| ip.to_string());
+                    let cf_ray = req
+                        .headers()
+                        .get("cf-ray")
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or("-");
+                    tracing::info_span!(
+                        "http_request",
+                        client_ip = %client_ip,
+                        cf_ray,
+                        method = %req.method(),
+                        uri = %req.uri(),
+                    )
+                })
+                .on_response(
+                    |resp: &axum::http::Response<axum::body::Body>,
+                     duration: std::time::Duration,
+                     _span: &tracing::Span| {
+                        tracing::info!(
+                            status = %resp.status(),
+                            duration_ms = duration.as_millis() as u64,
+                            "request completed"
+                        );
+                    },
+                ),
+        )
         .with_state(state)
 }
 

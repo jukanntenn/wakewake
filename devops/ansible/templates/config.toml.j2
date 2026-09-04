@@ -10,6 +10,11 @@ public_url = "{{ public_url }}"
 [server]
 host = "127.0.0.1"
 port = {{ backend_port }}
+{% if server_client_ip_header is defined %}
+# CF 回源拓扑（cloudflare-edge WRFC）：权威客户端 IP 头。Caddyfile.prod 的
+# remote_ip 守卫保证仅 CF 流量可达，此头不可伪造；与守卫同进同退。
+client_ip_header = "{{ server_client_ip_header }}"
+{% endif %}
 
 [database]
 dsn = "postgres:///{{ postgres_db }}?host=/var/run/postgresql&user={{ postgres_user }}&password={{ db_password | urlencode }}&sslmode=disable"

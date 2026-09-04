@@ -1,163 +1,151 @@
-# 配置机制规范（server + agent + 部署面）
+# Configuration spec (server + agent + deployment surfaces)
 
-> 本文是 wakewake 配置的唯一规范：加载分层、server/agent schema、环境变量映射、
-> example 文件约定，以及各部署环境"配置写在哪、secrets 放哪"的全景。
-> 运维操作流程（构建/发布/提升闸门）见 [`../../devops/README.md`](../../devops/README.md)，本文只管机制与不变量。
+English | [中文](configuration.zh.md)
 
-## 1. 设计原则
+> This document is the single specification for wakewake configuration: loading layers, the server/agent schemas, environment variable mapping, example-file conventions, and the full picture of "where configuration lives, where secrets live" per deployment environment. Operational procedures (build/release/promotion gates) live in [`../../devops/README.md`](../../devops/README.md); this document owns mechanisms and invariants only.
 
-1. **TOML 文件为主，环境变量覆盖，CLI 参数最高**。部署级配置写进 `config.toml`
-   （一次配置、可 diff、可 review）；`WAKEWAKE_*` 环境变量用于容器注入与测试动态覆盖；
-   CLI 参数用于调试一次性覆盖。
-2. **server 与 agent 同架构、分文件**：两份独立 `Settings`（字段不同），共用同一套
-   规约（config-rs + clap + 三层覆盖 + `WAKEWAKE_` 前缀 + `__` 嵌套分隔）。
-3. **fail-fast**：配置校验失败（garde）→ 启动失败，不降级运行。
-4. **example 文件是主要用户文档**（见 §7），schema 真源是 `Settings` struct +
-   builder `set_default`（server：`crates/server/src/config.rs`；agent：
-   `crates/agent/src/config.rs`）。
+## 1. Design principles
 
-技术选型：config-rs 0.15（`default-features = false, features = ["toml"]`，裁掉
-yaml/json/ron parser）+ clap 4 derive（CLI 解析与 `--help`，config-rs 不替代 clap，
-职责正交）。
+1. **TOML files first, environment variables override, CLI arguments win.** Deployment-level configuration goes into `config.toml` (configured once, diffable, reviewable); `WAKEWAKE_*` environment variables serve container injection and dynamic test overrides; CLI arguments serve one-off debugging overrides.
+2. **Server and agent share one architecture, split files**: two independent `Settings` (different fields) under one set of conventions (config-rs + clap + three-layer override + `WAKEWAKE_` prefix + `__` nesting separator).
+3. **Fail fast**: a failed configuration validation (garde) → startup failure, never degraded running.
+4. **The example files are the primary user documentation** (see §7); the schema source of truth is the `Settings` struct + builder `set_default` (server: `crates/server/src/config.rs`; agent: `crates/agent/src/config.rs`).
 
-## 2. 三层覆盖模型（优先级从高到低）
+Technology choice: config-rs 0.15 (`default-features = false, features = ["toml"]`, dropping the yaml/json/ron parsers) + clap 4 derive (CLI parsing and `--help`; config-rs does not replace clap — orthogonal responsibilities).
+
+## 2. The three-layer override model (highest priority first)
 
 ```
 CLI 参数（clap → set_override_option）  >  环境变量（WAKEWAKE_*）  >  TOML 文件  >  内置默认值
 ```
 
-| 层 | 实现 | 用途 |
+| Layer | Implementation | Purpose |
 |---|---|---|
-| 内置默认值 | `Config::builder().set_default(key, value)` | 安全默认（端口、TTL 等不敏感项） |
-| TOML 文件 | `File::with_name(path).required(false/true)` | 部署级配置（主体载体） |
-| 环境变量 | `Environment::with_prefix("WAKEWAKE").prefix_separator("_").separator("__").try_parsing(true)` | 容器注入（DSN 拼接）、e2e/测试动态覆盖 |
-| CLI 参数 | `set_override_option(key, clap_value)` | 调试/一次性覆盖 |
+| Built-in defaults | `Config::builder().set_default(key, value)` | Safe defaults (ports, TTLs — non-sensitive items) |
+| TOML file | `File::with_name(path).required(false/true)` | Deployment-level configuration (the main carrier) |
+| Environment | `Environment::with_prefix("WAKEWAKE").prefix_separator("_").separator("__").try_parsing(true)` | Container injection (DSN assembly), e2e/test dynamic overrides |
+| CLI arguments | `set_override_option(key, clap_value)` | Debug / one-off overrides |
 
-加载顺序细节（server `config.rs::Settings::load`）：
+Loading-order details (server `config.rs::Settings::load`):
 
-- **文件搜索**：`--config <path>` 指定时必须存在（`required(true)`）；未指定时搜
-  工作目录 `./config.toml`（`File::with_name("config").required(false)`，找不到不报错）。
-- **`__` 而非 `_` 做嵌套分隔**：单 `_` 与 TOML key 内下划线冲突（如
-  `packet_delay_ms` 会被误拆为嵌套）。`WAKEWAKE_SERVER__HOST` → `server.host`。
-- **`try_parsing(true)`**：env 字符串尝试解析为 `i64`/`f64`/`bool`（`"8080"` →
-  `i64` → `u16`；解析失败保持字符串），bool 支持 `true/false/1/0`。
-- **`set_override_option`**：clap 未传（`None`）不覆盖，传了即最高优先级。
-- **agent 的顶层键是单 `_`**：`WAKEWAKE_SERVER_URL` / `WAKEWAKE_PAIRING_CODE` /
-  `WAKEWAKE_HOME`（顶层无嵌套，落在 `__` 之外）。
+- **File search**: with `--config <path>` the file must exist (`required(true)`); without it, the working directory's `./config.toml` is searched (`File::with_name("config").required(false)` — no error if absent).
+- **`__` (not `_`) as the nesting separator**: a single `_` collides with underscores inside TOML keys (e.g. `packet_delay_ms` would be mis-split into nesting). `WAKEWAKE_SERVER__HOST` → `server.host`.
+- **`try_parsing(true)`**: env strings are tried as `i64`/`f64`/`bool` (`"8080"` → `i64` → `u16`; stays a string when parsing fails); bools accept `true/false/1/0`.
+- **`set_override_option`**: an unset clap value (`None`) does not override; a set one is the highest priority.
+- **The agent's top-level keys use a single `_`**: `WAKEWAKE_SERVER_URL` / `WAKEWAKE_PAIRING_CODE` / `WAKEWAKE_HOME` (no nesting at the top level, outside the `__` scheme).
 
-## 3. Server 配置 schema
+## 3. Server configuration schema
 
-### `[app]`（必填）
+### `[app]` (required)
 
-| 字段 | 类型 | env | 说明 |
+| Field | Type | env | Notes |
 |---|---|---|---|
-| `public_url` | string | `WAKEWAKE_APP__PUBLIC_URL` | 对外公网地址（scheme+host[+port]）。拼接邮件链接/agent 文档地址。**不从请求 Host 推导**（反代场景可伪造）。缺失启动失败 |
+| `public_url` | string | `WAKEWAKE_APP__PUBLIC_URL` | Public origin (scheme+host[+port]). Email links / agent doc URLs are built from it. **Never derived from the request Host** (forgeable behind a reverse proxy). Startup fails when missing |
 
 ### `[server]`
 
-| 字段 | 类型 | 默认 | env | 说明 |
+| Field | Type | Default | env | Notes |
 |---|---|---|---|---|
-| `host` | string | `0.0.0.0` | `WAKEWAKE_SERVER__HOST` | 监听地址 |
-| `port` | u16 | `8080` | `WAKEWAKE_SERVER__PORT` | **不变量 8080**：镜像内 `docker/caddy/routes.caddy` 反代 `127.0.0.1:8080`，永不改 |
-| `trust_proxy` | bool | `true` | `WAKEWAKE_SERVER__TRUST_PROXY` | true=从 XFF 最左取客户端 IP（反代）；false=TCP 对端（直连部署） |
+| `host` | string | `0.0.0.0` | `WAKEWAKE_SERVER__HOST` | Listen address |
+| `port` | u16 | `8080` | `WAKEWAKE_SERVER__PORT` | **Invariant 8080**: the in-image `docker/caddy/routes.caddy` proxies to `127.0.0.1:8080`; never changes |
+| `trust_proxy` | bool | `true` | `WAKEWAKE_SERVER__TRUST_PROXY` | true = client IP from the leftmost XFF (reverse proxy); false = TCP peer (direct deployment) |
+| `client_ip_header` | Option\<string\> | unset | `WAKEWAKE_SERVER__CLIENT_IP_HEADER` | Authoritative client-IP header (e.g. `CF-Connecting-IP` behind Cloudflare), read before XFF/X-Real-IP when set and `trust_proxy` is true. Behind CF the XFF chain is append-mode (leftmost forgeable), so prod sets this; it requires the access layer to admit only trusted proxies (Caddyfile.prod `remote_ip` CF-CIDR guard) or the header itself is forgeable — the two ship together |
+| `max_sse_connections` | usize | `2000` | `WAKEWAKE_SERVER__MAX_SSE_CONNECTIONS` | Global SSE connection cap (0 = unlimited); connections beyond it get 503 SERVICE_UNAVAILABLE and agents reconnect with backoff. Abuse backstop, not a per-user quota (connection cardinality = paired agents; same-agent reconnects replace, never stack) |
 
-### `[database]`（必填）
+### `[database]` (required)
 
-| 字段 | 类型 | env | 说明 |
+| Field | Type | env | Notes |
 |---|---|---|---|
-| `dsn` | string | `WAKEWAKE_DATABASE__DSN` | PG 连接串。容器拓扑统一走 Unix socket：`postgres:///db?host=/var/run/postgresql&user=...&password=...&sslmode=disable` |
+| `dsn` | string | `WAKEWAKE_DATABASE__DSN` | PG connection string. Container topologies standardize on the Unix socket: `postgres:///db?host=/var/run/postgresql&user=...&password=...&sslmode=disable` |
 
-DSN 单一来源规则（密码只写一处）：
+DSN single-source rule (the password is written once):
 
-- 自部署/本地验收：compose 从 `.env` 的 `POSTGRES_*` 插值拼接注入 env；
-- ansible 环境：`config.toml.j2` 渲染进 TOML，密码经 `urlencode`（vault 值可含 URL 特殊字符）；
-- e2e：compose 内置独立测试凭据。
+- Self-deploy / local acceptance: compose interpolates from `.env`'s `POSTGRES_*` and injects the env;
+- ansible environments: `config.toml.j2` renders into TOML, the password passed through `urlencode` (vault values may contain URL-special characters);
+- e2e: compose ships dedicated test credentials.
 
 ### `[jwt]`
 
-| 字段 | 类型 | 默认 | env | 校验 | 说明 |
+| Field | Type | Default | env | Validation | Notes |
 |---|---|---|---|---|---|
-| `signing_key` | string | — | `WAKEWAKE_JWT__SIGNING_KEY` | `length(min=32)` | access HMAC 密钥 |
-| `refresh_signing_key` | string | — | `WAKEWAKE_JWT__REFRESH_SIGNING_KEY` | `length(min=32)` | refresh HMAC 密钥（独立，勿复用） |
-| `access_expire` | humantime | `15m` | `WAKEWAKE_JWT__ACCESS_EXPIRE` | — | e2e short-ttl 用 `10s` 覆盖 |
+| `signing_key` | string | — | `WAKEWAKE_JWT__SIGNING_KEY` | `length(min=32)` | access HMAC key |
+| `refresh_signing_key` | string | — | `WAKEWAKE_JWT__REFRESH_SIGNING_KEY` | `length(min=32)` | refresh HMAC key (separate; never reuse) |
+| `access_expire` | humantime | `15m` | `WAKEWAKE_JWT__ACCESS_EXPIRE` | — | e2e short-ttl overrides with `10s` |
 | `refresh_expire` | humantime | `720h` | `WAKEWAKE_JWT__REFRESH_EXPIRE` | — | 30d |
 
-密钥无默认值，生成命令 `openssl rand -base64 32`。
+Keys have no default; generate with `openssl rand -base64 32`.
 
 ### `[password_reset]`
 
-| 字段 | 类型 | 默认 | env | 说明 |
+| Field | Type | Default | env | Notes |
 |---|---|---|---|---|
-| `secret` | string | — | `WAKEWAKE_PASSWORD_RESET__SECRET` | 无状态 reset token HMAC 密钥（必填） |
+| `secret` | string | — | `WAKEWAKE_PASSWORD_RESET__SECRET` | Stateless reset-token HMAC key (required) |
 | `expire` | humantime | `1h` | `WAKEWAKE_PASSWORD_RESET__EXPIRE` | token TTL |
 
 ### `[pow]`
 
-| 字段 | 类型 | 默认 | env | 说明 |
+| Field | Type | Default | env | Notes |
 |---|---|---|---|---|
-| `difficulty` | u8 | `4` | `WAKEWAKE_POW__DIFFICULTY` | 前导零个数 |
-| `challenge_ttl` | humantime | `10m` | `WAKEWAKE_POW__CHALLENGE_TTL` | challenge 有效期 |
+| `difficulty` | u8 | `4` | `WAKEWAKE_POW__DIFFICULTY` | Number of leading zeros |
+| `challenge_ttl` | humantime | `10m` | `WAKEWAKE_POW__CHALLENGE_TTL` | Challenge validity window |
 
 ### `[mailer]`
 
-| 字段 | 类型 | 默认 | env | 说明 |
+| Field | Type | Default | env | Notes |
 |---|---|---|---|---|
-| `enabled` | bool | `false` | `WAKEWAKE_MAILER__ENABLED` | false 时密码重置端点返 503 |
-| `smtp_host` | Option | — | `WAKEWAKE_MAILER__SMTP_HOST` | SMTP 服务器 |
-| `smtp_port` | u16 | `587` | `WAKEWAKE_MAILER__SMTP_PORT` | SMTP 端口 |
-| `smtp_username` | Option | — | `WAKEWAKE_MAILER__SMTP_USERNAME` | 用户名 |
-| `smtp_password` | Option | — | `WAKEWAKE_MAILER__SMTP_PASSWORD` | 密码 |
-| `from_address` | Option | — | `WAKEWAKE_MAILER__FROM_ADDRESS` | 发件人地址 |
-| `from_name` | string | `WakeWake` | `WAKEWAKE_MAILER__FROM_NAME` | 发件人名 |
+| `enabled` | bool | `false` | `WAKEWAKE_MAILER__ENABLED` | When false, password-reset endpoints return 503 |
+| `smtp_host` | Option | — | `WAKEWAKE_MAILER__SMTP_HOST` | SMTP server |
+| `smtp_port` | u16 | `587` | `WAKEWAKE_MAILER__SMTP_PORT` | SMTP port |
+| `smtp_username` | Option | — | `WAKEWAKE_MAILER__SMTP_USERNAME` | Username |
+| `smtp_password` | Option | — | `WAKEWAKE_MAILER__SMTP_PASSWORD` | Password |
+| `from_address` | Option | — | `WAKEWAKE_MAILER__FROM_ADDRESS` | Sender address |
+| `from_name` | string | `WakeWake` | `WAKEWAKE_MAILER__FROM_NAME` | Sender name |
 
-### `[rate_limit]`（测试专用）
+### `[rate_limit]` (test-only)
 
-| 字段 | 类型 | 默认 | env | 说明 |
+| Field | Type | Default | env | Notes |
 |---|---|---|---|---|
-| `disabled` | bool | `false` | `WAKEWAKE_RATE_LIMIT__DISABLED` | true = 旁路 axum-governor 速率限制。**仅旁路频率限制，不旁路业务配额**（`MAX_DEVICES_PER_USER` 等硬编码 const）。生产恒 false；e2e/压测 true |
+| `disabled` | bool | `false` | `WAKEWAKE_RATE_LIMIT__DISABLED` | true = bypass the axum-governor rate limiter. **Bypasses rate limiting only, never business quotas** (`MAX_DEVICES_PER_USER` and friends are hardcoded consts). Always false in production; true for e2e/load tests |
 
-### `[security]`（bootstrap admin）
+### `[security]` (bootstrap admin)
 
-| 字段 | 类型 | 默认 | env | 说明 |
+| Field | Type | Default | env | Notes |
 |---|---|---|---|---|
-| `bootstrap_admin_email` | string | `admin@wakewake.local` | `WAKEWAKE_SECURITY__BOOTSTRAP_ADMIN_EMAIL` | 启动时幂等创建（不存在才建，存在不覆盖）。类比 Grafana 默认 admin |
-| `bootstrap_admin_password` | string | `wakewake123` | `WAKEWAKE_SECURITY__BOOTSTRAP_ADMIN_PASSWORD` | ⚠️ 生产务必覆盖默认值 |
+| `bootstrap_admin_email` | string | `admin@wakewake.local` | `WAKEWAKE_SECURITY__BOOTSTRAP_ADMIN_EMAIL` | Created idempotently at startup (created only if absent, never overwritten). Grafana's default admin pattern |
+| `bootstrap_admin_password` | string | `wakewake123` | `WAKEWAKE_SECURITY__BOOTSTRAP_ADMIN_PASSWORD` | ⚠️ production must override the default |
 
 ### `[log]`
 
-| 字段 | 类型 | 默认 | env | 说明 |
+| Field | Type | Default | env | Notes |
 |---|---|---|---|---|
-| `level` | string | `info` | `WAKEWAKE_LOG__LEVEL` | **优先级：`RUST_LOG`（支持按模块 `wakewake_server=debug,sqlx=warn`）> 本项**。serve 与 admin 子命令同用此回落链 |
-| `dir` | string | `data/logs` | `WAKEWAKE_LOG__DIR` | tracing-appender daily rolling 目录（4 文件：app/traces/metrics/logs）。容器内 `./data:/app/data` 已挂载即持久化 |
+| `level` | string | `info` | `WAKEWAKE_LOG__LEVEL` | **Priority: `RUST_LOG` (per-module, e.g. `wakewake_server=debug,sqlx=warn`) > this field**. serve and the admin subcommands share this fallback chain |
+| `dir` | string | `data/logs` | `WAKEWAKE_LOG__DIR` | tracing-appender daily-rolling directory (4 files: app/traces/metrics/logs). Inside the container `./data:/app/data` is already mounted, so it persists |
 
-### `[maintenance]`（运维止血，初值）
+### `[maintenance]` (ops mitigation, initial value)
 
-| 字段 | 类型 | 默认 | env | 说明 |
+| Field | Type | Default | env | Notes |
 |---|---|---|---|---|
-| `enabled` | bool | `false` | `WAKEWAKE_MAINTENANCE__ENABLED` | 配置文件只决定**初值**；运行时经 `POST /admin/maintenance` 切换并持久化到 `data/maintenance.json`（重启恢复） |
-| `mode` | enum | `registration_disabled` | `WAKEWAKE_MAINTENANCE__MODE` | `registration_disabled` / `readonly` / `full`（admin 恒放行） |
-| `message` | string | 英文固定文案 | `WAKEWAKE_MAINTENANCE__MESSAGE` | 拦截响应文案 |
+| `enabled` | bool | `false` | `WAKEWAKE_MAINTENANCE__ENABLED` | The config file decides only the **initial value**; toggled at runtime via `POST /admin/maintenance` and persisted to `data/maintenance.json` (restored on restart) |
+| `mode` | enum | `registration_disabled` | `WAKEWAKE_MAINTENANCE__MODE` | `registration_disabled` / `readonly` / `full` (admin always passes) |
+| `message` | string | fixed English copy | `WAKEWAKE_MAINTENANCE__MESSAGE` | Interception response copy |
 
-### 非 `WAKEWAKE_` 前缀的环境变量
+### Environment variables without the `WAKEWAKE_` prefix
 
-| 变量 | 消费者 | 说明 |
+| Variable | Consumer | Notes |
 |---|---|---|
-| `RUST_LOG` | tracing EnvFilter | 服务日志级别最高优先级（见 `[log].level`） |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | observability | 设了走 OTLP collector，不设走本地文件 exporter |
-| `TZ` | s6 `cont-init.d/01-setup.sh` | 容器时区 |
+| `RUST_LOG` | tracing EnvFilter | Highest priority for service log level (see `[log].level`) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | observability | Set → OTLP collector; unset → local file exporter |
+| `TZ` | s6 `cont-init.d/01-setup.sh` | Container timezone |
 
-### CLI（`wakewake-server`）
+### CLI (`wakewake-server`)
 
-`--config <path>`；子命令：`serve [--host] [--port]`（缺省行为）、`version`、
-`admin create|promote|demote|list`（admin 子命令日志走同一 `log.level` 回落链）。
+`--config <path>`; subcommands: `serve [--host] [--port]` (default behavior), `version`, `admin create|promote|demote|list` (admin subcommands share the same `log.level` fallback chain).
 
-> server 的 `Settings` **不含 `[wol]`**——server 永不发 magic packet。
+> The server's `Settings` carries **no `[wol]`** — the server never sends magic packets.
 
-## 4. Agent 配置 schema
+## 4. Agent configuration schema
 
-Agent 与 server 同框架，字段不同。文件搜索路径（按序，后者覆盖前者）：
-`$WAKEWAKE_HOME/config.toml`（默认 `$HOME/.wakewake/`）→ `./wakewake.toml` →
-`--config <path>` 显式指定（必须存在，跳过前两者）。
+The agent shares the server's framework with different fields. File search path (in order; later overrides earlier): `$WAKEWAKE_HOME/config.toml` (default `$HOME/.wakewake/`) → `./wakewake.toml` → `--config <path>` explicit (must exist; skips the first two).
 
 ```toml
 # agent 的 config.toml
@@ -179,128 +167,109 @@ port     = 9503
 # api_base = "http://bemfa-mock:8080"   # 覆盖缝隙，日常不设
 ```
 
-| 组 | 字段 | env | 说明 |
+| Group | Fields | env | Notes |
 |---|---|---|---|
-| 顶层（必填） | `server_url` / `pairing_code` | `WAKEWAKE_SERVER_URL` / `WAKEWAKE_PAIRING_CODE` | CLI `--server` / `--pairing-code` 最高 |
-| 顶层 | `home_dir` | `WAKEWAKE_HOME` | 存 config.toml + key.pem + logs。优先级 env > `$HOME/.wakewake` > `./.wakewake`；容器 `/data`（卷 `agent_data`）；ansible supervisor 指向 `app_path` |
-| `[wol]` | `broadcast_addr` / `packet_count` / `packet_delay_ms` | `WAKEWAKE_WOL__*` | magic packet 发送参数 |
-| `[log]` | `level` / `format` / `dir`(Option) | `WAKEWAKE_LOG__*` | `dir` 未设 = `<home_dir>/logs` |
-| `[bemfa]` | `broker` / `port` / `api_base`(Option) | `WAKEWAKE_BEMFA__BROKER` / `__PORT` / `__API_BASE` | 巴法云端点 |
+| Top level (required) | `server_url` / `pairing_code` | `WAKEWAKE_SERVER_URL` / `WAKEWAKE_PAIRING_CODE` | CLI `--server` / `--pairing-code` wins |
+| Top level | `home_dir` | `WAKEWAKE_HOME` | Holds config.toml + key.pem + logs. Priority: env > `$HOME/.wakewake` > `./.wakewake`; `/data` in containers (volume `agent_data`); ansible supervisor points at `app_path` |
+| `[wol]` | `broadcast_addr` / `packet_count` / `packet_delay_ms` | `WAKEWAKE_WOL__*` | Magic-packet send parameters |
+| `[log]` | `level` / `format` / `dir`(Option) | `WAKEWAKE_LOG__*` | `dir` unset = `<home_dir>/logs` |
+| `[bemfa]` | `broker` / `port` / `api_base`(Option) | `WAKEWAKE_BEMFA__BROKER` / `__PORT` / `__API_BASE` | Bemfa endpoints |
 
-`[bemfa].api_base` 语义（重要）：真实巴法云各 API 分散在多个域名
-（`pro.bemfa.com` / `apis.bemfa.com`），无法用单值做默认——**不设 = 按端点用真实
-各域名默认；设了 = 整体基址覆盖 + 路径重组**（`{api_base}/v1/createTopic` 等）。
-该键的唯一用途是 E2E/测试指向 mock（`docker-compose.e2e.yml` 指向 bemfa-mock）。
-`port == 9503` 时 MQTT 走 TLS（系统默认 CA），非 9503（如 mosquitto 1883）走明文。
+`[bemfa].api_base` semantics (important): the real Bemfa cloud scatters its APIs across several domains (`pro.bemfa.com` / `apis.bemfa.com`), so no single value can be the default — **unset = per-endpoint real-domain defaults; set = whole-base-URL override + path reassembly** (`{api_base}/v1/createTopic` etc.). The key's only use is pointing E2E/tests at a mock (`docker-compose.e2e.yml` points at bemfa-mock). With `port == 9503` MQTT uses TLS (system default CAs); any other port (e.g. mosquitto 1883) uses plaintext.
 
-## 5. 校验与 fail-fast
+## 5. Validation and fail-fast
 
-加载后用 garde 校验语义约束（config-rs 不管校验）：
+After loading, garde validates semantic constraints (config-rs does no validation):
 
-- `app.public_url`：`#[garde(url)]`；JWT 两密钥 `length(min = 32)`；`Settings` 整体 `dive`。
-- 校验失败 → 进程 exit 1，不降级运行。
+- `app.public_url`: `#[garde(url)]`; both JWT keys `length(min = 32)`; the whole `Settings` gets `dive`.
+- A validation failure → process exits 1, never degraded running.
 
-| 失败类型 | 行为 |
+| Failure | Behavior |
 |---|---|
-| `--config` 指定的文件不存在 | 启动失败，错误含路径 |
-| TOML 语法错误 | 启动失败，报错带行号 |
-| 必填字段缺失（无文件无 env） | 启动失败，`missing field` |
-| 密钥长度不足 | 启动失败，`length min = 32` |
-| env 值类型错（如 port 非数字） | 启动失败，`invalid type` |
+| `--config` file does not exist | Startup fails, error includes the path |
+| TOML syntax error | Startup fails, error carries the line number |
+| Required field missing (no file, no env) | Startup fails, `missing field` |
+| Key too short | Startup fails, `length min = 32` |
+| Wrong env value type (e.g. non-numeric port) | Startup fails, `invalid type` |
 
-时间字段（`access_expire` 等）为 humantime 字符串，`Settings` 访问器里
-`humantime::parse_duration` 解析（`15m` / `720h` / `10s`）。
+Time fields (`access_expire` etc.) are humantime strings, parsed by `humantime::parse_duration` in the `Settings` accessors (`15m` / `720h` / `10s`).
 
-## 6. 环境变量映射规则
+## 6. Environment variable mapping rules
 
-| 规则 | 说明 | 示例 |
+| Rule | Notes | Example |
 |---|---|---|
-| 前缀 | `WAKEWAKE_` | — |
-| 嵌套分隔 | `__` | `WAKEWAKE_SERVER__HOST` → `server.host` |
-| agent 顶层键 | 单 `_`（无嵌套） | `WAKEWAKE_SERVER_URL` → `server_url` |
-| 大小写 | env 全大写 → TOML 全小写 | `WAKEWAKE_DATABASE__DSN` → `database.dsn` |
-| 类型推断 | `try_parsing(true)` 尝试 i64/f64/bool | `WAKEWAKE_SERVER__PORT=8080` → u16 |
-| 特殊字符 | env 值整体是字符串，无需转义 | `WAKEWAKE_DATABASE__DSN="postgres://u:p@db:5432/d"` |
+| Prefix | `WAKEWAKE_` | — |
+| Nesting separator | `__` | `WAKEWAKE_SERVER__HOST` → `server.host` |
+| Agent top-level keys | single `_` (no nesting) | `WAKEWAKE_SERVER_URL` → `server_url` |
+| Case | env all-caps → TOML all-lower | `WAKEWAKE_DATABASE__DSN` → `database.dsn` |
+| Type inference | `try_parsing(true)` tries i64/f64/bool | `WAKEWAKE_SERVER__PORT=8080` → u16 |
+| Special characters | an env value is one string, no escaping | `WAKEWAKE_DATABASE__DSN="postgres://u:p@db:5432/d"` |
 
-## 7. `config.example.toml` 约定（用户面向文档）
+## 7. `config.example.toml` conventions (user-facing documentation)
 
-example 文件是**主要用户文档**，schema 变更必须同步它。现有三份，读者不同：
+The example files are the **primary user documentation**; every schema change must sync them. Three exist today, each for a different reader:
 
-| 文件 | 读者 | 内容 |
+| File | Reader | Content |
 |---|---|---|
-| `backend/config.example.toml` | 全量 schema 文档 | 全部字段 + 说明 |
-| `backend/crates/agent/config.example.toml` | agent 用户 | agent 全量字段 |
-| `docker/config.example.toml` | 自部署用户 | 仅自部署需关心的项（public_url + 3 密钥 + 可选 mailer） |
-| `docker/config.local.example.toml` | 本地验收 | 全量字段显式列出（默认值/占位符），`cp` 后改密钥 |
+| `backend/config.example.toml` | full schema documentation | every field + notes |
+| `backend/crates/agent/config.example.toml` | agent users | every agent field |
+| `docker/config.example.toml` | self-deployers | only what they care about (public_url + 3 keys + optional mailer) |
+| `docker/config.local.example.toml` | local acceptance | every field listed explicitly (defaults/placeholders), `cp` then edit keys |
 
-字段约定：
+Field conventions:
 
-| 字段类型 | 约定 |
+| Field kind | Convention |
 |---|---|
-| 必填无默认（如 `jwt.signing_key`） | 不注释，值占位符 `"CHANGE_ME..."`，标 `[REQUIRED]` |
-| 可选有默认（如 `server.port`） | 注释掉，值为默认值，标 `[OPTIONAL]` |
-| 安全敏感默认 | 标 `⚠️` 警告 |
+| Required, no default (e.g. `jwt.signing_key`) | uncommented, placeholder value `"CHANGE_ME..."`, tagged `[REQUIRED]` |
+| Optional with default (e.g. `server.port`) | commented out, value = the default, tagged `[OPTIONAL]` |
+| Security-sensitive default | tagged with a `⚠️` warning |
 
-每个字段必须有：一行说明、`[REQUIRED]`/`[OPTIONAL]` 标签、`Env:` 标签、
-`Default:` 标签（仅可选字段）。
+Every field must carry: a one-line description, the `[REQUIRED]`/`[OPTIONAL]` tag, an `Env:` tag, and a `Default:` tag (optional fields only).
 
-## 8. 部署面配置全景（每环境读什么）
+## 8. Deployment-surface configuration map (what each environment reads)
 
-原则：**每个环境 = 一条命令 + 至多一个要改的文件**。运维速查表在
-[`../../devops/README.md`](../../devops/README.md)（环境速查）。
+Principle: **each environment = one command + at most one file to edit**. The ops cheat sheet lives in [`../../devops/README.md`](../../devops/README.md) (environment quick reference).
 
-| 环境 | 入口命令 | 配置载体 | secrets 落位 |
+| Environment | Entry command | Configuration carrier | Where secrets live |
 |---|---|---|---|
-| 本地开发 | `python3 devops/dev.py start` | dev.py 首启生成 `backend/config.local.toml`（内嵌 dev 默认值） | 固定 dev 值（不入库） |
-| 本地验收 | `docker compose -f docker/docker-compose.local.yml up` | `docker/config.local.toml`（模板 `config.local.example.toml`）+ compose env（DSN/public_url 插值） | 占位密钥（不入库） |
-| E2E | `cd e2e && pnpm test` | `e2e/docker-compose.e2e.yml` 纯 env（覆盖层当主层用）+ `short-ttl.yml` 覆盖 | compose 内置测试密钥（与生产绝不复用） |
-| 自部署 | `cd docker && docker compose up -d` | `docker/config.toml`（模板 `config.example.toml`）+ `.env`（`POSTGRES_*`） | 用户本地文件（不入库） |
-| 远程 test/staging/prod | `ansible-playbook devops/ansible/deploy.yml -l <env>` | `group_vars/<env>/env.yml` + `vault.yml`（avpm 单变量加密）→ 渲染 `config.toml.j2` + `docker-compose.yml.j2` + Caddyfile | ansible vault（入库但加密） |
-| agent（bare-metal） | `deploy-agent.yml -l test_agent` | vault 的 `agent_server_url`/`agent_pairing_code` → 渲染 `agent-config.toml.j2` + supervisord conf | ansible vault |
+| Local dev | `python3 devops/dev.py start` | dev.py generates `backend/config.local.toml` on first start (dev defaults embedded) | fixed dev values (never committed) |
+| Local acceptance | `docker compose -f docker/docker-compose.local.yml up` | `docker/config.local.toml` (template `config.local.example.toml`) + compose env (DSN/public_url interpolation) | placeholder keys (never committed) |
+| E2E | `cd e2e && pnpm test` | `e2e/docker-compose.e2e.yml` env-only (the override layer used as the primary) + `short-ttl.yml` override | compose-embedded test keys (never shared with production) |
+| Self-deploy | `cd docker && docker compose up -d` | `docker/config.toml` (template `config.example.toml`) + `.env` (`POSTGRES_*`) | user-local files (never committed) |
+| Remote test/staging/prod | `ansible-playbook devops/ansible/deploy.yml -l <env>` | `group_vars/<env>/env.yml` + `vault.yml` (avpm single-variable encryption) → renders `config.toml.j2` + `docker-compose.yml.j2` + Caddyfile | ansible vault (committed but encrypted) |
+| agent (bare-metal) | `deploy-agent.yml -l test_agent` | vault's `agent_server_url`/`agent_pairing_code` → renders `agent-config.toml.j2` + supervisord conf | ansible vault |
 
-ansible 环境变量（`group_vars/<env>/env.yml`）：`image`（test=LAN registry 浮动
-`main`；staging/prod=`wakewake_version` 钉版本）、`host_port`、`public_url`、
-`health_url`/`health_insecure`、`tls_profile`（http|https，分支 healthcheck 与
-caddy-data 卷）、`caddyfile_template`（未定义 = 零挂载，用镜像内置 Caddyfile）、
-`mailer_*`。共享不变量在 `group_vars/all.yml`（8080/8443、PG 库名/用户、路径）。
+ansible environment variables (`group_vars/<env>/env.yml`): `image` (test = LAN registry floating `main`; staging/prod = `wakewake_version` pinned), `host_port`, `public_url`, `health_url`/`health_insecure`, `tls_profile` (http|https; branches the healthcheck and the caddy-data volume), `caddyfile_template` (undefined = zero mounts, the image-builtin Caddyfile), `mailer_*`. Shared invariants live in `group_vars/all.yml` (8080/8443, PG database/user, paths).
 
-### Caddyfile：4 份站点变体 + 1 份路由真源
+### Caddyfile: 4 site variants + 1 routing source of truth
 
-路由唯一真源是 `docker/caddy/routes.caddy`（烤进镜像 `/app/caddy/routes.caddy`）：
-API/SSE 反代 + 静态前端 + 安全头 + 访问日志。**改路由只改这一处**。每环境 Caddyfile
-只做两件事：import 路由 + 声明站点地址与 TLS 层：
+The single routing source of truth is `docker/caddy/routes.caddy` (baked into the image at `/app/caddy/routes.caddy`): API/SSE proxying + static frontend + security headers + access logs. **To change routing, change this one file.** Each environment's Caddyfile does exactly two things: import the routes and declare the site address and TLS layer:
 
-| 变体 | TLS 形态 | 使用环境 |
+| Variant | TLS shape | Environments |
 |---|---|---|
-| `docker/Caddyfile`（镜像内置 `/app/Caddyfile`） | hostless `:8443` 纯 HTTP | 自部署 + staging（零挂载） |
-| `docker/Caddyfile.local` | `tls internal` 自签（SAN localhost, app） | 本地验收 + e2e（共用） |
-| `devops/ansible/templates/Caddyfile.test` | `tls internal` + `fallback_sni`（IP 直连） | test |
-| `devops/ansible/templates/Caddyfile.prod` | CF Origin Cert（占位） | prod |
+| `docker/Caddyfile` (image-builtin `/app/Caddyfile`) | hostless `:8443` plain HTTP | self-deploy + staging (zero mounts) |
+| `docker/Caddyfile.local` | `tls internal` self-signed (SAN localhost, app) | local acceptance + e2e (shared) |
+| `devops/ansible/templates/Caddyfile.test` | `tls internal` + `fallback_sni` (direct IP) | test |
+| `devops/ansible/templates/Caddyfile.prod` | CF Origin Cert (placeholder) | prod |
 
-## 9. 不变量清单（跨环境恒成立）
+## 9. Invariants list (hold across every environment)
 
-改下列任何一项 = 多处联动，动前先 grep 全部引用点：
+Changing any of these ripples widely — grep every reference before touching them:
 
-1. **8080**：backend 监听 = `routes.caddy` 反代目标（`[server].port` 永不改）。
-2. **8443**：容器内 Caddy 监听（compose `ports` 的容器侧、healthcheck、Caddyfile 站点地址）。
-3. **`/var/run/postgresql`**：postgres-socket 共享卷路径 = DSN `host=` = postgres
-   healthcheck `-h`（postgres 镜像默认，勿改）。
-4. **`/app/Caddyfile`**：s6 caddy run 脚本固定读取路径（挂载点必须一致）。
-5. **`/app/config.toml`**：server 默认文件搜索路径（工作目录 `/app`）。
-6. **`./data:/app/data`**：日志轮转 + `maintenance.json` 持久化根。
-7. **服务名 `app` / `mailpit` / `postgres`**：docker DNS 被另一处引用
-   （Caddyfile SAN、`smtp_host`、depends_on），改名必须同步。
-8. **compose 宿主端口与 `public_url` 同源**：本地验收 `APP_PORT` 同时插值
-   `ports` 与 `WAKEWAKE_APP__PUBLIC_URL`；远程环境 `host_port` ↔ `public_url` 在
-   env.yml 成对出现。
+1. **8080**: backend listen port = the `routes.caddy` proxy target (`[server].port` never changes).
+2. **8443**: in-container Caddy listen port (the container side of compose `ports`, healthchecks, Caddyfile site addresses).
+3. **`/var/run/postgresql`**: the postgres-socket shared-volume path = DSN `host=` = postgres healthcheck `-h` (the postgres image default; do not change).
+4. **`/app/Caddyfile`**: the fixed path the s6 caddy run script reads (mount points must agree).
+5. **`/app/config.toml`**: the server's default file-search path (working directory `/app`).
+6. **`./data:/app/data`**: the persistence root for log rotation + `maintenance.json`.
+7. **Service names `app` / `mailpit` / `postgres`**: docker DNS referenced elsewhere (Caddyfile SAN, `smtp_host`, depends_on); renaming must sync all of them.
+8. **compose host port and `public_url` share one source**: in local acceptance `APP_PORT` interpolates both `ports` and `WAKEWAKE_APP__PUBLIC_URL`; in remote environments `host_port` ↔ `public_url` appear as a pair in env.yml.
 
-## 10. 密钥管理
+## 10. Secret management
 
-- **生成**：`openssl rand -base64 32`；三把 HMAC 密钥（jwt access / jwt refresh /
-  password_reset）彼此独立，勿复用。
-- **开发/e2e**：固定测试值（e2e 与生产绝不复用）。
-- **自部署**：本地 `config.toml` + `.env`，均不入库（`*.local.toml`、`.env` 已 ignore）。
-- **远程环境**：avpm vault 单变量加密入库（轮换见 devops/README §Vault）。
-- **轮换**：改值重启即生效。JWT 密钥轮换 → 现存 token 全失效（预期，强制重登）。
-- **bootstrap admin**：默认 `admin@wakewake.local` / `wakewake123` 仅幂等首建；
-  生产必须经 env/TOML 覆盖默认密码。
+- **Generation**: `openssl rand -base64 32`; the three HMAC keys (jwt access / jwt refresh / password_reset) are mutually independent — never reuse.
+- **Dev/e2e**: fixed test values (e2e never shares with production).
+- **Self-deploy**: local `config.toml` + `.env`, neither committed (`*.local.toml`, `.env` are ignored).
+- **Remote environments**: avpm vault single-variable encryption committed to the repo (rotation in devops/README §Vault).
+- **Rotation**: change the value and restart. Rotating JWT keys invalidates all existing tokens (expected; forces re-login).
+- **bootstrap admin**: the default `admin@wakewake.local` / `wakewake123` only idempotently bootstraps; production must override the default password via env/TOML.

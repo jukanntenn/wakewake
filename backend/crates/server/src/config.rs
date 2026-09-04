@@ -107,10 +107,24 @@ pub struct ServerSettings {
     /// true 时从 XFF 最左取真实客户端 IP；false 时用 TCP 对端。直连部署设 false。
     #[serde(default = "default_trust_proxy")]
     pub trust_proxy: bool,
+    /// 权威客户端 IP 头名（如 `CF-Connecting-IP`，cloudflare-edge WRFC）。
+    /// 设置且 trust_proxy=true 时优先于 XFF/X-Real-IP 读取；未设维持 XFF 最左口径。
+    /// 前提：接入层已限定仅可信反代可达（Caddyfile.prod 的 remote_ip CF CIDR 守卫），
+    /// 否则直连方可任意伪造该头——与守卫同进同退。
+    #[serde(default)]
+    pub client_ip_header: Option<String>,
+    /// 全局 SSE 连接上限（cloudflare-edge WRFC 滥用兜底；0 = 不限制）。
+    /// 超出的连接返 503 SERVICE_UNAVAILABLE（agent 退避重连）。
+    #[serde(default = "default_max_sse_connections")]
+    pub max_sse_connections: usize,
 }
 
 fn default_trust_proxy() -> bool {
     true
+}
+
+fn default_max_sse_connections() -> usize {
+    2000
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -232,6 +246,7 @@ impl Settings {
             .set_default("log.level", "info")?
             .set_default("log.dir", "data/logs")?
             .set_default("server.trust_proxy", true)?
+            .set_default("server.max_sse_connections", 2000i64)?
             .set_default("maintenance.enabled", false)?
             .set_default("maintenance.mode", "registration_disabled")?
             .set_default("maintenance.message", "Scheduled maintenance in progress")?;

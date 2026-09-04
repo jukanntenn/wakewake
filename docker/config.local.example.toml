@@ -35,6 +35,14 @@ port = 8080
 # Env: WAKEWAKE_SERVER__TRUST_PROXY
 # Default: true
 trust_proxy = true
+# 权威客户端 IP 头（cloudflare-edge WRFC）：本地验收无 CF，保持未设（XFF 口径）。
+# Env: WAKEWAKE_SERVER__CLIENT_IP_HEADER
+# Default: 未设置
+# client_ip_header = "CF-Connecting-IP"
+# 全局 SSE 连接上限（超出返 503；0 = 不限制）
+# Env: WAKEWAKE_SERVER__MAX_SSE_CONNECTIONS
+# Default: 2000
+max_sse_connections = 2000
 
 # ============================================================
 # Maintenance（维护模式，ui-ux-risk-control §8.4）

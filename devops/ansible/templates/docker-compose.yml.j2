@@ -22,6 +22,12 @@ services:
       # 直接用镜像内置 plain HTTP Caddyfile。
       - {{ caddyfile }}:/app/Caddyfile:ro
 {% endif %}
+{% if origin_cert is defined %}
+      # CF Origin Cert 只读挂载：宿主 {{ app_path }}/certs/（运维放置，操作见
+      # devops/cloudflare.md §4）→ 容器内 /app/certs，供 Caddyfile.prod 的 tls 读取。
+      # origin_cert/origin_key（prod env.yml）是容器内路径，解开注释即触发本挂载。
+      - {{ app_path }}/certs:/app/certs:ro
+{% endif %}
       - postgres-socket:/var/run/postgresql
 {% if tls_profile == 'https' %}
       # Caddy 内部 CA 存储持久化（s6 caddy run 设 HOME=/root，故 CA 在
@@ -36,6 +42,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # SSE 长连接按连接数吃 FD：默认 soft nofile（常见 1024）约 1000 连接即触顶。
+    # 显式抬到 1M（与 tests/load 压测 override 同口径），与镜像内 s6 后端共享。
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
     healthcheck:
       # tls_profile=https: Caddy 终结 TLS（tls internal 自签），用 https + -k 跳过证书校验。
       # tls_profile=http: 外部反代终结 TLS，容器内 Caddy 是 plain HTTP。

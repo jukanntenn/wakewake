@@ -37,6 +37,24 @@ public_url = "https://wakewake.app"
 # [server]
 # trust_proxy = true
 
+# [OPTIONAL] 权威客户端 IP 头名（如 "CF-Connecting-IP"，cloudflare-edge WRFC）
+# 设置且 trust_proxy=true 时优先于 XFF/X-Real-IP 读取；未设维持 XFF 最左口径。
+# 适用 CF 回源拓扑：XFF 是追加链（左值可伪造），CF-Connecting-IP 恒为单个真实访客 IP。
+# ⚠️ 前提：接入层仅放行可信反代（Caddyfile.prod 的 remote_ip CF CIDR 守卫），
+# 否则直连方可任意伪造该头——与守卫同进同退。
+# Env: WAKEWAKE_SERVER__CLIENT_IP_HEADER
+# Default: 未设置
+# [server]
+# client_ip_header = "CF-Connecting-IP"
+
+# [OPTIONAL] 全局 SSE 连接上限（0 = 不限制）
+# 超出的连接返 503 SERVICE_UNAVAILABLE（agent 退避重连）。滥用兜底阀门，
+# 不替代 per-user 设备配额（连接基数 = 已配对 agent 数，同 agent 重连自愈不叠加）。
+# Env: WAKEWAKE_SERVER__MAX_SSE_CONNECTIONS
+# Default: 2000
+# [server]
+# max_sse_connections = 2000
+
 # ============================================================
 # Maintenance（维护模式，ui-ux-risk-control §8.4）
 # ============================================================

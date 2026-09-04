@@ -20,7 +20,7 @@ use crate::state::AppState;
 use garde::Validate;
 
 pub fn routes() -> Router<Arc<AppState>> {
-    routes_with_rate_limit(false, true)
+    routes_with_rate_limit(false, true, None)
 }
 
 /// 认证路由，可选旁路速率限制（e2e.md §2.5 `WAKEWAKE_RATE_LIMIT__DISABLED=true`）。
@@ -28,14 +28,25 @@ pub fn routes() -> Router<Arc<AppState>> {
 /// - register/login/refresh/pow：per-IP 10/min（authentication.md §七层1）。
 /// - password-reset/*：per-IP 3/hour（更严，防邮件轰炸）。
 /// - `disabled=true` 跳过 governor layer（仅旁路频率，不旁路业务配额）。
-/// - `trust_proxy`：限流 key 是否读 X-Forwarded-For（A-05B，与 §11.C.2 对齐）。
-pub fn routes_with_rate_limit(disabled: bool, trust_proxy: bool) -> Router<Arc<AppState>> {
+/// - `trust_proxy`：限流 key 是否读转发头（A-05B，与 §11.C.2 对齐）。
+/// - `client_ip_header`：权威客户端 IP 头（如 CF-Connecting-IP，cloudflare-edge
+///   WRFC），配置时优先于 XFF；None = 维持 XFF 最左口径。
+pub fn routes_with_rate_limit(
+    disabled: bool,
+    trust_proxy: bool,
+    client_ip_header: Option<&str>,
+) -> Router<Arc<AppState>> {
     let auth = Router::new()
         .route("/auth/register", post(register))
         .route("/auth/login", post(login))
         .route("/auth/refresh", post(refresh))
         .route("/pow/challenge", get(pow_challenge));
-    let auth = crate::middleware::rate_limit::apply_auth_rate_limit(auth, disabled, trust_proxy);
+    let auth = crate::middleware::rate_limit::apply_auth_rate_limit(
+        auth,
+        disabled,
+        trust_proxy,
+        client_ip_header,
+    );
 
     let password_reset = Router::new()
         .route("/auth/password-reset/request", post(password_reset_request))
@@ -44,18 +55,24 @@ pub fn routes_with_rate_limit(disabled: bool, trust_proxy: bool) -> Router<Arc<A
         password_reset,
         disabled,
         trust_proxy,
+        client_ip_header,
     );
 
     // 邮箱验证：verify 用 auth 限流组（与 login 同级），resend 用 password-reset 限流组（防邮件轰炸）。
     let email_verify = Router::new().route("/auth/verify-email", post(verify_email));
-    let email_verify =
-        crate::middleware::rate_limit::apply_auth_rate_limit(email_verify, disabled, trust_proxy);
+    let email_verify = crate::middleware::rate_limit::apply_auth_rate_limit(
+        email_verify,
+        disabled,
+        trust_proxy,
+        client_ip_header,
+    );
 
     let email_resend = Router::new().route("/auth/verify-email/resend", post(resend_verification));
     let email_resend = crate::middleware::rate_limit::apply_password_reset_rate_limit(
         email_resend,
         disabled,
         trust_proxy,
+        client_ip_header,
     );
 
     Router::new()
@@ -245,16 +262,20 @@ async fn login(
     }))
 }
 
-/// 从请求头 + TCP 对端构造登录审计上下文（XFF/X-Real-IP + User-Agent）。
+/// 从请求头 + TCP 对端构造登录审计上下文（权威头/XFF/X-Real-IP + User-Agent）。
+/// IP 口径与限流 key 一致（`util::client_ip_from_headers`，cloudflare-edge WRFC）。
 fn build_login_audit(
     state: &Arc<AppState>,
     headers: &HeaderMap,
     peer: SocketAddr,
 ) -> auth_service::LoginAudit {
-    let xff = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok());
-    let x_real = headers.get("x-real-ip").and_then(|v| v.to_str().ok());
-    let ip = crate::util::extract_client_ip(xff, x_real, peer, state.settings.server.trust_proxy)
-        .map(|ip| ip.to_string());
+    let ip = crate::util::client_ip_from_headers(
+        headers,
+        peer,
+        state.settings.server.client_ip_header.as_deref(),
+        state.settings.server.trust_proxy,
+    )
+    .map(|ip| ip.to_string());
     let user_agent = headers
         .get("user-agent")
         .and_then(|v| v.to_str().ok())
