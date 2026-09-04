@@ -40,6 +40,26 @@ pub struct Cli {
     /// 也可通过配置文件 `pairing_code` 或环境变量 `WAKEWAKE_PAIRING_CODE` 提供。
     #[arg(long)]
     pub pairing_code: Option<String>,
+    /// 子命令（当前仅 `service install`，常驻运行）。
+    #[command(subcommand)]
+    pub command: Option<Commands>,
+}
+
+/// 顶层子命令。
+#[derive(clap::Subcommand, Debug, Clone)]
+pub enum Commands {
+    /// systemd 服务管理（常驻运行 + 开机自启）。
+    Service {
+        #[command(subcommand)]
+        command: ServiceCommand,
+    },
+}
+
+/// `service` 子命令组。
+#[derive(clap::Subcommand, Debug, Clone)]
+pub enum ServiceCommand {
+    /// 安装为 systemd 服务并启动（需 sudo；Docker 路径不需要）。
+    Install,
 }
 
 /// Agent 配置。
@@ -57,6 +77,9 @@ pub struct Settings {
     pub log: LogSettings,
     #[serde(default)]
     pub bemfa: BemfaSettings,
+    /// TLS（自签场景的 CA 信任，specs/backend/agent-distribution.md）。
+    #[serde(default)]
+    pub tls: TlsSettings,
 }
 
 /// 默认 home `目录：$WAKEWAKE_HOME` > ~/.wakewake > ./.wakewake。
@@ -131,6 +154,13 @@ impl Default for BemfaSettings {
             api_base: None,
         }
     }
+}
+
+/// TLS 信任配置。`ca_cert` 指向内网自托管（Caddy `tls internal`）的 root CA 证书
+/// （PEM）——信任自己的 CA，而非关闭校验。默认 `None` 用系统信任库。
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct TlsSettings {
+    pub ca_cert: Option<PathBuf>,
 }
 
 impl WolSettings {

@@ -217,7 +217,9 @@
       "whereDesc": "The agent must share a router with the devices you want to wake — wake signals do not cross routers. A NAS, mini PC, or spare laptop works well.",
       "commandLabel": "Launch command",
       "copyCommand": "Copy command",
-      "waiting": "Waiting for the agent to connect — this page updates automatically."
+      "waiting": "Waiting for the agent to connect — this page updates automatically.",
+      "tabLinux": "Linux",
+      "tabDocker": "Docker"
     },
     "online": {
       "title": "Agent connected",
@@ -230,7 +232,11 @@
       "repairHint": "To pair the agent on a new machine, rotate the pairing code and use the new command."
     },
     "advancedConfigTitle": "Launch with a config file",
-    "advancedConfigDesc": "Save the following as ~/.wakewake/config.toml, then run ./target/release/wakewake-agent with no arguments."
+    "advancedConfigDesc": "Save the following as ~/.wakewake/config.toml, then run wakewake-agent with no arguments.",
+    "service": {
+      "title": "Run at boot (bare-metal installs)",
+      "desc": "After verifying the first foreground run, install the agent as a systemd service so it survives reboots and SSH disconnects. Docker installs don't need this (--restart unless-stopped)."
+    }
   },
   "integrations": {
     "title": "Integrations",

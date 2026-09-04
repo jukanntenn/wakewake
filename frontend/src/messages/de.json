@@ -133,7 +133,9 @@
       "whereDesc": "Der Agent muss hinter demselben Router wie die zu weckenden Geräte stehen — Wecksignale überqueren keine Router. Ein NAS, Mini-PC oder ein älteres Notebook eignet sich gut.",
       "commandLabel": "Startbefehl",
       "copyCommand": "Befehl kopieren",
-      "waiting": "Warte auf die Verbindung des Agenten — diese Seite aktualisiert sich automatisch."
+      "waiting": "Warte auf die Verbindung des Agenten — diese Seite aktualisiert sich automatisch.",
+      "tabLinux": "Linux",
+      "tabDocker": "Docker"
     },
     "online": {
       "title": "Agent verbunden",
@@ -146,7 +148,11 @@
       "repairHint": "Um den Agenten auf einer neuen Maschine zu koppeln, rotiere den Pairing-Code und verwende den neuen Befehl."
     },
     "advancedConfigTitle": "Mit Konfigurationsdatei starten",
-    "advancedConfigDesc": "Speichere Folgendes als ~/.wakewake/config.toml und führe dann ./target/release/wakewake-agent ohne Argumente aus."
+    "advancedConfigDesc": "Speichere Folgendes als ~/.wakewake/config.toml und führe dann wakewake-agent ohne Argumente aus.",
+    "service": {
+      "title": "Beim Systemstart ausführen (Bare-Metal-Installation)",
+      "desc": "Nach dem ersten Testlauf im Vordergrund installiere den Agenten als systemd-Dienst, damit er Neustarts und SSH-Trennungen überlebt. Bei Docker-Installationen nicht nötig (--restart unless-stopped)."
+    }
   },
   "integrations": {
     "title": "Integrationen",

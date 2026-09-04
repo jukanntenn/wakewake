@@ -10,16 +10,25 @@ use std::sync::Arc;
 use clap::Parser;
 use wakewake_agent::bemfa_state::{BemfaCoordinator, ReconcilerDeps};
 use wakewake_agent::command_executor;
-use wakewake_agent::config::{Cli, Settings};
+use wakewake_agent::config::{Cli, Commands, ServiceCommand, Settings};
 use wakewake_agent::http_client;
 use wakewake_agent::keystore;
 use wakewake_agent::reporter;
+use wakewake_agent::service;
 use wakewake_agent::sse_client::{self, Backoff, Outcome, SseEvent};
 use wakewake_agent::state::{AgentState, ApplyOutcome, SharedState};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+
+    // 子命令先行（不依赖 Settings——service install 只需定位 config，配置校验留给服务本体）。
+    if let Some(Commands::Service { command }) = &cli.command {
+        match command {
+            ServiceCommand::Install => return service::install_command(cli.config.as_deref()),
+        }
+    }
+
     let settings = Settings::load(&cli)?;
     let _log_guard = init_tracing(&settings);
 
@@ -32,7 +41,7 @@ async fn main() -> anyhow::Result<()> {
     let state = AgentState::new_shared();
 
     // HTTP client（sse_client + reporter + 巴法 topic API 共用）
-    let http_client = http_client::build_http_client();
+    let http_client = http_client::build_http_client(settings.tls.ca_cert.as_deref())?;
 
     // Bemfa 协调器（agent 单例）。device-sync-v3 §10：Notify 调度器，纯内存。
     let bemfa_coord = Arc::new(BemfaCoordinator::new());
@@ -60,6 +69,7 @@ async fn main() -> anyhow::Result<()> {
     let mut backoff = Backoff::new();
     loop {
         let outcome = sse_client::connect_and_run(
+            &http_client,
             &settings.server_url,
             &settings.pairing_code,
             Some(&public_key_header),
@@ -94,7 +104,12 @@ async fn main() -> anyhow::Result<()> {
                 tokio::time::sleep(delay).await;
             },
             Outcome::Connected => {
+                // 健康连接断开（流曾交付数据）→ 重置退避，按 base+jitter 重试：
+                // 单次网络抖动后 ~5s 恢复；风暴时 ±50% jitter 自然错峰。
                 backoff.reset();
+                let delay = backoff.next_delay();
+                tracing::warn!(?delay, "connection dropped after established, retrying");
+                tokio::time::sleep(delay).await;
             },
         }
     }

@@ -1,12 +1,25 @@
-// Agent 启动命令模板槽（specs/frontend/agent-onboarding.md 唯一来源）。
-// --server 由调用方传入当前站点 origin；一键启动机制落地时只改 buildAgentLaunchCommand。
+// Agent 启动命令模板槽（specs/frontend/agent-onboarding.md / specs/backend/agent-distribution.md）。
+// 两个生成器对应终端卡 Linux / Docker 双 tab；--server 由调用方传入当前站点 origin。
+// 命令与 README 实际分发渠道一字不差，不虚构。
 
-export function buildAgentLaunchCommand(serverUrl: string, pairingCode: string): string {
-  // 命令与 README.md Quick start 保持一致；不虚构未发布的分发渠道（docker / 下载链接）。
+const INSTALL_SCRIPT_URL = 'https://raw.githubusercontent.com/jukanntenn/wakewake/main/install.sh'
+const DOCKER_IMAGE = 'jukanntenn/wakewake-agent:latest'
+
+/** Linux 一行安装：install.sh 检测平台 → 下载 Release 资产 → sha256 校验 → 装 → 前台启动。 */
+export function buildAgentInstallCommand(serverUrl: string, pairingCode: string): string {
+  return `curl -fsSL ${INSTALL_SCRIPT_URL} | sh -s -- --server ${serverUrl} --code ${pairingCode}`
+}
+
+/** Docker 一行启动。--network host 是硬前提：受限广播（RFC 919）不出 bridge 网段。 */
+export function buildAgentDockerCommand(serverUrl: string, pairingCode: string): string {
   return [
-    'git clone https://github.com/jukanntenn/wakewake.git',
-    'cd wakewake/backend',
-    'cargo build --release -p wakewake-agent',
-    `./target/release/wakewake-agent --server ${serverUrl} --pairing-code ${pairingCode}`,
-  ].join('\n')
+    'docker run -d',
+    '--name wakewake-agent',
+    '--network host',
+    '--restart unless-stopped',
+    `-e WAKEWAKE_SERVER_URL=${serverUrl}`,
+    `-e WAKEWAKE_PAIRING_CODE=${pairingCode}`,
+    '-v wakewake-agent-data:/data',
+    DOCKER_IMAGE,
+  ].join(' ')
 }

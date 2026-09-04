@@ -133,7 +133,9 @@
       "whereDesc": "L'agent doit partager le même routeur que les appareils à réveiller — les signaux de réveil ne traversent pas les routeurs. Un NAS, un mini-PC ou un portable de rechange convient.",
       "commandLabel": "Commande de lancement",
       "copyCommand": "Copier la commande",
-      "waiting": "En attente de la connexion de l'agent — cette page se met à jour automatiquement."
+      "waiting": "En attente de la connexion de l'agent — cette page se met à jour automatiquement.",
+      "tabLinux": "Linux",
+      "tabDocker": "Docker"
     },
     "online": {
       "title": "Agent connecté",
@@ -146,7 +148,11 @@
       "repairHint": "Pour jumeler l'agent sur une nouvelle machine, renouvelez le code d'appairage et utilisez la nouvelle commande."
     },
     "advancedConfigTitle": "Lancer avec un fichier de configuration",
-    "advancedConfigDesc": "Enregistrez ce qui suit dans ~/.wakewake/config.toml, puis exécutez ./target/release/wakewake-agent sans arguments."
+    "advancedConfigDesc": "Enregistrez ce qui suit dans ~/.wakewake/config.toml, puis exécutez wakewake-agent sans arguments.",
+    "service": {
+      "title": "Lancement au démarrage (installation binaire)",
+      "desc": "Après la première exécution en avant-plan, installez l'agent comme service systemd pour qu'il survive aux redémarrages et déconnexions SSH. Inutile avec Docker (--restart unless-stopped)."
+    }
   },
   "integrations": {
     "title": "Intégrations",

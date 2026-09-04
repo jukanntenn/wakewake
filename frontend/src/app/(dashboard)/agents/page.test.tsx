@@ -127,13 +127,16 @@ describe('AgentStatus (agents page) — copy & rotate', () => {
     expect(toast.message).not.toHaveBeenCalled()
   })
 
-  it('pending: shows launch command (origin embedded) + auto-waiting line', async () => {
+  it('pending: shows install command (origin embedded) + auto-waiting line', async () => {
     const { default: AgentsPage } = await import('./page')
     renderWithProviders(<AgentsPage />)
-    // 命令模板槽：最终命令含 --server（origin 挂载后填充）
+    // 命令模板槽（Linux tab 默认）：一行安装命令含 install.sh + --server origin
     await vi.waitFor(() => {
-      expect(screen.getByText(/wakewake-agent --server /)).toBeInTheDocument()
+      expect(screen.getByText(/install\.sh \| sh -s -- --server /)).toBeInTheDocument()
     })
+    // Docker tab 切换后生成 docker run（--network host 硬前提）
+    await userEvent.click(screen.getByRole('tab', { name: 'Docker' }))
+    expect(screen.getByText(/docker run -d .*--network host/)).toBeInTheDocument()
     // 等待行（自动检测提示）
     expect(
       screen.getByText('Waiting for the agent to connect — this page updates automatically.'),

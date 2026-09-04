@@ -217,7 +217,9 @@
       "whereDesc": "Agent 必须与被唤醒的设备位于同一路由器下（唤醒信号不会跨路由器转发）。NAS、小主机或闲置笔记本均可。",
       "commandLabel": "启动命令",
       "copyCommand": "复制命令",
-      "waiting": "正在等待 Agent 连接，页面将自动更新。"
+      "waiting": "正在等待 Agent 连接，页面将自动更新。",
+      "tabLinux": "Linux",
+      "tabDocker": "Docker"
     },
     "online": {
       "title": "Agent 已连接",
@@ -230,7 +232,11 @@
       "repairHint": "如需在新的机器上重新配对，请更换配对码后使用新命令。"
     },
     "advancedConfigTitle": "使用配置文件启动",
-    "advancedConfigDesc": "将以下内容保存为 ~/.wakewake/config.toml，之后直接运行 ./target/release/wakewake-agent，无需命令行参数。"
+    "advancedConfigDesc": "将以下内容保存为 ~/.wakewake/config.toml，之后直接运行 wakewake-agent，无需命令行参数。",
+    "service": {
+      "title": "开机自启（裸机安装）",
+      "desc": "前台首次验证成功后，把 agent 安装为 systemd 服务，重启与 ssh 断开后仍常驻运行。Docker 安装无需此步（--restart unless-stopped）。"
+    }
   },
   "integrations": {
     "title": "集成",

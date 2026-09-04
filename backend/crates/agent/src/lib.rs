@@ -9,6 +9,7 @@ pub mod http_client;
 pub mod keystore;
 pub mod mac;
 pub mod reporter;
+pub mod service;
 pub mod sse_client;
 pub mod state;
 pub mod wol;

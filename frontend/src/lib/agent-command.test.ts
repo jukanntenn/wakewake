@@ -1,19 +1,25 @@
 import { describe, it, expect } from 'vitest'
-import { buildAgentLaunchCommand } from './agent-command'
+import { buildAgentInstallCommand, buildAgentDockerCommand } from './agent-command'
 
-describe('buildAgentLaunchCommand', () => {
-  it('embeds server origin and pairing code in the final command', () => {
-    const cmd = buildAgentLaunchCommand('https://wakewake.example.com', 'a1b2c3d4e5f60718')
-    const lines = cmd.split('\n')
-    expect(lines).toHaveLength(4)
-    expect(lines[3]).toBe(
-      './target/release/wakewake-agent --server https://wakewake.example.com --pairing-code a1b2c3d4e5f60718',
+describe('buildAgentInstallCommand', () => {
+  it('is a single line embedding server origin and pairing code', () => {
+    const cmd = buildAgentInstallCommand('https://wakewake.example.com', 'a1b2c3d4e5f60718')
+    expect(cmd).not.toContain('\n')
+    expect(cmd).toBe(
+      'curl -fsSL https://raw.githubusercontent.com/jukanntenn/wakewake/main/install.sh | sh -s -- --server https://wakewake.example.com --code a1b2c3d4e5f60718',
     )
   })
+})
 
-  it('starts with the README-identical build steps', () => {
-    const cmd = buildAgentLaunchCommand('https://x.example', 'ffff')
-    expect(cmd).toContain('git clone https://github.com/jukanntenn/wakewake.git')
-    expect(cmd).toContain('cargo build --release -p wakewake-agent')
+describe('buildAgentDockerCommand', () => {
+  it('requires host networking and persistence, embeds env config', () => {
+    const cmd = buildAgentDockerCommand('https://wakewake.example.com', 'a1b2c3d4e5f60718')
+    expect(cmd).not.toContain('\n')
+    expect(cmd).toContain('--network host')
+    expect(cmd).toContain('--restart unless-stopped')
+    expect(cmd).toContain('-e WAKEWAKE_SERVER_URL=https://wakewake.example.com')
+    expect(cmd).toContain('-e WAKEWAKE_PAIRING_CODE=a1b2c3d4e5f60718')
+    expect(cmd).toContain('-v wakewake-agent-data:/data')
+    expect(cmd).toContain('jukanntenn/wakewake-agent:latest')
   })
 })

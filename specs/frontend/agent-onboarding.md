@@ -1,29 +1,31 @@
-# Agent Onboarding 与设备添加前置门控
+# Agent onboarding and device-add gating
 
-面向普通用户的 agent 配对体验与设备添加的报错前置（错误在用户投入输入之前拦截并给出去向，而非提交后红字）。机制与不变量如下；实现位于 `agents/page.tsx`、`devices/page.tsx`、`DeviceForm.tsx`、`lib/agent-command.ts`、后端 `routes/auth.rs`。
+English | [中文](agent-onboarding.zh.md)
 
-## 真相源与不变量
+The user-facing agent pairing experience and the front-loading of device-add errors (mistakes are intercepted before the user invests any input, with a way forward — not a red banner after submit). Mechanisms and invariants below; implementation lives in `agents/page.tsx`, `devices/page.tsx`, `DeviceForm.tsx`, `lib/agent-command.ts`, and backend `routes/auth.rs`.
 
-- **配额唯一权威**是 `domain::MAX_DEVICES_PER_USER`（`backend/crates/server/src/domain/mod.rs`）。前端不得复制该数值；`UserPublic`（login / register / `GET /me` 共用构造器 `from_user`）携带 `limits.max_devices` 投影下发。服务端 `QUOTA_EXCEEDED` 校验保留，作为竞态兜底（多端同时添加）。持久化会话中 `limits` 缺失（旧会话）时跳过前置配额判断，回落到服务端兜底——降级可见于提交时错误文案，不静默造数。
-- **agent 状态语义**：`public_key == null` ⇔ pending（从未配对）；有 key 且 SSE 在线 ⇔ online；有 key 且离线 ⇔ offline。设备添加的硬前提是**公钥存在**（前端用它加密 MAC），不是"在线"：
-  - pending → 阻断添加，引导至 Agent 页；
-  - offline → 放行添加，信息条告知"保存后待 Agent 上线自动同步"（与 `projection_status` 状态机一致）。
-- **MAC 加密依赖安全上下文**（Web Crypto 在非 HTTPS、非 localhost 下不可用，见 `lib/crypto.ts`）。`window.isSecureContext` 为假时阻断添加并解释原因。
-- **Agent 页命令模板槽**：整条启动命令由 `lib/agent-command.ts` 的单一函数生成（`--server` 取 `window.location.origin`，配对码由调用方传入）。当前渲染与 `README.md` 一字不差的二进制命令——不虚构未存在的分发渠道（docker / 下载链接）；一键启动机制落地时只改此函数，页面结构不动。
+## Sources of truth and invariants
 
-## Agent 页（`/agents`）
+- **The single quota authority** is `domain::MAX_DEVICES_PER_USER` (`backend/crates/server/src/domain/mod.rs`). The frontend never copies the number; `UserPublic` (login / register / `GET /me` share the `from_user` constructor) carries the `limits.max_devices` projection. The server-side `QUOTA_EXCEEDED` check stays as a race backstop (concurrent adds from several clients). When `limits` is missing from a persisted session (an old session), the front-loaded quota check is skipped and the server backstop answers — the degradation is visible in the submit-time error copy, never silently fabricated.
+- **Agent status semantics**: `public_key == null` ⇔ pending (never paired); key present + SSE connected ⇔ online; key present + disconnected ⇔ offline. The hard precondition for adding a device is **that the public key exists** (the frontend needs it to encrypt the MAC), not "online":
+  - pending → block the add, route to the Agents page;
+  - offline → allow the add, with an info bar saying "saved; syncs automatically once the agent is back" (consistent with the `projection_status` state machine).
+- **MAC encryption needs a secure context** (Web Crypto is unavailable off HTTPS/localhost; see `lib/crypto.ts`). When `window.isSecureContext` is false the add is blocked with an explanation.
+- **Agent-page command template slots**: the launch commands come from the two generators in `lib/agent-command.ts` (`buildAgentInstallCommand` one-liner / `buildAgentDockerCommand` docker run); `--server` takes `window.location.origin`, the pairing code is passed in by the caller, and the terminal card header switches between Linux / Docker tabs (distribution mechanism in [`backend/agent-distribution.md`](../backend/agent-distribution.md)). The commands match the README's real channels word for word — nothing invented.
 
-三态页面，由 `useDefaultAgent()`（5s 轮询）驱动自动切换，无新增后端端点：
+## Agents page (`/agents`)
 
-- **pending（引导态）**：心智模型图（lucide `Cloud` / `House` / `Monitor` 三节点 + hairline 连接线，服务器↔Agent 段断开高亮）→ 启动命令终端卡（hairline 头部 `sh` 标签 + `$` 前缀行，落地页同款视觉）→ 主按钮"复制命令"（整条命令一键复制，配对信息已内嵌）→ 等待行（脉冲，"页面将自动更新"）。提示文案说明 Agent 须运行在与被唤醒设备同一路由器下的常开机器（WoL 受限广播不跨路由器，RFC 919）。
-- **online（完成态）**：模型图全连通；一行结论 + CTA「前往设备」（与设备页 onboarding 首尾衔接）；高级区折叠。
-- **offline（修复态）**：结论"连接已断开" + 修复指引（检查那台机器是否在线，恢复后自动重连）+ 更换配对码入口（脱敏码无法直接用于重新配对，rotate 是获取完整码的唯一途径）。
-- **高级折叠**（`<details>`，三态共用）：配对码（完整/脱敏）+ 复制 + 两段式轮换（armed 3s 模式不变）、Agent 公钥 PEM（pending 时显示"连接后可用"）、配置文件方式（`config.toml` 最小模板）。
-- 文案走 next-intl 全部 8 个 locale，语气专业且友好，命令块不内嵌自然语言注释。
+A three-state page driven by `useDefaultAgent()` (5s polling), no new backend endpoints:
 
-## 设备页（`/devices`）
+- **pending (guidance)**: mental-model diagram (lucide `Cloud` / `House` / `Monitor` nodes + hairline connectors, the server↔agent segment highlighted as broken) → the launch-command terminal card (hairline header with an `sh` tab + `$` prompt lines, the landing page's visual language) → primary button "copy command" (one click copies the whole command, pairing info embedded) → a waiting row (pulse, "this page updates automatically"). The copy explains that the agent must run on an always-on machine under the same router as the devices being woken (WoL directed broadcast does not cross routers, RFC 919).
+- **online (done)**: the diagram fully connected; one-line conclusion + CTA "go to devices" (dovetails with the devices-page onboarding); advanced section collapsed.
+- **offline (repair)**: conclusion "connection lost" + repair guidance (check whether that machine is up; it reconnects automatically) + an entry point to rotate the pairing code (the masked code cannot re-pair; rotate is the only way to obtain the full code).
+- **Advanced fold** (`<details>`, shared by all three states): pairing code (full/masked) + copy + two-step rotation (armed 3s pattern unchanged), agent public key PEM ("available after connecting" while pending), the config-file route (a minimal `config.toml` template).
+- Copy goes through next-intl in all 8 locales; professional and friendly tone; command blocks embed no natural-language comments.
 
-**点击「添加设备」的前置状态机**（顺序固定，命中即拦截）：
+## Devices page (`/devices`)
+
+**The pre-flight state machine on "add device"** (fixed order, first hit intercepts):
 
 ```
 agent.public_key == null        → 拦截弹窗：需要先连接 Agent [去连接 Agent →]
@@ -32,18 +34,18 @@ devices.length >= limits.max_devices → 拦截弹窗：设备已达上限（lim
 其余                             → 打开表单
 ```
 
-- 三个拦截共用一个轻量 Dialog（图标 + 标题 + 两行解释 + 动作）；按钮永远可点，点了永远得到解释。
-- 标题旁常驻配额徽标 `{count}/{max}`（`limits` 缺失时不渲染）。
-- **空状态 + pending**：设备列表为空且 agent 未配对时，空状态替换为 onboarding 引导卡（① 连接 Agent → ② 添加设备 → ③ 远程开机，当前步高亮，CTA 进 Agent 页）。
-- **pending 且已有设备**（agent 被重置的罕见场景）：页首信息条引导重配对。
-- **offline（已配对）**：页首信息条（离线 + 相对时间 + "可添加、待同步"说明 + 查看链接），不阻断。
-- 设备卡片"Agent 离线"附注行带跳转链接。
-- **MAC 失焦即校验**：`react-hook-form` `mode: 'onTouched'` + pattern 注册，格式错误在失焦时呈现，不再等到提交。
-- **提交兜底保留**：服务端错误码映射（`QUOTA_EXCEEDED` / `AGENT_NOT_FOUND` / `RATE_LIMITED` / `SYNCING` / 字段级）不变；`connectorNotReady`（表单打开期间 agent 被重置的竞态）文案附内联链接至 `/agents`。编辑设备不受门控影响（MAC 锁定）。
+- The three intercepts share one lightweight dialog (icon + title + two lines of explanation + an action); the button is always clickable, and clicking always yields an explanation.
+- A permanent quota badge `{count}/{max}` beside the title (not rendered when `limits` is missing).
+- **Empty state + pending**: when the device list is empty and the agent is unpaired, the empty state is replaced by an onboarding card (① connect agent → ② add device → ③ wake remotely, current step highlighted, CTA into the Agents page).
+- **Pending with existing devices** (the rare case of a reset agent): a header info bar routes to re-pairing.
+- **Offline (paired)**: a header info bar (offline + relative time + "can add, pending sync" note + a link), non-blocking.
+- Device cards' "agent offline" footnote row carries a jump link.
+- **MAC validated on blur**: `react-hook-form` `mode: 'onTouched'` + pattern registration; a format error surfaces at blur time.
+- **Submit-time backstop kept**: the server error-code mapping (`QUOTA_EXCEEDED` / `AGENT_NOT_FOUND` / `RATE_LIMITED` / `SYNCING` / field-level) is unchanged; `connectorNotReady` (the race where the agent is reset while the form is open) copy carries an inline link to `/agents`. Editing a device is unaffected by the gating (MAC locked).
 
-## 验收
+## Acceptance
 
-- 正常路径（pending 引导 → 配对 → online CTA → 添加设备）与全部拦截态（pending / 配额 / 非安全上下文 / offline 信息条）有组件级测试；`DeviceForm.test.tsx` 覆盖 MAC 失焦校验与兜底链接。
-- 后端 `/me`、login、register 响应含 `limits.max_devices`（值来自 domain 常量）。
-- i18n 键在 8 个 locale 全量存在（`en/zh/ja/ko/de/fr/es/pt`）。
-- UI 以 Playwright 实机截图验证三态与门控。
+- The happy path (pending guidance → pairing → online CTA → add device) and every intercept state (pending / quota / insecure context / offline info bar) have component-level tests; `DeviceForm.test.tsx` covers blur-time MAC validation and the backstop links.
+- Backend `/me`, login, and register responses carry `limits.max_devices` (value from the domain constant).
+- i18n keys exist in all 8 locales (`en/zh/ja/ko/de/fr/es/pt`).
+- The UI is verified with real Playwright screenshots across the three states and the gates.

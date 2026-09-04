@@ -133,7 +133,9 @@
       "whereDesc": "エージェントはウェイク対象のデバイスと同じルーター配下にある必要があります（ウェイク信号はルーターを越えません）。NAS、ミニPC、予備のノートPCが適しています。",
       "commandLabel": "起動コマンド",
       "copyCommand": "コマンドをコピー",
-      "waiting": "エージェントの接続を待っています。ページは自動的に更新されます。"
+      "waiting": "エージェントの接続を待っています。ページは自動的に更新されます。",
+      "tabLinux": "Linux",
+      "tabDocker": "Docker"
     },
     "online": {
       "title": "エージェントが接続されました",
@@ -146,7 +148,11 @@
       "repairHint": "新しいマシンで再ペアリングするには、ペアリングコードを更新して新しいコマンドを使用してください。"
     },
     "advancedConfigTitle": "設定ファイルで起動",
-    "advancedConfigDesc": "以下を ~/.wakewake/config.toml として保存すれば、コマンドライン引数なしで ./target/release/wakewake-agent を実行できます。"
+    "advancedConfigDesc": "以下を ~/.wakewake/config.toml として保存すれば、コマンドライン引数なしで wakewake-agent を実行できます。",
+    "service": {
+      "title": "起動時に自動実行（バイナリ直接インストール）",
+      "desc": "フォアグラウンドでの初回動作確認後、systemd サービスとしてインストールすると、再起動や SSH 切断後も動作し続けます。Docker 利用時は不要です（--restart unless-stopped）。"
+    }
   },
   "integrations": {
     "title": "連携",

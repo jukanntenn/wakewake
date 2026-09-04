@@ -133,7 +133,9 @@
       "whereDesc": "O agente deve estar no mesmo roteador dos dispositivos que você deseja acordar — o sinal de wake não atravessa roteadores. Um NAS, mini PC ou notebook reserva serve.",
       "commandLabel": "Comando de inicialização",
       "copyCommand": "Copiar comando",
-      "waiting": "Aguardando a conexão do agente — esta página é atualizada automaticamente."
+      "waiting": "Aguardando a conexão do agente — esta página é atualizada automaticamente.",
+      "tabLinux": "Linux",
+      "tabDocker": "Docker"
     },
     "online": {
       "title": "Agente conectado",
@@ -146,7 +148,11 @@
       "repairHint": "Para parear o agente em uma nova máquina, troque o código de pareamento e use o novo comando."
     },
     "advancedConfigTitle": "Iniciar com um arquivo de configuração",
-    "advancedConfigDesc": "Salve o conteúdo a seguir em ~/.wakewake/config.toml e execute ./target/release/wakewake-agent sem argumentos."
+    "advancedConfigDesc": "Salve o conteúdo a seguir em ~/.wakewake/config.toml e execute wakewake-agent sem argumentos.",
+    "service": {
+      "title": "Executar na inicialização (instalação direta)",
+      "desc": "Após verificar a primeira execução em primeiro plano, instale o agente como serviço systemd para que sobreviva a reinicializações e desconexões SSH. Com Docker não é necessário (--restart unless-stopped)."
+    }
   },
   "integrations": {
     "title": "Integrações",

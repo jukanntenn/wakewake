@@ -85,3 +85,15 @@ pairing_code = "CHANGE_ME_a1b2c3d4e5f60718"
 # broker = "bemfa.com"
 # port = 9503
 # api_base = "http://bemfa-mock:8080"
+
+# ============================================================
+# TLS（内网自托管场景）
+# ============================================================
+# [OPTIONAL] 自签 root CA 证书路径（PEM）
+# 内网自托管（Caddy `tls internal`）时指向导出的 root 证书——
+# 信任自己的 CA，而非关闭校验。不设 = 系统信任库（公网部署不设此项）。
+# root 证书导出（统一镜像默认 /data 卷内）：
+#   docker exec <wakewake容器> cat /data/caddy/pki/authorities/local/root.crt > caddy-root.crt
+# Env: WAKEWAKE_TLS__CA_CERT
+# [tls]
+# ca_cert = "/etc/wakewake/caddy-root.crt"

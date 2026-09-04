@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import { Check, Cloud, Copy, Home, Monitor, RefreshCw } from 'lucide-react'
 import { useDefaultAgent, useRotatePairingCode } from '@/hooks/useAgents'
 import { copyText } from '@/lib/clipboard'
-import { buildAgentLaunchCommand } from '@/lib/agent-command'
+import { buildAgentDockerCommand, buildAgentInstallCommand } from '@/lib/agent-command'
 import { BrandMark } from '@/components/brand/brand-logo'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { RelativeTime } from '@/components/ui/relative-time'
@@ -19,6 +19,15 @@ import { StatusIndicator } from '@/components/ui/status-indicator'
 import { cn } from '@/lib/utils'
 
 type LinkState = 'linked' | 'missing' | 'broken'
+type CommandTab = 'linux' | 'docker'
+
+const COMMAND_TABS: ReadonlyArray<{
+  id: CommandTab
+  labelKey: 'guide.tabLinux' | 'guide.tabDocker'
+}> = [
+  { id: 'linux', labelKey: 'guide.tabLinux' },
+  { id: 'docker', labelKey: 'guide.tabDocker' },
+]
 
 const subscribeNoop = () => () => {}
 
@@ -38,6 +47,7 @@ export default function AgentsPage() {
   const { data: agent, isLoading } = useDefaultAgent()
   const rotateMut = useRotatePairingCode()
   const origin = useSiteOrigin()
+  const [cmdTab, setCmdTab] = useState<CommandTab>('linux')
   const [cmdCopied, setCmdCopied] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
   // rotate 两段式 armed 态（§11.B.6）：第一次点击 armed，3s 内再点执行，超时/移出恢复。
@@ -125,7 +135,12 @@ export default function AgentsPage() {
 
   // 脱敏码含 ****（后端 mask_code），不可用于实际连接；rotate 是取回完整码的唯一途径。
   const isMasked = agent.pairing_code.includes('****')
-  const command = !isMasked && origin ? buildAgentLaunchCommand(origin, agent.pairing_code) : null
+  const command =
+    !isMasked && origin
+      ? cmdTab === 'linux'
+        ? buildAgentInstallCommand(origin, agent.pairing_code)
+        : buildAgentDockerCommand(origin, agent.pairing_code)
+      : null
 
   const linkState: LinkState =
     agent.status === 'online' ? 'linked' : agent.status === 'offline' ? 'broken' : 'missing'
@@ -174,6 +189,9 @@ export default function AgentsPage() {
               copied={cmdCopied}
               onCopy={onCopyCommand}
               copyLabel={t('guide.copyCommand')}
+              tabs={COMMAND_TABS}
+              activeTab={cmdTab}
+              onTabChange={setCmdTab}
               t={t}
             />
           )}
@@ -191,6 +209,9 @@ export default function AgentsPage() {
               copied={cmdCopied}
               onCopy={onCopyCommand}
               copyLabel={t('guide.copyCommand')}
+              tabs={COMMAND_TABS}
+              activeTab={cmdTab}
+              onTabChange={setCmdTab}
               t={t}
             />
             <p className="text-ink-muted flex items-center gap-2 text-sm">
@@ -258,6 +279,14 @@ export default function AgentsPage() {
             <p className="text-ink-muted mt-1 text-sm leading-relaxed">{t('advancedConfigDesc')}</p>
             <pre className="border-hairline bg-surface-2 text-ink-subtle mt-1.5 overflow-auto rounded-md border p-3 font-mono text-xs leading-relaxed">
               {`# ~/.wakewake/config.toml\nserver_url   = ${origin ? `"${origin}"` : '"<server_url>"'}\npairing_code = "${agent.pairing_code}"`}
+            </pre>
+          </div>
+
+          <div>
+            <h3 className="text-ink-muted text-sm font-medium">{t('service.title')}</h3>
+            <p className="text-ink-muted mt-1 text-sm leading-relaxed">{t('service.desc')}</p>
+            <pre className="border-hairline bg-surface-2 text-ink-subtle mt-1.5 overflow-x-auto rounded-md border p-3 font-mono text-xs leading-relaxed">
+              sudo wakewake-agent service install
             </pre>
           </div>
         </div>
@@ -337,18 +366,43 @@ function CommandCard({
   copied,
   onCopy,
   copyLabel,
+  tabs,
+  activeTab,
+  onTabChange,
   t,
 }: {
   command: string | null
   copied: boolean
   onCopy: () => void
   copyLabel: string
+  tabs: ReadonlyArray<{ id: CommandTab; labelKey: 'guide.tabLinux' | 'guide.tabDocker' }>
+  activeTab: CommandTab
+  onTabChange: (id: CommandTab) => void
   t: ReturnType<typeof useTranslations>
 }) {
   return (
     <div className="border-hairline bg-surface-2 overflow-hidden rounded-lg border">
-      <div className="border-hairline flex items-center justify-between border-b px-4 py-2">
-        <span className="text-ink-muted font-mono text-xs">{t('guide.commandLabel')}</span>
+      <div className="border-hairline flex items-center justify-between gap-2 border-b px-4 py-2">
+        <div
+          className="flex items-center gap-1"
+          role="tablist"
+          aria-label={t('guide.commandLabel')}
+        >
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              onClick={() => onTabChange(tab.id)}
+              className={cn(
+                'rounded-md px-2.5 py-1 font-mono text-xs transition-colors',
+                activeTab === tab.id ? 'bg-surface-3 text-ink' : 'text-ink-subtle hover:text-ink',
+              )}
+            >
+              {t(tab.labelKey)}
+            </button>
+          ))}
+        </div>
         <Button variant="secondary" size="sm" onClick={onCopy} disabled={!command}>
           {copied ? <Check className="text-success h-4 w-4" /> : <Copy className="h-4 w-4" />}
           {copyLabel}

@@ -42,6 +42,8 @@ const enMessages = {
       commandLabel: 'Launch command',
       copyCommand: 'Copy command',
       waiting: 'Waiting for the agent to connect — this page updates automatically.',
+      tabLinux: 'Linux',
+      tabDocker: 'Docker',
     },
     online: { title: 'Agent connected', desc: 'The agent is running.', cta: 'Go to devices' },
     offline: {
@@ -52,6 +54,10 @@ const enMessages = {
     advanced: 'Advanced',
     advancedConfigTitle: 'Launch with a config file',
     advancedConfigDesc: 'Save as ~/.wakewake/config.toml.',
+    service: {
+      title: 'Run at boot (bare-metal installs)',
+      desc: 'Install as a systemd service after the first foreground run. Docker installs do not need this.',
+    },
   },
   agents: { title: 'Agent', comingSoon: 'soon' },
   device: {
