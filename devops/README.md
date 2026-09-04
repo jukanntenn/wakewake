@@ -1,49 +1,50 @@
-# 构建与部署体系
+# Build and deployment
 
-设计目标：最低心智负担 + staging 与 prod 容器侧字节同构（差异只在配置）。
-四环境（本地验收 → test → staging → prod），每步对应一条命令，单向闸门提升。
+English | [中文](README.zh.md)
 
-## 环境速查（我想跑起来/改配置 → 用哪个）
+Design goals: minimal mental overhead + byte-identical containers between staging and prod (differences live only in configuration). Four environments (local acceptance → test → staging → prod), each step is one command, promotion through one-way gates.
 
-| 我想… | 命令 | 要改的文件 |
+## Environment cheat sheet (I want to run it / change config → which one)
+
+| I want to… | Command | Files to edit |
 |---|---|---|
-| 本地开发（热重载） | `python3 devops/dev.py start` | 无（dev.py 首启自动生成 `backend/config.local.toml`） |
-| 本地验收生产形态 | `docker compose -f docker/docker-compose.local.yml up -d --build` | `cp docker/config.local.example.toml docker/config.local.toml`（3 个密钥）；可选 `docker/.env`（APP_PORT / POSTGRES_*） |
-| 跑 E2E | `cd e2e && pnpm test` | 无（compose 内置测试密钥） |
-| 自部署（单机用户） | `cd docker && docker compose up -d` | `cp config.example.toml config.toml`（public_url + 3 密钥）+ `cp .env.example .env`（PG 密码） |
-| 部署远程 test | `ansible-playbook devops/ansible/deploy.yml -l test` | 无（`group_vars/test/` 已定型） |
-| 部署 staging / prod | 同上 `-l staging` / `-l prod` | 上线时：env.yml（域名/版本）+ vault（4 密钥） |
-| 部署 agent（bare-metal） | `ansible-playbook devops/ansible/deploy-agent.yml -l test_agent` | 无（vault 已定型） |
+| Local dev (hot reload) | `python3 devops/dev.py start` | none (`dev.py` generates `backend/config.local.toml` on first start) |
+| Local acceptance of the production shape | `docker compose -f docker/docker-compose.local.yml up -d --build` | `cp docker/config.local.example.toml docker/config.local.toml` (3 secrets); optional `docker/.env` (APP_PORT / POSTGRES_*) |
+| Run E2E | `cd e2e && pnpm test` | none (compose ships test secrets) |
+| Self-deploy (single-machine user) | `cd docker && docker compose up -d` | `cp config.example.toml config.toml` (public_url + 3 secrets) + `cp .env.example .env` (PG password) |
+| Deploy remote test | `ansible-playbook devops/ansible/deploy.yml -l test` | none (`group_vars/test/` is settled) |
+| Deploy staging / prod | same with `-l staging` / `-l prod` | at launch: env.yml (domain/version) + vault (4 secrets) |
+| Deploy agent (bare-metal) | `ansible-playbook devops/ansible/deploy-agent.yml -l test_agent` | none (vault is settled) |
 
-配置分层规则（所有环境一致）：**TOML 文件为主，必要时用 `WAKEWAKE_*` 环境变量覆盖**（e2e/测试的动态覆盖走这一层）；secrets 按环境落位：dev 固定值 / e2e 内置测试密钥 / 远程 ansible vault / 自部署本地文件（不入库）。
+Configuration layering (identical across environments): **TOML files first, override with `WAKEWAKE_*` environment variables when needed** (dynamic overrides for e2e/tests go through this layer); secrets live per environment: fixed values in dev / built-in test secrets for e2e / remote ansible vault / self-deploy local files (never committed).
 
-## 环境定义
+## Environment definitions
 
-| | 本地验收 | test | staging | prod |
+| | Local acceptance | test | staging | prod |
 |---|---|---|---|---|
-| **位置** | 本机 | fn (LAN 192.168.5.200) | VPS（未上线，占位） | VPS（未上线，占位） |
-| **镜像源** | 本地 build | LAN `192.168.5.50:5000` | Docker Hub `jukanntenn/wakewake` | 同 staging |
-| **镜像 tag** | `local` | `main`（浮动，= 工作区代码） | `X.Y.Z`（钉精确版本） | 同 staging（同版本） |
-| **容器 Caddy** | `tls internal` | `tls internal`（自签） | **HTTP** | **HTTPS**（CF Origin Cert） |
-| **HTTPS 终结** | Caddy 自签 | Caddy 自签 | 宿主机隧道（cloudflared 类） | Cloudflare 直连回源 |
-| **入口** | — | LAN 直连 | 隧道 → host_port | CF CDN → 仅 CF CIDR 回源 |
-| **debug** | — | 全开（方便排错） | 关 | 关 |
-| **agent** | 本机 | `danger-insecure-tls` | 正常 TLS | 同 staging |
-| **部署** | compose up | `deploy.yml -l test` | `deploy.yml -l staging` | `deploy.yml -l prod` |
+| **Where** | this machine | fn (LAN 192.168.5.200) | VPS (not live, placeholder) | VPS (not live, placeholder) |
+| **Image source** | local build | LAN `192.168.5.50:5000` | Docker Hub `jukanntenn/wakewake` | same as staging |
+| **Image tag** | `local` | `main` (floating, = working tree) | `X.Y.Z` (pinned exact version) | same as staging (same version) |
+| **In-container Caddy** | `tls internal` | `tls internal` (self-signed) | **HTTP** | **HTTPS** (CF Origin Cert) |
+| **TLS termination** | Caddy self-signed | Caddy self-signed | host tunnel (cloudflared-style) | Cloudflare direct origin pull |
+| **Entry** | — | direct LAN | tunnel → host_port | CF CDN → origin restricted to CF CIDRs |
+| **debug** | — | all on (easy triage) | off | off |
+| **agent** | local | `danger-insecure-tls` | normal TLS | same as staging |
+| **Deploy** | compose up | `deploy.yml -l test` | `deploy.yml -l staging` | `deploy.yml -l prod` |
 
-不变量（四环境一致）：单容器 s6（Caddy:`caddy_port` + backend:`backend_port`）+ 兄弟 postgres 走 Unix socket（`postgres-socket` 卷）。差异只在 TLS 层、对外端口、镜像源、配置。
+Invariants (identical across the four environments): one s6 container (Caddy:`caddy_port` + backend:`backend_port`) + a sibling postgres over a Unix socket (the `postgres-socket` volume). Differences live only in the TLS layer, external ports, image source, and configuration.
 
-## 镜像 tag 规范（SemVer 2.0.0，https://semver.org）
+## Image tag rules (SemVer 2.0.0, https://semver.org)
 
-预发布必须连字符（`v0.1.3rc1` **非法**，`v0.1.3-rc.1` 合法）：
+Prereleases must use a hyphen (`v0.1.3rc1` is **invalid**, `v0.1.3-rc.1` is valid):
 
-| tag | 指向 | 生产者 |
+| tag | points to | produced by |
 |---|---|---|
-| `main` | 当前工作区代码（浮动） | `docker/build.py`（恒定包含，`--tags` 只追加） |
-| `latest` | 最新**正式版**（不含预发布） | CI（git tag 触发，`!is_prerelease`） |
-| `X.Y.Z` / `X.Y.Z-rc.N` | 对应 git tag `vX.Y.Z` / `vX.Y.Z-rc.N` | CI；手动期 build.py |
+| `main` | current working-tree code (floating) | `docker/build.py` (always included, `--tags` only appends) |
+| `latest` | newest **stable release** (no prereleases) | CI (git tag triggered, `!is_prerelease`) |
+| `X.Y.Z` / `X.Y.Z-rc.N` | the git tag `vX.Y.Z` / `vX.Y.Z-rc.N` | CI; build.py during the manual period |
 
-## 构建与发布
+## Build and release
 
 ```bash
 # 本地验收（load 到本机，宿主平台）
@@ -61,13 +62,11 @@ git tag v0.1.3 && git push origin v0.1.3      # → 0.1.3 + latest（多平台�
 git tag v0.1.3-rc.1 && git push origin v0.1.3-rc.1   # → 0.1.3-rc.1（无 latest）
 ```
 
-- 本地多平台只能走 buildx（`--all-platforms` 或重复 `--platform`，跨架构需 QEMU binfmt）；
-  CI 多平台走原生镜像（ubuntu-latest + ubuntu-24.04-arm，无 QEMU）。
-- push 模式不写 registry 缓存（本地 buildkit 缓存已够；registry cache 只对跨机构建有增益，
-  本项目无此场景，徒占 registry 磁盘）。
-- `GIT_SHA` 构建参数烙进镜像 → `/api/v1/version` 暴露 `git_sha`（部署校验用）。
+- Local multi-platform goes only through buildx (`--all-platforms` or repeated `--platform`; cross-arch needs QEMU binfmt); CI multi-platform uses native runners (ubuntu-latest + ubuntu-24.04-arm, no QEMU).
+- Push mode writes no registry cache (local buildkit cache suffices; registry cache only pays off across orgs, which this project does not do — it would just waste registry disk).
+- The `GIT_SHA` build arg is baked into the image → `/api/v1/version` exposes `git_sha` (for deploy verification).
 
-## 提升流程
+## Promotion flow
 
 ```
 [本地验收]   python3 docker/build.py && docker compose -f docker/docker-compose.local.yml up -d
@@ -95,39 +94,37 @@ git push origin main   ──▶  CI: lint/test/build/e2e（命令源 = prek，�
              ansible-playbook devops/ansible/deploy.yml -l prod
 ```
 
-回滚：改 `wakewake_version` 指向旧版本，重跑 playbook（镜像不可变，秒级回退）。
-从非 tag 提交点部署 staging/prod 时 `-e verify_sha=no` 跳过 sha 比对（健康检查仍跑）。
+Rollback: point `wakewake_version` back at the target version and re-run the playbook (images are immutable; a rollback takes seconds). Deploying staging/prod from a non-tag commit adds `-e verify_sha=no` to skip the sha comparison (the health check still runs).
 
-## 质量门禁（prek 单一命令源，本地 = CI）
+## Quality gates (prek as the single command source, local = CI)
 
-所有门禁命令定义在 prek，按目录拆分（workspace 模式自动发现）：
+All gate commands are defined in prek, split per directory (workspace mode auto-discovers):
 
-| 配置 | format 组 | lint 组 | check 组 |
+| Config | format group (mutating) | lint group (read-only) | check group |
 |---|---|---|---|
-| `prek.toml`（根） | builtin 修正器 | actionlint | check-yaml/toml/json、agents-sync 等 |
-| `backend/prek.toml` | cargo fmt | cargo clippy | test（真 PG workspace，回退 --lib）、build（manual） |
-| `frontend/prek.toml` | prettier | eslint、tsc | vitest、build（manual） |
+| `prek.toml` (root) | builtin fixers, ruff format | actionlint, doc-check (documentation gates) | check-yaml/toml/json, agent-instructions-sync, … |
+| `backend/prek.toml` | cargo fmt | cargo fmt --check, cargo clippy | test (real-PG workspace, --lib fallback), build (manual) |
+| `frontend/prek.toml` | prettier --write | prettier --check, eslint, tsc | vitest, build (manual) |
 
-- 本地 git hooks：pre-commit = 快门禁；pre-push = 慢门禁（clippy/eslint/tsc/测试）；
-  manual = 仅显式调用（build 门禁）。
-- CI 按 `项目:hook/组` 调 prek（`pip install prek==<本地版本>`），与本地跑同一条命令，
-  杜绝"本地全绿、CI 报红"。常用：
+- Editor hooks (PostToolUse/Stop) delegate to prek's format/lint groups and never restate commands (no formatter logic lives in `scripts/`).
+- Local git hooks: pre-commit = fast gates; pre-push = slow gates (clippy/eslint/tsc/tests); manual = explicit invocation only (the build gate).
+- CI invokes prek per `project:hook/group` (`pip install prek==<local version>`), running the same command as local — "local green, CI red" drift is designed out. Common invocations:
   - `prek run --all-files --group format --group lint backend/`
-  - `prek run --all-files backend:test`（scripts/backend_tests.py：有 PG → workspace 全量）
+  - `prek run --all-files backend:test` (scripts/backend_tests.py: with PG → full workspace)
   - `prek run --all-files --hook-stage manual frontend:build`
-- Node 版本真源 `frontend/.nvmrc`，pnpm 版本真源 `frontend/package.json` 的 `packageManager`。
+- Node version source of truth: `frontend/.nvmrc`; pnpm version source of truth: the `packageManager` field in `frontend/package.json`.
 
-## 部署后健康校验
+## Post-deploy health verification
 
-`scripts/check_deploy.py`（控制机执行，stdlib only）：
+`scripts/check_deploy.py` (run on the control machine, stdlib only):
 
-1. 轮询 `/api/v1/health`（默认 5s 间隔 / 180s 超时）等 `{"status":"ok"}`；
-2. 给定 `--sha` 时比对 `/api/v1/version` 的 `git_sha`——容器"活着但跑旧镜像"才是部署验证核心；
-3. 自签环境（test）加 `--insecure`。
+1. Polls `/api/v1/health` (default 5s interval / 180s timeout) for `{"status":"ok"}`;
+2. With `--sha`, compares `/api/v1/version`'s `git_sha` — "container alive but running the wrong image" is exactly what deploy verification must catch;
+3. Self-signed environments (test) add `--insecure`.
 
-deploy.yml 尾部自动执行（health_url / health_insecure 每环境 group_vars 定义）。
+deploy.yml runs it automatically at the end (health_url / health_insecure are defined per environment in group_vars).
 
-## Ansible 结构
+## Ansible layout
 
 ```
 ansible.cfg                        根配置（inventory + avpm vault 身份，仓库任意目录免参数）
@@ -146,15 +143,13 @@ devops/ansible/
     docker-compose.yml.j2          通用（healthcheck / caddy-data 按 tls_profile 分支）
     config.toml.j2                 通用（DSN password urlencode）
     Caddyfile.test                 test：tls internal + fallback_sni
-    Caddyfile.prod                 prod：CF Origin Cert + CF CIDR 放行（占位注释）
+    Caddyfile.prod                 prod：CF Origin Cert + CF CIDR 放行（remote_ip 守卫 + client_ip）
                                    （staging 零挂载：直接用镜像内置 /app/Caddyfile）
 ```
 
-### Vault（avpm 单变量加密）
+### Vault (avpm single-variable encryption)
 
-每环境一个 vault-id，密码在 avpm keyring（`~/.local/bin/avpm-client`，多设备加密同步），
-secrets 以 `!vault` 单变量加密**入库**（group_vars/<env>/vault.yml，ansible.cfg 的
-vault_identity_list 自动解密）：
+One vault-id per environment, its password in the avpm keyring (`~/.local/bin/avpm-client`, encrypted multi-device sync); secrets are **committed** as `!vault`-encrypted single variables (group_vars/<env>/vault.yml; ansible.cfg's vault_identity_list decrypts automatically):
 
 ```bash
 # 接线一个新环境（一次性）：
@@ -165,17 +160,13 @@ ansible-vault encrypt_string --vault-id wakewake-test@~/.local/bin/avpm-client \
   '<value>' --name db_password >> devops/ansible/group_vars/test/vault.yml
 ```
 
-迁移备注：dev 时代的整文件加密 vault（vars/<env>/vault.yml + ~/.ansible-vault/*.pwd）
-已废弃删除；`~/.ansible-vault/wakewake-dev.pwd` 保留作 keyring 丢失时的恢复备份，
-确认 avpm 同步可靠后可删。
+`~/.ansible-vault/wakewake-dev.pwd` exists only as a recovery backup should the keyring be lost; delete it once avpm sync is proven reliable.
 
-## 待办（staging/prod 上线时）
+## TODO (when staging/prod go live)
 
-- `hosts.yml`：staging / prod group 填入真实 VPS IP / 用户
-- `host_vars/staging.yml` / `prod.yml`：重命名为对应 host 名，填 `user`/`home`
-- `group_vars/staging/env.yml` / `prod/env.yml`：填 `public_url`（真实域名）、按需开 `mailer_*`
-- prod：生成 CF Origin Cert 放 `{{ app_path }}/certs/`，解开 env.yml 的 origin_cert/origin_key
-  与 Caddyfile.prod 的 CIDR 放行（或 VPS 防火墙方案）
-- vault：`avpm-client set wakewake-staging / wakewake-prod` + 按 vault.yml 头部字段清单加密
-- GitHub secrets：`DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`（CI 发布期；token 需带
-  read/write/delete 权限，delete 用于清理临时 build-<arch> tag）
+- `hosts.yml`: fill real VPS IPs / users into the staging / prod groups
+- `host_vars/staging.yml` / `prod.yml`: rename to the host names, fill `user`/`home`
+- `group_vars/staging/env.yml` / `prod/env.yml`: fill `public_url` (real domain), enable `mailer_*` as needed
+- prod: run the Cloudflare console steps in [cloudflare.md](cloudflare.md) (zone, DNS, TLS mode, Origin Cert, edge protections), then uncomment origin_cert/origin_key in env.yml. The Caddyfile.prod CIDR allowlist and the backend `client_ip_header` are already wired via `cloudflare_cidrs` / `server_client_ip_header` in env.yml.
+- vault: `avpm-client set wakewake-staging / wakewake-prod` + encrypt per the field list at the top of vault.yml
+- GitHub secrets: `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` (for the CI publishing period; the token needs read/write/delete, delete to clean up temporary build-<arch> tags)

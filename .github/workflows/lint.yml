@@ -1,5 +1,6 @@
 # Lint workflow —— 双层路径过滤（paths-ignore 拦噪音 + dorny/paths-filter 精确路由）。
-# 触发：push 到 main + PR 到 main。改纯 markdown/docs 不触发。
+# 触发：push 到 main + PR 到 main。markdown/docs/specs 变更会触发 root 作业
+# （文档门控 doc-check 在 lint 组）；backend/frontend 作业仍由 dorny 精确路由。
 #
 # 命令源唯一：所有门禁命令定义在 prek（根/backend/frontend 三份 prek.toml，
 # format/lint/check 三组），CI 只按 项目:组 调用 prek——本地 prek 与 CI 跑的是
@@ -10,18 +11,12 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - 'specs/**'
       - '.gitignore'
       - 'LICENSE'
       - '.vscode/**'
   pull_request:
     branches: [main]
     paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - 'specs/**'
       - '.gitignore'
       - 'LICENSE'
       - '.vscode/**'
@@ -55,8 +50,9 @@ jobs:
             frontend:
               - 'frontend/**'
 
-  # 仓库级卫生（builtin fixers / check-* / agents-sync / actionlint），秒级，
-  # 无语言工具链依赖 —— 不做路径过滤。
+  # 仓库级卫生（builtin fixers / check-* / agent-instructions-sync /
+  # doc-check 文档门控 / ruff / actionlint），秒级，无语言工具链依赖
+  # （ruff 未安装时优雅跳过）—— 不做路径过滤。
   root:
     runs-on: ubuntu-latest
     timeout-minutes: 5

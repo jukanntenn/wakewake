@@ -5,6 +5,9 @@
 #   prek run --all-files --group format --group lint backend/   # lint.yml
 #   prek run --all-files backend:test                           # test.yml（带 PG）
 #   prek run --all-files --hook-stage manual backend:build      # build.yml
+#
+# fmt-check 定义在 fmt 之前：CI 的按组调用按定义序执行，先在干净树上 --check
+# 抓未格式化，再跑改写型 fmt——顺序反了会让检查看到已被修复的树。
 
 default_install_hook_types = ["pre-commit", "pre-push"]
 
@@ -14,10 +17,20 @@ exclude = """^(target/|\\.cargo/|bin/|data/)"""
 repo = "local"
 
 [[repos.hooks]]
-id = "fmt"
+id = "fmt-check"
 name = "cargo fmt --check"
 language = "system"
 entry = "cargo fmt --check"
+files = "\\.rs$|^rustfmt\\.toml$"
+pass_filenames = false
+stages = ["pre-push"]
+groups = ["lint"]
+
+[[repos.hooks]]
+id = "fmt"
+name = "cargo fmt"
+language = "system"
+entry = "cargo fmt"
 files = "\\.rs$|^rustfmt\\.toml$"
 pass_filenames = false
 stages = ["pre-commit"]
@@ -27,7 +40,7 @@ groups = ["format"]
 id = "clippy"
 name = "cargo clippy --all-targets --all-features"
 language = "system"
-# 与 CI 完全同命令。存量 pedantic warning 清零前不加 -D warnings（见 AGENTS.md），
+# 与 CI 完全同命令。存量 pedantic warning 清零前不加 -D warnings（见 backend/AGENTS.md），
 # 清零后此处与 CI 同步加回。
 entry = "cargo clippy --all-targets --all-features"
 files = "\\.rs$|\\.toml$|^Cargo\\.lock$"

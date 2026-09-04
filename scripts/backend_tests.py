@@ -92,7 +92,9 @@ def run_cargo(args: list[str], env: dict[str, str] | None = None) -> int:
 
 def main() -> int:
     if dsn := os.environ.get("TEST_DATABASE_URL"):
-        warn(f"TEST_DATABASE_URL set, running full workspace tests against {dsn.split('@')[-1]}")
+        warn(
+            f"TEST_DATABASE_URL set, running full workspace tests against {dsn.split('@')[-1]}"
+        )
         return run_cargo(["cargo", "test", "--workspace"], {"TEST_DATABASE_URL": dsn})
 
     if not probe_tcp(PG_HOST, PG_PORT):

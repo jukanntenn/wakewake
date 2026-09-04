@@ -3,17 +3,18 @@
 # Run all:  prek run --all-files
 #
 # 配置拆分（workspace 模式自动发现，各项目只见自己目录内的文件）：
-#   prek.toml           仓库级卫生检查 + commit-msg 门禁
+#   prek.toml           仓库级卫生检查 + 文档门控 + commit-msg 门禁
 #   backend/prek.toml   Rust 门禁（fmt / clippy / test / build）
 #   frontend/prek.toml  前端门禁（prettier / eslint / tsc / vitest / build）
 # 按项目精选：prek run backend:clippy、prek run frontend:lint
 #
 # 三组门禁（CI 与本地共用同一命令源，杜绝 drift）：
-#   format —— 格式（builtin 修正器 + fmt/prettier 的 --check）
-#   lint   —— 静态分析（clippy / eslint / tsc / actionlint）
-#   check  —— 动态验证（文件合法性、agents-sync、测试、构建）
+#   format —— 改写型格式化（builtin 修正器 / cargo fmt / prettier --write / ruff）。
+#             PostToolUse hook（编辑后）与 pre-commit 调用；只读 --check 变体在 lint 组。
+#   lint   —— 只读静态分析（clippy / fmt --check / eslint / tsc / actionlint / doc-check）
+#   check  —— 动态验证（文件合法性、agent-instructions-sync、测试、构建）
 #
-# 本地 git hook 分层：pre-commit = 快门禁；pre-push = 慢门禁；
+# 本地 git hook 分层：pre-commit = 快门禁（format 组自动修复）；pre-push = 慢门禁；
 # manual = 仅显式调用（CI 的 build 门禁经 --hook-stage manual 触发）。
 
 default_install_hook_types = ["pre-commit", "pre-push", "commit-msg"]
@@ -21,7 +22,7 @@ default_install_hook_types = ["pre-commit", "pre-push", "commit-msg"]
 # 产物目录全局排除（不喂给任何 hook）。子项目配置另有各自的排除。
 exclude = """^(backend/target/|frontend/node_modules/|frontend/.next/|frontend/out/|.local/|acceptance/|e2e/node_modules/|e2e/playwright-report/|e2e/test-results/)"""
 
-# ---- 仓库卫生（prek builtin：零依赖原生 hook） ----
+# ---- 仓库卫生（prek builtin：零依赖原生 hook；修正器改文件、改了即 exit 1） ----
 [[repos]]
 repo = "builtin"
 hooks = [
@@ -40,15 +41,44 @@ hooks = [
 [[repos]]
 repo = "local"
 
+# Agent 指令镜像：AGENTS.md/CLAUDE.md 字节一致对（scripts/agentlib.py）+ skills 双镜像。
+# 自愈：单侧变更自动拷贝并暂存旧的一侧；双侧冲突或删除才失败，报错带调和步骤。
 [[repos.hooks]]
-id = "agents-sync"
-name = "AGENTS.md == CLAUDE.md"
+id = "agent-instructions-sync"
+name = "Agent instructions in sync"
 language = "system"
-entry = "python3 scripts/sync_agents.py --check"
-files = "^(AGENTS|CLAUDE)\\.md$"
+entry = "python3 scripts/check_agent_instructions.py"
+files = "(^|/)(AGENTS|CLAUDE)\\.md$|^\\.agents/skills/|^\\.zcode/skills/|^\\.claude/skills/"
 pass_filenames = false
 stages = ["pre-commit"]
 groups = ["check"]
+
+# 文档门控（docs/AGENTS.md）：现态行文、链接/锚点、单行段落、specs 索引、wrfc 格式、
+# 双语配对、词数预算（scripts/doc_sync.py 编排）。只查暂存集——prek 在 hook 运行期
+# stash 未暂存变更，全量语料的真相在 CI（lint 组按组调用会带上本 hook）。
+# skills 镜像（.zcode/.claude 下的字节拷贝）与 .zcode 内部文件不在门控范围。
+[[repos.hooks]]
+id = "doc-check"
+name = "documentation gates (doc_sync)"
+language = "system"
+entry = "python3 scripts/doc_sync.py"
+files = "\\.md$"
+exclude = "^\\.zcode/"
+pass_filenames = true
+stages = ["pre-commit"]
+groups = ["lint"]
+
+# ruff（scripts/ 与 devops/ 的 Python）。未安装则优雅跳过，与 CI 的无 ruff 环境一致。
+[[repos.hooks]]
+id = "ruff-format"
+name = "ruff format (python)"
+language = "system"
+entry = "command -v ruff >/dev/null || { echo 'ruff not installed, skipping'; exit 0; }; ruff format \"$@\""
+shell = "bash"
+files = "\\.py$"
+pass_filenames = true
+groups = ["format"]
+stages = ["pre-commit"]
 
 # actionlint —— 校验 GitHub Actions workflow 语法/语义。check-yaml 只验证
 # “是否合法 YAML”，抓不到 paths-ignore 放错位置这类“合法 YAML 但非法 workflow”

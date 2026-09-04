@@ -1,5 +1,7 @@
 # Coding principles
 
+English | [中文](PRINCIPLES.zh.md)
+
 Behavioral constraints for the agent. Each is a rule the agent gets wrong without being told. Production safety and data integrity outrank every principle here — including the license to redesign from scratch; against a mere default or style rule, the principle wins.
 
 ## Ground every conclusion in fact
@@ -30,7 +32,7 @@ Derive a design from the business essence; every premise is breakable; an elegan
 
 ## Single source of truth
 
-Each category of information — config, i18n, gate commands, agent instructions — has exactly one authoritative source; every other copy is generated. Agent instructions live in `AGENTS.md`; `CLAUDE.md` is a synced copy (`scripts/sync_agents.py` blocks drift). Gate commands live once in the three `prek.toml`s; CI re-invokes the same hooks rather than restating commands. The frontend renders; it does not decide.
+Each category of information — config, i18n, gate commands, agent instructions — has exactly one authoritative source; every other copy is generated. Agent instructions live in `AGENTS.md`; `CLAUDE.md` is a direction-free mirror (`scripts/agentlib.py` + the `agent-instructions-sync` gate keep the pair equal, whichever side was edited). Gate commands live once in the three `prek.toml`s; CI re-invokes the same hooks rather than restating commands, and the editor hooks delegate to prek instead of restating formatters. The frontend renders; it does not decide.
 
 ## Naming is part of the API
 

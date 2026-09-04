@@ -5,6 +5,9 @@
 #   prek run --all-files --group format --group lint frontend/   # lint.yml
 #   prek run --all-files frontend:test                           # test.yml
 #   prek run --all-files --hook-stage manual frontend:build      # build.yml
+#
+# format-check 定义在 format 之前：CI 的按组调用按定义序执行，先在干净树上
+# --check 抓未格式化，再跑改写型 format——顺序反了会让检查看到已被修复的树。
 
 default_install_hook_types = ["pre-commit", "pre-push"]
 
@@ -14,10 +17,20 @@ exclude = """^(node_modules/|\\.next/|out/|playwright-report/|test-results/)"""
 repo = "local"
 
 [[repos.hooks]]
-id = "format"
+id = "format-check"
 name = "prettier --check"
 language = "system"
 entry = "pnpm exec prettier --check ."
+files = "\\.(ts|tsx|js|jsx|mjs|cjs|json|css|md|html|ya?ml)$"
+pass_filenames = false
+stages = ["pre-push"]
+groups = ["lint"]
+
+[[repos.hooks]]
+id = "format"
+name = "prettier --write"
+language = "system"
+entry = "pnpm exec prettier --write ."
 files = "\\.(ts|tsx|js|jsx|mjs|cjs|json|css|md|html|ya?ml)$"
 pass_filenames = false
 stages = ["pre-commit"]

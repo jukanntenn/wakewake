@@ -17,6 +17,7 @@ Group by logical change, not by file. Draft a plan, confirm, then execute. Never
 Message: `<type>(<scope>): <desc>` — lowercase, imperative, no trailing period. Types: `feat`/`fix`/`refactor`/`docs`/`test`/`chore`/`ci`/`build`/`style`/`perf`/`revert` (the commit-msg hook enforces this list). Scopes: `backend`/`frontend`/`agent`/`protocol`/`devops`/`docker`/`e2e`/`i18n` (omit for cross-cutting). Match the change's language.
 
 - Generated files (`Cargo.lock`, `pnpm-lock.yaml`) bundle into the producing commit, or as a standalone `chore` — regenerate, never hand-edit.
-- Migration + consuming code, config template + code (`config.example.toml` + `config.rs`), and bilingual docs (`README.md` + `README_zh.md`, likewise the whole `messages/*.json` set) stay together when the code depends on them.
-- `AGENTS.md` edits: run `python3 scripts/sync_agents.py` in the same commit, or the agents-sync hook blocks it.
+- Migration + consuming code, config template + code (`config.example.toml` + `config.rs`), and bilingual documentation pairs (`foo.md` + `foo.zh.md` — README, PRINCIPLES, specs, wrfcs; likewise the whole `messages/*.json` set) stay together when the code depends on them; a pair never commits one-sided.
+- `AGENTS.md`/`CLAUDE.md` edits: the `agent-instructions-sync` hook self-heals the mirror pair on commit (`scripts/sync_agent_instructions.py` fixes manually); skills edits live in `.agents/skills/` and the same script rebuilds the `.zcode`/`.claude` mirrors.
+- Non-trivial changes carry their WRFC in the same commit (both languages of the pair).
 - Never silently include unrecognized files. Never amend, never push, never placeholder messages (`tmp commit~`, `wip`, `update files`).

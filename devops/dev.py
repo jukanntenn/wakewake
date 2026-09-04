@@ -133,9 +133,7 @@ def ensure_dev_config():
     config = BACKEND_DIR / "config.local.toml"
     if config.exists():
         return
-    config.write_text(
-        DEV_CONFIG.format(frontend_port=FRONTEND_PORT), encoding="utf-8"
-    )
+    config.write_text(DEV_CONFIG.format(frontend_port=FRONTEND_PORT), encoding="utf-8")
     logger.info("[ok] generated %s (dev defaults)", config.relative_to(PROJECT_ROOT))
 
 
@@ -167,10 +165,17 @@ def start():
     start_infra()
 
     if has_cargo_watch():
-        backend_cmd = ["cargo", "watch", "-x", "run -- --config config.local.toml serve"]
+        backend_cmd = [
+            "cargo",
+            "watch",
+            "-x",
+            "run -- --config config.local.toml serve",
+        ]
     else:
-        logger.info("cargo-watch not installed; backend won't auto-reload "
-                    "(cargo install cargo-watch)")
+        logger.info(
+            "cargo-watch not installed; backend won't auto-reload "
+            "(cargo install cargo-watch)"
+        )
         backend_cmd = ["cargo", "run", "--", "--config", "config.local.toml", "serve"]
     spawn(
         "backend",
@@ -179,7 +184,9 @@ def start():
         SCRIPT_DIR / "backend.pid",
         SCRIPT_DIR / "backend.log",
     )
-    wait_for_http(f"http://localhost:{BACKEND_PORT}/api/v1/health", "Backend", timeout=300)
+    wait_for_http(
+        f"http://localhost:{BACKEND_PORT}/api/v1/health", "Backend", timeout=300
+    )
 
     frontend_dir = PROJECT_ROOT / "frontend"
     if not (frontend_dir / "node_modules").exists():

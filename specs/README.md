@@ -1,14 +1,18 @@
-# WakeWake Specs（工程规范）
+# WakeWake Specs
 
-提交入库的设计规范。规则：
+English | [中文](README.zh.md)
 
-- 规范描述**机制与不变量**（为什么这样设计、哪些东西不能动）；操作流程归
-  [`../devops/README.md`](../devops/README.md)，代码本身归源码注释。
-- 改动相关实现时同步对应 spec；spec 与实现漂移视为 bug。
+Design specs committed to the repository. The rules:
 
-## 目录
+- Specs describe **mechanisms and invariants** (why it is designed this way, what must not move); operational procedures belong in [`../devops/README.md`](../devops/README.md), and code commentary belongs in the source.
+- When the implementation changes, the matching spec changes with it; spec/implementation drift is a bug.
+- Adding a spec file means adding its row here in the same change ([`scripts/verify_specs_index.py`](../scripts/verify_specs_index.py) enforces both directions); decision history lives in [`.agents/wrfcs/`](../.agents/wrfcs/README.md).
 
-| 文件 | 内容 |
+## Index
+
+| File | What it covers |
 |---|---|
-| [`backend/configuration.md`](backend/configuration.md) | 配置机制：三层覆盖、server/agent schema、env 映射、example 约定、部署面全景与不变量 |
-| [`frontend/agent-onboarding.md`](frontend/agent-onboarding.md) | Agent onboarding 三态页 + 设备添加前置门控：配额经 `UserPublic.limits` 下发、pending/offline 语义、命令模板槽、安全上下文拦截 |
+| [`backend/agent-distribution.md`](backend/agent-distribution.md) | Agent distribution: GitHub Releases binaries + Docker Hub image, the install.sh one-liner contract, the `service install` subcommand, `tls.ca_cert` for self-signed TLS, the `--network host` requirement |
+| [`backend/configuration.md`](backend/configuration.md) | The configuration mechanism: three-layer override, server/agent schemas, env mapping, example-file conventions, the per-environment deployment map, and invariants |
+| [`frontend/agent-onboarding.md`](frontend/agent-onboarding.md) | Agent-onboarding three-state page + device-add pre-flight gating: quota via `UserPublic.limits`, pending/offline semantics, command template slots, secure-context interception |
+| [`testing/load.md`](testing/load.md) | Load and capacity testing: the two rigs (bare-metal / prod-sim), the 2c2g3Mbps environment contract with egress shaping, the R1–R7 scenario matrix, the seed data contract, red lines, and the knee/sweet-spot judgement methodology |
