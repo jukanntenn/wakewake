@@ -4,6 +4,7 @@
 //! 返回的行结构带 user_email（JOIN users），供 admin 表格展示归属。
 //! admin_actions 审计表：每个 admin 写操作记一行（actor/action/target/detail）。
 
+use serde::Serialize;
 use sqlx::PgPool;
 use sqlx::types::Json;
 use time::OffsetDateTime;
@@ -702,4 +703,86 @@ pub async fn count_all_wakes_offset(
     .fetch_one(pool)
     .await?;
     Ok(count.0)
+}
+
+// ============================================================================
+// 风控聚合（GET /admin/risk，admin-risk-controls WRFC）
+// ============================================================================
+
+/// 失败登录 top IP 行（近 24h，撞库画像）。
+#[derive(Debug, sqlx::FromRow, Serialize)]
+pub struct TopFailedIpRow {
+    pub ip: String,
+    pub failures: i64,
+    pub distinct_emails: i64,
+}
+
+/// 失败登录 top 目标邮箱行（近 24h，定向爆破画像）。
+#[derive(Debug, sqlx::FromRow, Serialize)]
+pub struct TopFailedEmailRow {
+    pub email: String,
+    pub failures: i64,
+    pub distinct_ips: i64,
+}
+
+/// DB 侧风控聚合（注册速率 / 未验证堆积 / 失败登录聚合）。
+/// 发信预算、PoW 难度、封禁计数来自运行时句柄快照（零查询），由路由层拼装。
+#[derive(Debug)]
+pub struct RiskAggregates {
+    pub registrations_24h: i64,
+    pub registrations_7d: i64,
+    pub unverified_count: i64,
+    pub oldest_unverified_age_hours: Option<i64>,
+    pub failed_logins_24h: i64,
+    pub top_failed_ips: Vec<TopFailedIpRow>,
+    pub top_failed_emails: Vec<TopFailedEmailRow>,
+}
+
+pub async fn risk_aggregates(pool: &PgPool) -> Result<RiskAggregates, RepoError> {
+    let registrations_24h: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM users WHERE created_at > now() - interval '24 hours'",
+    )
+    .fetch_one(pool)
+    .await?;
+    let registrations_7d: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM users WHERE created_at > now() - interval '7 days'",
+    )
+    .fetch_one(pool)
+    .await?;
+    let unverified_count = crate::repo::user_repo::count_unverified(pool).await?;
+    let oldest_unverified_age_hours =
+        crate::repo::user_repo::oldest_unverified_age_hours(pool).await?;
+    let failed_logins_24h: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM login_events
+          WHERE success = false AND created_at > now() - interval '24 hours'",
+    )
+    .fetch_one(pool)
+    .await?;
+    let top_failed_ips = sqlx::query_as::<_, TopFailedIpRow>(sqlx::AssertSqlSafe(
+        "SELECT host(ip_address) AS ip, count(*) AS failures, count(DISTINCT email) AS distinct_emails
+           FROM login_events
+          WHERE success = false AND created_at > now() - interval '24 hours'
+            AND ip_address IS NOT NULL
+          GROUP BY ip_address ORDER BY failures DESC LIMIT 10",
+    ))
+    .fetch_all(pool)
+    .await?;
+    let top_failed_emails = sqlx::query_as::<_, TopFailedEmailRow>(sqlx::AssertSqlSafe(
+        "SELECT email, count(*) AS failures, count(DISTINCT ip_address) AS distinct_ips
+           FROM login_events
+          WHERE success = false AND created_at > now() - interval '24 hours'
+            AND ip_address IS NOT NULL
+          GROUP BY email ORDER BY failures DESC LIMIT 10",
+    ))
+    .fetch_all(pool)
+    .await?;
+    Ok(RiskAggregates {
+        registrations_24h,
+        registrations_7d,
+        unverified_count,
+        oldest_unverified_age_hours,
+        failed_logins_24h,
+        top_failed_ips,
+        top_failed_emails,
+    })
 }

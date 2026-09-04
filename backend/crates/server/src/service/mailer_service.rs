@@ -2,6 +2,11 @@
 //!
 //! 密码重置低频异步发邮件。mailer.enabled=false 时返 `MailerError::Disabled（端点` 503）。
 //! SMTP 发送失败记日志 + 监控告警，不影响 HTTP 服务（邮件是 best-effort）。
+//!
+//! 发信预算（admin-risk-controls WRFC）：每次发送先经 MailerControl 原子占用
+//! 分路日预算（register/resend/reset 分账）；运行时总闸关闭或预算耗尽 →
+//! BudgetExhausted/Disabled，调用方按「mailer 关闭」的既有语义降级
+//! （注册静默跳过 / resend 静默 / 重置请求 503）。
 
 use std::sync::Arc;
 
@@ -10,6 +15,8 @@ use lettre::transport::smtp::authentication::Credentials;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 
 use crate::config::MailerSettings;
+use crate::observability::metrics;
+use crate::service::mailer_control::{AcquireOutcome, MailPath, MailerControl};
 
 /// 邮件错误。
 #[derive(thiserror::Error, Debug)]
@@ -17,6 +24,9 @@ pub enum MailerError {
     /// mailer.enabled=false（端点返 503 `SERVICE_UNAVAILABLE`）。
     #[error("mailer disabled")]
     Disabled,
+    /// 运行时总闸关闭或当日分路预算耗尽（降级语义与 Disabled 相同）。
+    #[error("mailer budget exhausted for path {0}")]
+    BudgetExhausted(&'static str),
     #[error("mailer not configured (missing smtp_host/from_address)")]
     NotConfigured,
     #[error("smtp send failed: {0}")]
@@ -31,6 +41,7 @@ pub enum MailerError {
 #[derive(Clone)]
 pub struct MailerService {
     inner: Arc<Inner>,
+    control: MailerControl,
 }
 
 struct Inner {
@@ -44,7 +55,7 @@ struct Inner {
 
 impl MailerService {
     #[must_use]
-    pub fn new(cfg: &MailerSettings) -> Self {
+    pub fn new(cfg: &MailerSettings, control: MailerControl) -> Self {
         let from_mailbox = cfg
             .from_address
             .as_deref()
@@ -70,19 +81,46 @@ impl MailerService {
                 from_mailbox,
                 from_name: cfg.from_name.clone(),
             }),
+            control,
         }
     }
 
-    /// 发送密码重置邮件（HTML + 纯文本 multipart）。mailer.enabled=false → Disabled（端点 503）。
+    /// 只读预检：配置启用 && 运行时总闸开 && 当日预算有余。
+    /// reset 路由的 503 判定与注册路径的「跳过发信」判定共用（不计数）。
+    #[must_use]
+    pub fn would_send(&self, path: MailPath) -> bool {
+        self.inner.enabled && self.control.would_send(path)
+    }
+
+    /// 占用一个发送名额：配置/总闸/预算三重判定。
+    fn acquire(&self, path: MailPath) -> Result<(), MailerError> {
+        if !self.inner.enabled {
+            return Err(MailerError::Disabled);
+        }
+        match self.control.try_acquire(path) {
+            AcquireOutcome::Allowed => {
+                metrics::record_email_sent(path.as_str());
+                Ok(())
+            },
+            AcquireOutcome::Disabled => {
+                metrics::record_email_blocked(path.as_str(), "disabled");
+                Err(MailerError::Disabled)
+            },
+            AcquireOutcome::Exhausted => {
+                metrics::record_email_blocked(path.as_str(), "exhausted");
+                Err(MailerError::BudgetExhausted(path.as_str()))
+            },
+        }
+    }
+
+    /// 发送密码重置邮件（HTML + 纯文本 multipart）。总闸关闭 → 503；预算耗尽 → BudgetExhausted。
     pub async fn send_password_reset(
         &self,
         to: &str,
         locale: &str,
         reset_url: &str,
     ) -> Result<(), MailerError> {
-        if !self.inner.enabled {
-            return Err(MailerError::Disabled);
-        }
+        self.acquire(MailPath::Reset)?;
         let transport = self
             .inner
             .transport
@@ -103,15 +141,15 @@ impl MailerService {
     }
 
     /// 发送邮箱验证邮件（HTML + 纯文本 multipart）。与 reset 同构。
+    /// `path` 区分注册首信（Register）与用户手动重发（Resend）——分路预算分账。
     pub async fn send_email_verification(
         &self,
+        path: MailPath,
         to: &str,
         locale: &str,
         verify_url: &str,
     ) -> Result<(), MailerError> {
-        if !self.inner.enabled {
-            return Err(MailerError::Disabled);
-        }
+        self.acquire(path)?;
         let transport = self
             .inner
             .transport
@@ -153,7 +191,7 @@ impl MailerService {
         Ok(())
     }
 
-    /// 是否启用。
+    /// 是否启用（配置级；运行时总闸见 would_send）。
     #[must_use]
     pub fn is_enabled(&self) -> bool {
         self.inner.enabled

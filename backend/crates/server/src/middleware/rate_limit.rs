@@ -72,7 +72,9 @@ impl KeyExtractor for ClientIpExtractor {
 
 /// 429 响应：统一 JSON 错误包络 `{code,message}` + Retry-After（UX-70）。
 /// key 提取失败（理论上不应发生，connect_info 已强制）回 500。
+/// 拒绝计入进程内 + OTel 计数（risk 面板 / admin-risk-controls WRFC）。
 fn rate_limit_error_handler(reason: RejectionReason) -> http::Response<axum::body::Body> {
+    crate::observability::metrics::record_rate_limited();
     let (status, wait) = match &reason {
         RejectionReason::QuotaExceeded { wait, .. } => (http::StatusCode::TOO_MANY_REQUESTS, *wait),
         RejectionReason::KeyExtractionFailed(_) => {

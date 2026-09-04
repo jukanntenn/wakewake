@@ -26,6 +26,7 @@ fn security(email: &str) -> SecuritySettings {
     SecuritySettings {
         bootstrap_admin_email: email.into(),
         bootstrap_admin_password: "TestPass123!".into(),
+        unverified_retention_days: 7,
     }
 }
 

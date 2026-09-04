@@ -83,6 +83,8 @@ pub enum ErrorCode {
     MaintenanceReadonly, // 403 MAINTENANCE_READONLY（维护模式 readonly）
     #[error("maintenance: full")]
     MaintenanceFull, // 403 MAINTENANCE_FULL（维护模式 full）
+    #[error("ip blocked")]
+    IpBlocked, // 403 IP_BLOCKED（应用层 IP 封禁命中，admin-risk-controls WRFC）
     #[error("internal error")]
     Internal, // 500 INTERNAL_ERROR
 }
@@ -113,6 +115,7 @@ impl ErrorCode {
             Self::MaintenanceRegistrationClosed => "MAINTENANCE_REGISTRATION_CLOSED",
             Self::MaintenanceReadonly => "MAINTENANCE_READONLY",
             Self::MaintenanceFull => "MAINTENANCE_FULL",
+            Self::IpBlocked => "IP_BLOCKED",
             Self::Internal => "INTERNAL_ERROR",
         }
     }
@@ -134,7 +137,8 @@ impl ErrorCode {
             Self::EmailNotVerified
             | Self::MaintenanceRegistrationClosed
             | Self::MaintenanceReadonly
-            | Self::MaintenanceFull => StatusCode::FORBIDDEN,
+            | Self::MaintenanceFull
+            | Self::IpBlocked => StatusCode::FORBIDDEN,
             Self::InvalidToken => StatusCode::BAD_REQUEST,
             Self::QuotaExceeded => StatusCode::UNPROCESSABLE_ENTITY,
             // 202：不阻塞命令创建，命令将 60s expired（api-design.md Part 4）。
@@ -170,6 +174,7 @@ impl ErrorCode {
             Self::MaintenanceRegistrationClosed => "Registration is temporarily disabled",
             Self::MaintenanceReadonly => "System is in read-only mode",
             Self::MaintenanceFull => "System is under maintenance",
+            Self::IpBlocked => "Your IP address has been blocked",
             Self::Internal => "Internal server error",
         }
     }

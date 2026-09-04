@@ -12,6 +12,7 @@ use crate::domain::user::User;
 use crate::error::{AppError, AppResult, ErrorCode};
 use crate::repo::{login_event_repo, refresh_token_repo, user_repo};
 use crate::service::jwt;
+use crate::service::mailer_control::MailPath;
 use crate::service::mailer_service::MailerService;
 use crate::service::maintenance::MaintenanceHandle;
 
@@ -58,13 +59,17 @@ pub async fn register(
     // 创建默认 agent（1:1）。
     let _agent = crate::service::agent_service::create_default(pool, user.id).await?;
 
-    // 发验证邮件（best-effort：mailer 未启用则跳过，用户仍可通过 resend 触发）。
-    if mailer.is_enabled() {
-        crate::service::email_verification_service::send_verification_email(
-            pool, settings, mailer, &user,
-        )
-        .await;
-    }
+    // 发验证邮件（best-effort）：不经预检 gate，直接走发送层——acquire 内部
+    // 判定总闸/预算，拒绝时 warn + blocked 计数（静默降级路径也要可见），
+    // 用户仍可通过 resend 触发。
+    crate::service::email_verification_service::send_verification_email(
+        pool,
+        settings,
+        mailer,
+        &user,
+        MailPath::Register,
+    )
+    .await;
     Ok(user)
 }
 

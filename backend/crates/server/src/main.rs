@@ -84,10 +84,16 @@ async fn run_server(cli: Cli) -> anyhow::Result<()> {
     // Provider registry（启动时编译 jsonschema，复用）
     let providers = ProviderRegistry::build()?;
 
-    // Mailer（密码重置邮件，enabled=false 时端点返 503）+ PoW（防滥用）+ 登录失败锁定
-    let mailer = wakewake_server::service::mailer_service::MailerService::new(&settings.mailer);
-    let pow = wakewake_server::service::pow::PowService::new(&settings.pow);
-    let login_lockout = wakewake_server::service::login_lockout::LoginLockout::new();
+    // 运行时服务族（mailer 总闸/预算、PoW 难度旋钮、IP 封禁、登录锁定），
+    // 各句柄的持久化文件与恢复语义见各自模块（admin-risk-controls WRFC）。
+    let RuntimeServices {
+        mailer,
+        mailer_control,
+        pow,
+        login_lockout,
+        ip_bans,
+        maintenance,
+    } = build_runtime_services(&settings);
     // PoW challenge GC task（清理过期/已消费 challenge）
     let pow_gc = pow.clone();
     tokio::spawn(async move {
@@ -109,15 +115,6 @@ async fn run_server(cli: Cli) -> anyhow::Result<()> {
 
     let addr: SocketAddr = format!("{}:{}", settings.server.host, settings.server.port).parse()?;
 
-    // 维护模式运行态（从 data/maintenance.json 恢复，或用配置默认值）。
-    let maintenance_path = std::path::PathBuf::from("data/maintenance.json");
-    let maintenance = wakewake_server::service::maintenance::MaintenanceHandle::load_or_init(
-        settings.maintenance.enabled,
-        settings.maintenance.mode,
-        &settings.maintenance.message,
-        maintenance_path,
-    );
-
     // login_events 清理任务（24h 周期，删 30 天前记录，ui-ux-risk-control §8.3）。
     let cleanup_pool = pool.clone();
     tokio::spawn(async move {
@@ -137,6 +134,13 @@ async fn run_server(cli: Cli) -> anyhow::Result<()> {
         }
     });
 
+    // 未验证账号清理 + 封禁条目 housekeeping（admin-risk-controls WRFC）。
+    spawn_risk_housekeeping(
+        pool.clone(),
+        ip_bans.clone(),
+        settings.security.unverified_retention_days,
+    );
+
     let state = Arc::new(AppState::new(
         pool,
         settings.clone(),
@@ -147,6 +151,8 @@ async fn run_server(cli: Cli) -> anyhow::Result<()> {
         login_lockout,
         wake_tx,
         maintenance,
+        mailer_control,
+        ip_bans,
     ));
 
     let app = build_router(state.clone(), Arc::new(settings));
@@ -234,6 +240,12 @@ fn build_router(state: Arc<AppState>, settings: Arc<Settings>) -> Router {
         trust_proxy,
         client_ip_header.as_deref(),
     )
+    // 应用层 IP 封禁（admin-risk-controls WRFC）：挂全局限流之外（banned IP 不占
+    // governor 预算），health 同样后置豁免（探活不带业务语义）。fail-open 见中间件。
+    .layer(axum::middleware::from_fn_with_state(
+        state.clone(),
+        wakewake_server::middleware::ip_ban::ip_ban_middleware,
+    ))
     .merge(routes::health::routes());
     // 所有 API 路由挂载在 /api/v1 前缀下（api-design.md §0.3 版本策略）。
     // routes 用相对路径定义（/devices, /health），统一 nest 到 /api/v1。
@@ -287,6 +299,88 @@ fn build_router(state: Arc<AppState>, settings: Arc<Settings>) -> Router {
                 ),
         )
         .with_state(state)
+}
+
+/// 组合根可用的运行时服务族（一次性构造，避免 run_server 膨胀）。
+struct RuntimeServices {
+    mailer: wakewake_server::service::mailer_service::MailerService,
+    mailer_control: wakewake_server::service::mailer_control::MailerControl,
+    pow: wakewake_server::service::pow::PowService,
+    login_lockout: wakewake_server::service::login_lockout::LoginLockout,
+    ip_bans: wakewake_server::service::ip_ban::IpBanStore,
+    maintenance: wakewake_server::service::maintenance::MaintenanceHandle,
+}
+
+fn build_runtime_services(settings: &wakewake_server::config::Settings) -> RuntimeServices {
+    // 发信运行态（总闸 + 分路日预算）：data/mailer.json 恢复。
+    let mailer_control = wakewake_server::service::mailer_control::MailerControl::load_or_init(
+        wakewake_server::service::mailer_control::MailLimits {
+            register: settings.mailer.max_register_emails_per_day,
+            resend: settings.mailer.max_resend_emails_per_day,
+            reset: settings.mailer.max_reset_emails_per_day,
+        },
+        std::path::PathBuf::from("data/mailer.json"),
+    );
+    let mailer = wakewake_server::service::mailer_service::MailerService::new(
+        &settings.mailer,
+        mailer_control.clone(),
+    );
+    // PoW：difficulty 运行时旋钮持久化 data/pow.json（跨重启保持）。
+    let pow = wakewake_server::service::pow::PowService::new(
+        &settings.pow,
+        Some(std::path::PathBuf::from("data/pow.json")),
+    );
+    // 维护模式运行态（从 data/maintenance.json 恢复，或用配置默认值）。
+    let maintenance = wakewake_server::service::maintenance::MaintenanceHandle::load_or_init(
+        settings.maintenance.enabled,
+        settings.maintenance.mode,
+        &settings.maintenance.message,
+        std::path::PathBuf::from("data/maintenance.json"),
+    );
+    RuntimeServices {
+        mailer,
+        mailer_control,
+        pow,
+        maintenance,
+        login_lockout: wakewake_server::service::login_lockout::LoginLockout::new(),
+        ip_bans: wakewake_server::service::ip_ban::IpBanStore::load_or_init(
+            std::path::PathBuf::from("data/ip_bans.json"),
+        ),
+    }
+}
+
+/// 后台 task：风控 housekeeping（24h 周期，首 tick 立即触发 → 启动即清）。
+/// - IP 封禁过期条目回收（compact）。
+/// - 未验证账号清理：retention_days=0 关闭；守卫与批删见 user_repo::purge_unverified。
+fn spawn_risk_housekeeping(
+    pool: sqlx::PgPool,
+    ip_bans: wakewake_server::service::ip_ban::IpBanStore,
+    retention_days: u32,
+) {
+    tokio::spawn(async move {
+        #[allow(clippy::duration_suboptimal_units)]
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(86_400));
+        loop {
+            interval.tick().await;
+            ip_bans.compact();
+            if retention_days == 0 {
+                continue;
+            }
+            match wakewake_server::repo::user_repo::purge_unverified(
+                &pool,
+                i32::try_from(retention_days).unwrap_or(i32::MAX),
+            )
+            .await
+            {
+                Ok(0) => {},
+                Ok(n) => {
+                    tracing::info!(count = n, "purged unverified accounts");
+                    wakewake_server::observability::metrics::record_unverified_purged(n);
+                },
+                Err(e) => tracing::warn!(error = ?e, "unverified purge failed"),
+            }
+        }
+    });
 }
 
 /// 后台 task：消费 wake writer channel，批量落库（不阻塞命令 ack 链路）。

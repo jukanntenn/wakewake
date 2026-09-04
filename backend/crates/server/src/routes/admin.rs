@@ -17,22 +17,31 @@
 //! - POST   /admin/integrations/:id/resync        强制重同步集成
 //! - POST   /admin/agents/:id/disconnect          强制断开 agent SSE
 //! - GET    /admin/audit-log                      审计日志（分页 + ?action）
+//!
+//! 风控运行时控制（admin-risk-controls WRFC）：
+//! - GET/POST /admin/mailer                       发信总闸 + 分路日预算
+//! - GET/POST /admin/pow                          PoW 难度运行时旋钮
+//! - GET/POST/DELETE /admin/ip-bans               应用层 IP 封禁（含自封守卫）
+//! - GET    /admin/risk                           风控聚合面板数据
 
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
-use axum::extract::{Path, Query, State};
+use axum::extract::{ConnectInfo, Path, Query, State};
 use axum::http::StatusCode;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
-use crate::error::{AppError, AppResult, ErrorCode};
+use crate::error::{AppError, AppResult, ErrorCode, FieldError};
 use crate::hub::CommandDispatcher;
 use crate::middleware::auth::AuthUser;
 use crate::service::admin_service;
+use crate::service::ip_ban::BanAddError;
+use crate::service::mailer_control::{MailLimits, MailerSnapshot};
 use crate::state::AppState;
 
 pub fn routes() -> Router<Arc<AppState>> {
@@ -53,6 +62,15 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/admin/activity", get(list_activity))
         // 维护模式（§9.10）
         .route("/admin/maintenance", get(get_maintenance).post(set_maintenance))
+        // 风控运行时控制（admin-risk-controls WRFC）
+        .route("/admin/mailer", get(get_mailer).post(set_mailer))
+        .route("/admin/pow", get(get_pow).post(set_pow))
+        .route(
+            "/admin/ip-bans",
+            get(list_ip_bans).post(add_ip_ban),
+        )
+        .route("/admin/ip-bans/{id}", delete(remove_ip_ban))
+        .route("/admin/risk", get(risk_overview))
         // 风控操作
         .route("/admin/devices/{did}/resync", post(resync_device))
         .route("/admin/integrations/{id}/resync", post(resync_integration))
@@ -850,4 +868,267 @@ async fn set_maintenance(
         mode: m.mode.as_str().into(),
         message: m.message,
     }))
+}
+
+// ============================================================================
+// 邮件发信运行时控制（总闸 + 分路日预算，admin-risk-controls WRFC）
+// ============================================================================
+
+#[derive(Debug, Serialize)]
+struct MailerResponse {
+    #[serde(flatten)]
+    snapshot: MailerSnapshot,
+}
+
+async fn get_mailer(State(state): State<Arc<AppState>>) -> AppResult<Json<MailerResponse>> {
+    Ok(Json(MailerResponse {
+        snapshot: state.mailer_control.snapshot(),
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+struct SetMailerBody {
+    enabled: Option<bool>,
+    limits: Option<MailLimits>,
+}
+
+async fn set_mailer(
+    State(state): State<Arc<AppState>>,
+    actor: AuthUser,
+    Json(body): Json<SetMailerBody>,
+) -> AppResult<Json<MailerResponse>> {
+    if body.enabled.is_none() && body.limits.is_none() {
+        return Err(AppError::validation(vec![FieldError::new(
+            "enabled", "required",
+        )]));
+    }
+    if let Some(enabled) = body.enabled {
+        state
+            .mailer_control
+            .set_enabled(enabled, Some(actor.user_id));
+        let action = if enabled {
+            "mailer.enabled"
+        } else {
+            "mailer.disabled"
+        };
+        audit_ok(&state, &actor, action, &serde_json::json!({})).await;
+    }
+    if let Some(limits) = body.limits {
+        state.mailer_control.set_limits(limits, Some(actor.user_id));
+        audit_ok(
+            &state,
+            &actor,
+            "mailer.limits",
+            &serde_json::json!({ "limits": limits }),
+        )
+        .await;
+    }
+    Ok(Json(MailerResponse {
+        snapshot: state.mailer_control.snapshot(),
+    }))
+}
+
+// ============================================================================
+// PoW 难度运行时旋钮（admin-risk-controls WRFC）
+// ============================================================================
+
+#[derive(Debug, Serialize)]
+struct PowResponse {
+    difficulty: u8,
+    max_difficulty: u8,
+}
+
+async fn get_pow(State(state): State<Arc<AppState>>) -> AppResult<Json<PowResponse>> {
+    Ok(Json(PowResponse {
+        difficulty: state.pow.difficulty(),
+        max_difficulty: crate::service::pow::MAX_DIFFICULTY,
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+struct SetPowBody {
+    difficulty: u8,
+}
+
+async fn set_pow(
+    State(state): State<Arc<AppState>>,
+    actor: AuthUser,
+    Json(body): Json<SetPowBody>,
+) -> AppResult<Json<PowResponse>> {
+    state
+        .pow
+        .set_difficulty(body.difficulty)
+        .map_err(|_| AppError::validation(vec![FieldError::new("difficulty", "max")]))?;
+    audit_ok(
+        &state,
+        &actor,
+        "pow.difficulty",
+        &serde_json::json!({ "difficulty": body.difficulty }),
+    )
+    .await;
+    Ok(Json(PowResponse {
+        difficulty: state.pow.difficulty(),
+        max_difficulty: crate::service::pow::MAX_DIFFICULTY,
+    }))
+}
+
+// ============================================================================
+// 应用层 IP 封禁（admin-risk-controls WRFC）
+// ============================================================================
+
+fn requester_ip(state: &AppState, headers: &axum::http::HeaderMap, peer: SocketAddr) -> IpAddr {
+    crate::util::client_ip_from_headers(
+        headers,
+        peer,
+        state.settings.server.client_ip_header.as_deref(),
+        state.settings.server.trust_proxy,
+    )
+    .unwrap_or_else(|| peer.ip())
+}
+
+async fn list_ip_bans(
+    State(state): State<Arc<AppState>>,
+) -> AppResult<Json<Vec<serde_json::Value>>> {
+    // BanEntry 已 Serialize；经 json! 中转保持响应形状与 serde derive 解耦。
+    let items = state
+        .ip_bans
+        .list()
+        .into_iter()
+        .map(|e| serde_json::to_value(e).unwrap_or_else(|_| serde_json::json!({})))
+        .collect();
+    Ok(Json(items))
+}
+
+#[derive(Debug, Deserialize)]
+struct AddIpBanBody {
+    /// 精确 IP 或 CIDR（"203.0.113.5" / "198.51.100.0/24"）。
+    target: String,
+    #[serde(default)]
+    reason: Option<String>,
+    /// TTL 小时数；None = 永久。
+    #[serde(default)]
+    ttl_hours: Option<i64>,
+}
+
+async fn add_ip_ban(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: axum::http::HeaderMap,
+    actor: AuthUser,
+    Json(body): Json<AddIpBanBody>,
+) -> AppResult<(StatusCode, Json<serde_json::Value>)> {
+    if body.ttl_hours.is_some_and(|h| h < 1) {
+        return Err(AppError::validation(vec![FieldError::new(
+            "ttl_hours",
+            "min",
+        )]));
+    }
+    // 自封守卫：目标覆盖请求者自身 IP → 拒绝（否则一次误操作即锁死管理员）。
+    let self_ip = requester_ip(&state, &headers, peer);
+    if state.ip_bans.would_cover(&body.target, self_ip) {
+        return Err(AppError::validation(vec![FieldError::new(
+            "target", "self_ban",
+        )]));
+    }
+    let entry = state
+        .ip_bans
+        .add(
+            &body.target,
+            body.reason.as_deref().unwrap_or(""),
+            body.ttl_hours.map(|h| h * 3600),
+            actor.user_id,
+        )
+        .map_err(|e| match e {
+            BanAddError::Invalid => {
+                AppError::validation(vec![FieldError::new("target", "invalid_format")])
+            },
+            BanAddError::Duplicate => AppError::code(ErrorCode::IntegrationExists),
+        })?;
+    audit_ok(
+        &state,
+        &actor,
+        "ip_ban.add",
+        &serde_json::json!({ "target": entry.target, "ttl_hours": body.ttl_hours }),
+    )
+    .await;
+    let value = serde_json::to_value(&entry).map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+    Ok((StatusCode::CREATED, Json(value)))
+}
+
+async fn remove_ip_ban(
+    State(state): State<Arc<AppState>>,
+    actor: AuthUser,
+    Path(id): Path<Uuid>,
+) -> AppResult<StatusCode> {
+    let entry = state
+        .ip_bans
+        .remove(id)
+        .ok_or(AppError::code(ErrorCode::UserNotFound))?;
+    audit_ok(
+        &state,
+        &actor,
+        "ip_ban.remove",
+        &serde_json::json!({ "target": entry.target }),
+    )
+    .await;
+    Ok(StatusCode::OK)
+}
+
+// ============================================================================
+// 风控聚合面板（GET /admin/risk，admin-risk-controls WRFC）
+// ============================================================================
+
+#[derive(Debug, Serialize)]
+struct RiskResponse {
+    registrations_24h: i64,
+    registrations_7d: i64,
+    unverified_count: i64,
+    oldest_unverified_age_hours: Option<i64>,
+    failed_logins_24h: i64,
+    top_failed_ips: Vec<crate::repo::admin_repo::TopFailedIpRow>,
+    top_failed_emails: Vec<crate::repo::admin_repo::TopFailedEmailRow>,
+    mailer: MailerSnapshot,
+    pow_difficulty: u8,
+    ip_ban_count: usize,
+    /// 进程内累计 429（重启归零；对账走 CF 分析页）。
+    rate_limited_since_start: u64,
+    rate_limited_uptime_secs: u64,
+}
+
+async fn risk_overview(State(state): State<Arc<AppState>>) -> AppResult<Json<RiskResponse>> {
+    let agg = crate::repo::admin_repo::risk_aggregates(&state.pool)
+        .await
+        .map_err(AppError::from_repo)?;
+    let (rate_limited, uptime) = crate::observability::metrics::rate_limited_snapshot();
+    Ok(Json(RiskResponse {
+        registrations_24h: agg.registrations_24h,
+        registrations_7d: agg.registrations_7d,
+        unverified_count: agg.unverified_count,
+        oldest_unverified_age_hours: agg.oldest_unverified_age_hours,
+        failed_logins_24h: agg.failed_logins_24h,
+        top_failed_ips: agg.top_failed_ips,
+        top_failed_emails: agg.top_failed_emails,
+        mailer: state.mailer_control.snapshot(),
+        pow_difficulty: state.pow.difficulty(),
+        ip_ban_count: state.ip_bans.active_count(),
+        rate_limited_since_start: rate_limited,
+        rate_limited_uptime_secs: uptime,
+    }))
+}
+
+/// admin 写操作审计（best-effort；与 admin_service::audit 同语义，路由层便捷入口）。
+async fn audit_ok(state: &AppState, actor: &AuthUser, action: &str, detail: &serde_json::Value) {
+    if let Err(e) = crate::repo::admin_repo::insert_action(
+        &state.pool,
+        actor.user_id,
+        action,
+        None,
+        None,
+        None,
+        detail,
+    )
+    .await
+    {
+        tracing::warn!(error = ?e, "audit {} failed", action);
+    }
 }

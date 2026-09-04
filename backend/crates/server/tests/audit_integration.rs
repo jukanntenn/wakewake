@@ -40,22 +40,27 @@ fn test_settings() -> Settings {
 async fn build_state(pool: PgPool) -> AppState {
     let settings = test_settings();
     let (wake_tx, _wake_rx) = tokio::sync::mpsc::channel(256);
-    let maintenance = MaintenanceHandle::load_or_init(
-        false,
-        MaintenanceMode::RegistrationDisabled,
-        "",
-        std::env::temp_dir().join(format!("wakewake_audit_test_{}.json", uuid::Uuid::new_v4())),
+    let tmp =
+        || std::env::temp_dir().join(format!("wakewake_audit_test_{}.json", uuid::Uuid::new_v4()));
+    let maintenance =
+        MaintenanceHandle::load_or_init(false, MaintenanceMode::RegistrationDisabled, "", tmp());
+    let mailer_control = wakewake_server::service::mailer_control::MailerControl::load_or_init(
+        wakewake_server::service::mailer_control::MailLimits::default(),
+        tmp(),
     );
+    let ip_bans = wakewake_server::service::ip_ban::IpBanStore::load_or_init(tmp());
     AppState::new(
         pool,
         settings,
         Hub::new(),
         ProviderRegistry::build().unwrap(),
-        MailerService::new(&test_settings().mailer),
-        PowService::new(&test_settings().pow),
+        MailerService::new(&test_settings().mailer, mailer_control.clone()),
+        PowService::new(&test_settings().pow, None),
         LoginLockout::new(),
         wake_tx,
         maintenance,
+        mailer_control,
+        ip_bans,
     )
 }
 

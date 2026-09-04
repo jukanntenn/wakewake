@@ -12,7 +12,9 @@ use crate::config::Settings;
 use crate::hub::Hub;
 use crate::integrations::ProviderRegistry;
 use crate::service::command_handler::WakeWriter;
+use crate::service::ip_ban::IpBanStore;
 use crate::service::login_lockout::LoginLockout;
+use crate::service::mailer_control::MailerControl;
 use crate::service::mailer_service::MailerService;
 use crate::service::maintenance::MaintenanceHandle;
 use crate::service::pow::PowService;
@@ -36,6 +38,10 @@ pub struct AppState {
     pub wake_writer: WakeWriter,
     /// 维护模式运行态（可变，支持 POST /admin/maintenance 实时切换）。
     pub maintenance: MaintenanceHandle,
+    /// 邮件发信运行态（总闸 + 分路日预算，POST /admin/mailer 实时切换）。
+    pub mailer_control: MailerControl,
+    /// 应用层 IP 封禁（中间件读路径，POST /admin/ip-bans 管理）。
+    pub ip_bans: IpBanStore,
 }
 
 impl AppState {
@@ -51,6 +57,8 @@ impl AppState {
         login_lockout: LoginLockout,
         wake_writer: WakeWriter,
         maintenance: MaintenanceHandle,
+        mailer_control: MailerControl,
+        ip_bans: IpBanStore,
     ) -> Self {
         Self {
             pool: Arc::new(pool),
@@ -72,6 +80,8 @@ impl AppState {
                 .build_with_hasher(Xxh3DefaultBuilder::new()),
             wake_writer,
             maintenance,
+            mailer_control,
+            ip_bans,
         }
     }
 }

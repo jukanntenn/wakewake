@@ -338,8 +338,17 @@ async fn password_reset_request(
     State(state): State<Arc<AppState>>,
     Json(input): Json<PasswordResetRequestInput>,
 ) -> AppResult<StatusCode> {
-    // mailer 未启用 → 503 SERVICE_UNAVAILABLE（authentication.md §七层5）
-    if !state.mailer.is_enabled() {
+    // mailer 配置关闭 / 运行时总闸关闭 / 当日重置预算耗尽 → 503 SERVICE_UNAVAILABLE
+    // （authentication.md §七层5；降级语义与 mailer.enabled=false 一致）。
+    // 预检拒绝计入 blocked 计数与指标（拒绝不静默，admin-risk-controls WRFC）。
+    if !state
+        .mailer
+        .would_send(crate::service::mailer_control::MailPath::Reset)
+    {
+        state
+            .mailer_control
+            .record_rejected(crate::service::mailer_control::MailPath::Reset);
+        crate::observability::metrics::record_email_blocked("reset", "precheck");
         return Err(AppError::code(ErrorCode::ServiceUnavailable));
     }
     // PoW 校验（challenge 一次性消费）

@@ -125,6 +125,8 @@ secret = "CHANGE_ME_openssl_rand_base64_32_padding"
 # PoW
 # ============================================================
 # [OPTIONAL] 前导零个数（authentication.md §六）
+# 启动默认值；运行时可经 POST /admin/pow 调整（admin-risk-controls WRFC），
+# 持久化到 data/pow.json 跨重启保持，上限 10。
 # Env: WAKEWAKE_POW__DIFFICULTY
 # Default: 4
 # [pow]
@@ -138,6 +140,10 @@ secret = "CHANGE_ME_openssl_rand_base64_32_padding"
 # ============================================================
 # Mailer（密码重置；enabled=false 时该端点返 503）
 # ============================================================
+# 分路日预算（admin-risk-controls WRFC）：注册验证/重发/密码重置三路独立计数，
+# UTC 日翻零；0 = 不限。运行时总闸与限额可经 POST /admin/mailer 调整，
+# 计数持久化到 data/mailer.json（重启不清零）。预算耗尽时该路径降级为
+# 与 mailer 关闭相同的行为（注册静默跳过 / 重发静默 / 重置请求 503）。
 # Env: WAKEWAKE_MAILER__ENABLED
 # Default: false
 # [mailer]
@@ -148,6 +154,21 @@ secret = "CHANGE_ME_openssl_rand_base64_32_padding"
 # smtp_password = ""
 # from_address = "noreply@wakewake.app"
 # from_name = "WakeWake"
+# [OPTIONAL] 注册验证邮件日预算
+# Env: WAKEWAKE_MAILER__MAX_REGISTER_EMAILS_PER_DAY
+# Default: 500
+# [mailer]
+# max_register_emails_per_day = 500
+# [OPTIONAL] 验证邮件重发日预算
+# Env: WAKEWAKE_MAILER__MAX_RESEND_EMAILS_PER_DAY
+# Default: 200
+# [mailer]
+# max_resend_emails_per_day = 200
+# [OPTIONAL] 密码重置邮件日预算
+# Env: WAKEWAKE_MAILER__MAX_RESET_EMAILS_PER_DAY
+# Default: 300
+# [mailer]
+# max_reset_emails_per_day = 300
 
 # ============================================================
 # Security（默认 admin 账户 bootstrap）
@@ -161,6 +182,13 @@ secret = "CHANGE_ME_openssl_rand_base64_32_padding"
 # [security]
 # bootstrap_admin_email = "admin@wakewake.local"
 # bootstrap_admin_password = "wakewake123"
+# [OPTIONAL] 未验证账号保留天数（admin-risk-controls WRFC）：
+# 每日清理任务删除超期未验证账号（连带 agents 级联），防注册轰炸灌库
+# + 释放被抢占邮箱；0 = 关闭清理。
+# Env: WAKEWAKE_SECURITY__UNVERIFIED_RETENTION_DAYS
+# Default: 7
+# [security]
+# unverified_retention_days = 7
 
 # ============================================================
 # Log（tracing-appender 文件轮转 + OTel）

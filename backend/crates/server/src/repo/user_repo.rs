@@ -297,3 +297,59 @@ pub async fn list_for_admin(
     .await?;
     Ok((items, total))
 }
+
+/// 批量删除超期未验证账号（admin-risk-controls WRFC）。
+///
+/// 守卫（不之而删 = 事故）：`email_verified = false AND is_superuser = false`。
+/// 锚点 `created_at`（固定窗口）——不用 verification_sent_at：resend 端点防枚举恒 200，
+/// 任何人都能对任意邮箱刷新该时间戳给抢占账号「续命」。
+/// 级联由 FK 清 agents/refresh_tokens 等；未验证用户登录被阻断，结构上无
+/// devices/integrations（agent_id RESTRICT 不可达）。批 1000 行循环，防洪水后
+/// 首清的单条大事务。返回本次总删除数。
+pub async fn purge_unverified(pool: &PgPool, retention_days: i32) -> Result<u64, RepoError> {
+    const BATCH: i64 = 1000;
+    let mut total: u64 = 0;
+    loop {
+        let result = sqlx::query(
+            "DELETE FROM users WHERE id IN (
+                 SELECT id FROM users
+                 WHERE email_verified = false
+                   AND is_superuser = false
+                   AND created_at < now() - make_interval(days => $1)
+                 LIMIT $2
+             )",
+        )
+        .bind(retention_days)
+        .bind(BATCH)
+        .execute(pool)
+        .await?;
+        let n = result.rows_affected();
+        total += n;
+        if n < u64::try_from(BATCH).unwrap_or(u64::MAX) {
+            break;
+        }
+    }
+    Ok(total)
+}
+
+/// 未验证账号堆积数（risk 面板）。
+pub async fn count_unverified(pool: &PgPool) -> Result<i64, RepoError> {
+    let n: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM users WHERE email_verified = false AND is_superuser = false",
+    )
+    .fetch_one(pool)
+    .await?;
+    Ok(n)
+}
+
+/// 最老未验证账号的账龄（小时；None = 无未验证账号）——判断注册轰炸存量。
+pub async fn oldest_unverified_age_hours(pool: &PgPool) -> Result<Option<i64>, RepoError> {
+    // EXTRACT 返回 NUMERIC，sqlx 不隐式转 f64 → SQL 内显式 ::float8。
+    let hours: Option<f64> = sqlx::query_scalar(
+        "SELECT (EXTRACT(EPOCH FROM (now() - MIN(created_at))) / 3600.0)::float8
+         FROM users WHERE email_verified = false AND is_superuser = false",
+    )
+    .fetch_one(pool)
+    .await?;
+    Ok(hours.map(|h| h as i64))
+}

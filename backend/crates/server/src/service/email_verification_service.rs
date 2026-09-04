@@ -11,6 +11,7 @@ use sqlx::PgPool;
 use crate::config::Settings;
 use crate::error::{AppError, AppResult, ErrorCode};
 use crate::repo::user_repo;
+use crate::service::mailer_control::MailPath;
 use crate::service::mailer_service::MailerService;
 use crate::service::secrets::{ResetTokenError, make_verify_token, verify_verify_token};
 
@@ -22,11 +23,14 @@ pub const VERIFY_TOKEN_MAX_AGE_SECS: i64 = 24 * 3600;
 
 /// 给已注册（未验证）用户发送验证邮件：生成 token → 发邮件 → 记 verification_sent_at。
 /// best-effort：邮件发送失败仅记日志（不阻塞注册 HTTP 响应）。
+/// 发送**成功**才记 `verification_sent_at（与` reset 的「成功才占冷却」语义一致：
+/// 失败/预算耗尽不烧 60s 冷却，预算恢复后可立即重试）。
 pub async fn send_verification_email(
     pool: &PgPool,
     settings: &Settings,
     mailer: &MailerService,
     user: &crate::domain::user::User,
+    path: MailPath,
 ) {
     let token = make_verify_token(&settings.password_reset.secret, user.id, &user.password);
     // public_url 启动时已 garde 校验为合法 URL；build_absolute_url 仅在 scheme 非 http(s) 时返 None，
@@ -45,10 +49,11 @@ pub async fn send_verification_email(
     });
     let locale = user.preferred_locale.as_deref().unwrap_or("en");
     if let Err(e) = mailer
-        .send_email_verification(&user.email, locale, &verify_url)
+        .send_email_verification(path, &user.email, locale, &verify_url)
         .await
     {
         tracing::warn!(error = ?e, user_id = user.id, "verification email send failed");
+        return;
     }
     let _ = user_repo::touch_verification_sent(pool, user.id).await;
 }
@@ -107,7 +112,7 @@ pub async fn resend(
                 (time::OffsetDateTime::now_utc() - t).whole_seconds() < RESEND_COOLDOWN_SECS
             });
             if !within_cooldown {
-                send_verification_email(pool, settings, mailer, &user).await;
+                send_verification_email(pool, settings, mailer, &user, MailPath::Resend).await;
             }
         }
     }
