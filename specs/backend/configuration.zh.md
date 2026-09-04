@@ -86,7 +86,7 @@ DSN 单一来源规则（密码只写一处）：
 
 | 字段 | 类型 | 默认 | env | 说明 |
 |---|---|---|---|---|
-| `difficulty` | u8 | `4` | `WAKEWAKE_POW__DIFFICULTY` | 前导零个数 |
+| `difficulty` | u8 | `4` | `WAKEWAKE_POW__DIFFICULTY` | 前导零个数的启动默认值；运行时可经 `POST /admin/pow` 调整（0..=10），持久化到 `data/pow.json` |
 | `challenge_ttl` | humantime | `10m` | `WAKEWAKE_POW__CHALLENGE_TTL` | challenge 有效期 |
 
 ### `[mailer]`
@@ -100,6 +100,9 @@ DSN 单一来源规则（密码只写一处）：
 | `smtp_password` | Option | — | `WAKEWAKE_MAILER__SMTP_PASSWORD` | 密码 |
 | `from_address` | Option | — | `WAKEWAKE_MAILER__FROM_ADDRESS` | 发件人地址 |
 | `from_name` | string | `WakeWake` | `WAKEWAKE_MAILER__FROM_NAME` | 发件人名 |
+| `max_register_emails_per_day` | u32 | `500` | `WAKEWAKE_MAILER__MAX_REGISTER_EMAILS_PER_DAY` | 分路 UTC 日预算（0 = 不限）；运行时可经 `POST /admin/mailer` 调整，计数持久化到 `data/mailer.json` |
+| `max_resend_emails_per_day` | u32 | `200` | `WAKEWAKE_MAILER__MAX_RESEND_EMAILS_PER_DAY` | 同上机制，重发路径 |
+| `max_reset_emails_per_day` | u32 | `300` | `WAKEWAKE_MAILER__MAX_RESET_EMAILS_PER_DAY` | 同上机制，重置路径 |
 
 ### `[rate_limit]`（测试专用）
 
@@ -113,6 +116,7 @@ DSN 单一来源规则（密码只写一处）：
 |---|---|---|---|---|
 | `bootstrap_admin_email` | string | `admin@wakewake.local` | `WAKEWAKE_SECURITY__BOOTSTRAP_ADMIN_EMAIL` | 启动时幂等创建（不存在才建，存在不覆盖）。类比 Grafana 默认 admin |
 | `bootstrap_admin_password` | string | `wakewake123` | `WAKEWAKE_SECURITY__BOOTSTRAP_ADMIN_PASSWORD` | ⚠️ 生产务必覆盖默认值 |
+| `unverified_retention_days` | u32 | `7` | `WAKEWAKE_SECURITY__UNVERIFIED_RETENTION_DAYS` | 每日清理删除超期的未验证非超级用户账号（0 = 关闭）；见[风控控制](risk-controls.zh.md) |
 
 ### `[log]`
 

@@ -86,7 +86,7 @@ Keys have no default; generate with `openssl rand -base64 32`.
 
 | Field | Type | Default | env | Notes |
 |---|---|---|---|---|
-| `difficulty` | u8 | `4` | `WAKEWAKE_POW__DIFFICULTY` | Number of leading zeros |
+| `difficulty` | u8 | `4` | `WAKEWAKE_POW__DIFFICULTY` | Startup default for the leading-zero count; runtime-adjustable via `POST /admin/pow` (0..=10), persisted to `data/pow.json` |
 | `challenge_ttl` | humantime | `10m` | `WAKEWAKE_POW__CHALLENGE_TTL` | Challenge validity window |
 
 ### `[mailer]`
@@ -100,6 +100,9 @@ Keys have no default; generate with `openssl rand -base64 32`.
 | `smtp_password` | Option | — | `WAKEWAKE_MAILER__SMTP_PASSWORD` | Password |
 | `from_address` | Option | — | `WAKEWAKE_MAILER__FROM_ADDRESS` | Sender address |
 | `from_name` | string | `WakeWake` | `WAKEWAKE_MAILER__FROM_NAME` | Sender name |
+| `max_register_emails_per_day` | u32 | `500` | `WAKEWAKE_MAILER__MAX_REGISTER_EMAILS_PER_DAY` | Per-path UTC-daily budget (0 = unlimited); runtime-adjustable via `POST /admin/mailer`, counters persisted to `data/mailer.json` |
+| `max_resend_emails_per_day` | u32 | `200` | `WAKEWAKE_MAILER__MAX_RESEND_EMAILS_PER_DAY` | Same mechanism as above, resend path |
+| `max_reset_emails_per_day` | u32 | `300` | `WAKEWAKE_MAILER__MAX_RESET_EMAILS_PER_DAY` | Same mechanism as above, reset path |
 
 ### `[rate_limit]` (test-only)
 
@@ -113,6 +116,7 @@ Keys have no default; generate with `openssl rand -base64 32`.
 |---|---|---|---|---|
 | `bootstrap_admin_email` | string | `admin@wakewake.local` | `WAKEWAKE_SECURITY__BOOTSTRAP_ADMIN_EMAIL` | Created idempotently at startup (created only if absent, never overwritten). Grafana's default admin pattern |
 | `bootstrap_admin_password` | string | `wakewake123` | `WAKEWAKE_SECURITY__BOOTSTRAP_ADMIN_PASSWORD` | ⚠️ production must override the default |
+| `unverified_retention_days` | u32 | `7` | `WAKEWAKE_SECURITY__UNVERIFIED_RETENTION_DAYS` | Daily purge deletes unverified non-superuser accounts older than this (0 = off); see [risk controls](risk-controls.md) |
 
 ### `[log]`
 
