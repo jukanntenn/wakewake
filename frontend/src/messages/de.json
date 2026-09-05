@@ -692,22 +692,41 @@
       "chip2": "Migrationen beim Start",
       "chip3": "idempotenter Bootstrap-Admin"
     },
-    "spec": {
-      "kicker": "Spec",
-      "title": "Zahlen sprechen für sich",
-      "stat1": "gleichzeitige Agenten · Designziel",
-      "stat2": "Speicher pro Verbindung",
-      "stat3": "VPS genügt",
-      "stat4": "Sprachen",
-      "item1": "Gerätegruppen & Notizen",
-      "item2": "Aufweck-Historie als Audit",
-      "item3": "Bemfa-Sprachsteuerung",
-      "item4": "Ein Multi-Arch-Image",
-      "item5": "Migrationen beim Start",
-      "item6": "PoW-Missbrauchsschutz",
-      "item7": "JWT + rotierende Refresh-Tokens",
-      "item8": "RSA-Schlüssel lokal erzeugt",
-      "item9": "AGPL-3.0"
+    "why": {
+      "kicker": "Warum WakeWake",
+      "title": "Ohne Plattform, ohne Hardware-Upgrade, ohne offene Ports",
+      "item1": {
+        "title": "Keine eingehenden Ports",
+        "body": "Der Agent baut nur ausgehende Verbindungen auf — kein Portforwarding, dein LAN bleibt unsichtbar."
+      },
+      "item2": {
+        "title": "Ende-zu-Ende verschlüsselt",
+        "body": "MAC-Adressen werden im Browser verschlüsselt, der Schlüssel entsteht zu Hause. Der Server sieht nur Chiffretext."
+      },
+      "item3": {
+        "title": "Läuft auf kleinem Server",
+        "body": "Ein 2-GB-VPS genügt. Ein Container, sonst nichts."
+      },
+      "item4": {
+        "title": "Ein Image, überall",
+        "body": "Multi-Arch-Einzelimage — x86 oder ARM, egal wo."
+      },
+      "item5": {
+        "title": "Vollständige Weck-Historie",
+        "body": "Jedes Aufwecken wird protokolliert: wer, wann, welches Gerät."
+      },
+      "item6": {
+        "title": "Gruppen & Notizen",
+        "body": "Geräte mit Gruppen und Notizen organisieren."
+      },
+      "item7": {
+        "title": "Sprachsteuerung",
+        "body": "Geräte per Sprachbefehl über die Bemfa-Integration aufwecken."
+      },
+      "item8": {
+        "title": "Open Source & selbst gehostet",
+        "body": "AGPL-3.0. Deine Daten bleiben in deiner Hand."
+      }
     },
     "closing": {
       "line": "Mit drei Befehlen betriebsbereit."

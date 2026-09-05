@@ -692,22 +692,41 @@
       "chip2": "migrations au démarrage",
       "chip3": "admin bootstrap idempotent"
     },
-    "spec": {
-      "kicker": "Spec",
-      "title": "Les chiffres parlent",
-      "stat1": "agents simultanés · objectif de conception",
-      "stat2": "mémoire par connexion",
-      "stat3": "un VPS suffit",
-      "stat4": "langues",
-      "item1": "Groupes d'appareils & notes",
-      "item2": "Historique de réveil audité",
-      "item3": "Contrôle vocal Bemfa",
-      "item4": "Une image multi-arch",
-      "item5": "Migrations au démarrage",
-      "item6": "Protection anti-abus PoW",
-      "item7": "JWT + refresh tokens rotatifs",
-      "item8": "Clés RSA générées localement",
-      "item9": "AGPL-3.0"
+    "why": {
+      "kicker": "Pourquoi WakeWake",
+      "title": "Sans plateforme, sans nouveau matériel, sans port ouvert",
+      "item1": {
+        "title": "Zéro port entrant",
+        "body": "L'agent n'établit que des connexions sortantes — aucune redirection de port, votre LAN reste invisible."
+      },
+      "item2": {
+        "title": "Chiffré de bout en bout",
+        "body": "Les adresses MAC sont chiffrées dans votre navigateur avec une clé générée chez vous ; le serveur ne voit que du chiffré."
+      },
+      "item3": {
+        "title": "Tourne sur un petit serveur",
+        "body": "Un VPS de 2 Go suffit. Un conteneur, rien de plus."
+      },
+      "item4": {
+        "title": "Une image, partout",
+        "body": "Image unique multi-architecture — x86 ou ARM, où que vous déployiez."
+      },
+      "item5": {
+        "title": "Historique complet des réveils",
+        "body": "Chaque réveil est enregistré : qui, quand, quel appareil."
+      },
+      "item6": {
+        "title": "Groupes et notes",
+        "body": "Organisez vos appareils avec des groupes et des notes."
+      },
+      "item7": {
+        "title": "Contrôle vocal",
+        "body": "Réveillez vos appareils à la voix via l’intégration Bemfa."
+      },
+      "item8": {
+        "title": "Open source & auto-hébergé",
+        "body": "AGPL-3.0. Vos données restent entre vos mains."
+      }
     },
     "closing": {
       "line": "Opérationnel en trois commandes."

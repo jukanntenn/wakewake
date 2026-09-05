@@ -733,22 +733,41 @@
       "chip2": "migrations on startup",
       "chip3": "idempotent bootstrap admin"
     },
-    "spec": {
-      "kicker": "Spec",
-      "title": "The numbers speak",
-      "stat1": "concurrent agents · design target",
-      "stat2": "memory per connection",
-      "stat3": "VPS is enough",
-      "stat4": "languages",
-      "item1": "Device groups & notes",
-      "item2": "Wake history audit",
-      "item3": "Bemfa voice control",
-      "item4": "One multi-arch image",
-      "item5": "Migrations on startup",
-      "item6": "PoW abuse protection",
-      "item7": "JWT + rotating refresh tokens",
-      "item8": "RSA keys generated locally",
-      "item9": "AGPL-3.0"
+    "why": {
+      "kicker": "Why WakeWake",
+      "title": "No platform lock-in, no hardware upgrade, no open ports",
+      "item1": {
+        "title": "Zero inbound ports",
+        "body": "The agent makes only outbound connections — your router needs no port forwarding and your LAN stays invisible."
+      },
+      "item2": {
+        "title": "End-to-end encrypted",
+        "body": "MAC addresses are encrypted in your browser with a key generated at home; the server only ever sees ciphertext."
+      },
+      "item3": {
+        "title": "Runs on a tiny server",
+        "body": "A 2 GB VPS is enough. One container, no extras."
+      },
+      "item4": {
+        "title": "One image, anywhere",
+        "body": "Multi-arch single image — x86 or ARM, wherever you deploy."
+      },
+      "item5": {
+        "title": "Full wake history",
+        "body": "Every wake is recorded: who, when, which device."
+      },
+      "item6": {
+        "title": "Groups & notes",
+        "body": "Organize devices with groups and notes."
+      },
+      "item7": {
+        "title": "Voice control",
+        "body": "Wake devices by voice via the Bemfa integration."
+      },
+      "item8": {
+        "title": "Open source & self-hosted",
+        "body": "AGPL-3.0. Your data stays in your hands."
+      }
     },
     "closing": {
       "line": "Up and running in three commands."

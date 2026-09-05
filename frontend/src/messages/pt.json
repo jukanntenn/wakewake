@@ -692,22 +692,41 @@
       "chip2": "migrações na inicialização",
       "chip3": "bootstrap admin idempotente"
     },
-    "spec": {
-      "kicker": "Spec",
-      "title": "Os números falam",
-      "stat1": "agentes simultâneos · meta de projeto",
-      "stat2": "memória por conexão",
-      "stat3": "um VPS basta",
-      "stat4": "idiomas",
-      "item1": "Grupos de dispositivos e notas",
-      "item2": "Histórico de despertares auditável",
-      "item3": "Controle por voz Bemfa",
-      "item4": "Uma imagem multi-arquitetura",
-      "item5": "Migrações na inicialização",
-      "item6": "Proteção anti-abuso PoW",
-      "item7": "JWT + rotação de refresh tokens",
-      "item8": "Chaves RSA geradas localmente",
-      "item9": "AGPL-3.0"
+    "why": {
+      "kicker": "Por que WakeWake",
+      "title": "Sem plataforma, sem trocar de hardware, sem abrir portas",
+      "item1": {
+        "title": "Zero portas de entrada",
+        "body": "O agente faz apenas conexões de saída — o roteador não precisa de nada e a LAN fica invisível."
+      },
+      "item2": {
+        "title": "Criptografia ponta a ponta",
+        "body": "Os endereços MAC são criptografados no seu navegador com uma chave gerada em casa; o servidor só vê texto cifrado."
+      },
+      "item3": {
+        "title": "Roda num servidor pequeno",
+        "body": "Um VPS de 2 GB basta. Um contêiner, nada mais."
+      },
+      "item4": {
+        "title": "Uma imagem, em qualquer lugar",
+        "body": "Imagem única multiarquitetura — x86 ou ARM, onde você implantar."
+      },
+      "item5": {
+        "title": "Histórico completo de despertares",
+        "body": "Cada despertar é registrado: quem, quando, qual dispositivo."
+      },
+      "item6": {
+        "title": "Grupos e notas",
+        "body": "Organize seus dispositivos com grupos e notas."
+      },
+      "item7": {
+        "title": "Controle por voz",
+        "body": "Desperte dispositivos por voz com a integração Bemfa."
+      },
+      "item8": {
+        "title": "Código aberto e auto-hospedado",
+        "body": "AGPL-3.0. Seus dados ficam com você."
+      }
     },
     "closing": {
       "line": "Funcionando em três comandos."
