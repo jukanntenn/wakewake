@@ -11,7 +11,7 @@ The user-facing agent pairing experience and the front-loading of device-add err
   - pending → block the add, route to the Agents page;
   - offline → allow the add, with an info bar saying "saved; syncs automatically once the agent is back" (consistent with the `projection_status` state machine).
 - **MAC encryption needs a secure context** (Web Crypto is unavailable off HTTPS/localhost; see `lib/crypto.ts`). When `window.isSecureContext` is false the add is blocked with an explanation.
-- **Agent-page command template slots**: the launch commands come from the two generators in `lib/agent-command.ts` (`buildAgentInstallCommand` one-liner / `buildAgentDockerCommand` docker run); `--server` takes `window.location.origin`, the pairing code is passed in by the caller, and the terminal card header switches between Linux / Docker tabs (distribution mechanism in [`backend/agent-distribution.md`](../backend/agent-distribution.md)). The commands match the README's real channels word for word — nothing invented.
+- **Agent-page command template slots**: the launch commands come from the three generators in `lib/agent-command.ts` (`buildAgentInstallCommand` one-liner / `buildAgentDockerCommand` docker run / `buildAgentComposeYaml` docker compose — field-for-field equivalent to the run command, with `docker compose up -d` attached as a trailing comment); `--server` takes `window.location.origin`, the pairing code is passed in by the caller, and the terminal card header switches between Linux / Docker tabs (distribution mechanism in [`backend/agent-distribution.md`](../backend/agent-distribution.md)). Inside the Docker tab the content is two stacked blocks: compose (with a "Recommended" chip and its own copy button for the full YAML) and the one-liner run (its own copy button). The commands match the README's real channels word for word — nothing invented.
 
 ## Agents page (`/agents`)
 
@@ -21,7 +21,7 @@ A three-state page driven by `useDefaultAgent()` (5s polling), no new backend en
 - **online (done)**: the diagram fully connected; one-line conclusion + CTA "go to devices" (dovetails with the devices-page onboarding); advanced section collapsed.
 - **offline (repair)**: conclusion "connection lost" + repair guidance (check whether that machine is up; it reconnects automatically) + an entry point to rotate the pairing code (the masked code cannot re-pair; rotate is the only way to obtain the full code).
 - **Advanced fold** (`<details>`, shared by all three states): pairing code (full/masked) + copy + two-step rotation (armed 3s pattern unchanged), agent public key PEM ("available after connecting" while pending), the config-file route (a minimal `config.toml` template).
-- Copy goes through next-intl in all 8 locales; professional and friendly tone; command blocks embed no natural-language comments.
+- Copy goes through next-intl in all 8 locales; professional and friendly tone. Command blocks embed no natural-language comments — the single exception is the compose YAML, whose trailing `# 启动: docker compose up -d` line and the inline `network_mode: host` constraint note are deliberate parts of the copied payload (paste yields self-documenting, valid YAML).
 
 ## Devices page (`/devices`)
 

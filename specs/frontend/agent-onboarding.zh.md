@@ -11,7 +11,7 @@
   - pending → 阻断添加，引导至 Agent 页；
   - offline → 放行添加，信息条告知"保存后待 Agent 上线自动同步"（与 `projection_status` 状态机一致）。
 - **MAC 加密依赖安全上下文**（Web Crypto 在非 HTTPS、非 localhost 下不可用，见 `lib/crypto.ts`）。`window.isSecureContext` 为假时阻断添加并解释原因。
-- **Agent 页命令模板槽**：启动命令由 `lib/agent-command.ts` 的两个生成器产出（`buildAgentInstallCommand` 一行安装 / `buildAgentDockerCommand` docker run），`--server` 取 `window.location.origin`，配对码由调用方传入，终端卡头部 Linux / Docker 双 tab 切换（分发机制见 [`backend/agent-distribution.zh.md`](../backend/agent-distribution.zh.md)）。命令与 README 实际渠道一字不差，不虚构。
+- **Agent 页命令模板槽**：启动命令由 `lib/agent-command.ts` 的三个生成器产出（`buildAgentInstallCommand` 一行安装 / `buildAgentDockerCommand` docker run 一键启动 / `buildAgentComposeYaml` docker compose，后者与 docker run 逐字段等价、末行以注释附带 `docker compose up -d`），`--server` 取 `window.location.origin`，配对码由调用方传入，终端卡头部 Linux / Docker 双 tab 切换（分发机制见 [`backend/agent-distribution.zh.md`](../backend/agent-distribution.zh.md)）。Docker tab 内为上下双块：compose（带「推荐」chip，独立复制整份 YAML）+ 一键启动（独立复制 run 命令）。命令与 README 实际渠道一字不差，不虚构。
 
 ## Agent 页（`/agents`）
 
@@ -21,7 +21,7 @@
 - **online（完成态）**：模型图全连通；一行结论 + CTA「前往设备」（与设备页 onboarding 首尾衔接）；高级区折叠。
 - **offline（修复态）**：结论"连接已断开" + 修复指引（检查那台机器是否在线，恢复后自动重连）+ 更换配对码入口（脱敏码无法直接用于重新配对，rotate 是获取完整码的唯一途径）。
 - **高级折叠**（`<details>`，三态共用）：配对码（完整/脱敏）+ 复制 + 两段式轮换（armed 3s 模式不变）、Agent 公钥 PEM（pending 时显示"连接后可用"）、配置文件方式（`config.toml` 最小模板）。
-- 文案走 next-intl 全部 8 个 locale，语气专业且友好，命令块不内嵌自然语言注释。
+- 文案走 next-intl 全部 8 个 locale，语气专业且友好。命令块不内嵌自然语言注释——唯一例外是 compose YAML：末行 `# 启动: docker compose up -d` 与 `network_mode: host` 行内约束注释是复制载荷的有意组成部分（粘贴即得自说明的合法 YAML）。
 
 ## 设备页（`/devices`）
 

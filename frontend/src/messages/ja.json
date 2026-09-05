@@ -138,7 +138,10 @@
       "copyCommand": "コマンドをコピー",
       "waiting": "エージェントの接続を待っています。ページは自動的に更新されます。",
       "tabLinux": "Linux",
-      "tabDocker": "Docker"
+      "tabDocker": "Docker",
+      "composeTitle": "Docker Compose",
+      "composeRecommended": "推奨",
+      "runTitle": "ワンライナー"
     },
     "online": {
       "title": "エージェントが接続されました",

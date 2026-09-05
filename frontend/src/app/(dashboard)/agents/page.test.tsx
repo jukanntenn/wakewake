@@ -33,6 +33,10 @@ vi.mock('@/hooks/useAgents', () => ({
 
 const first = (els: HTMLElement[]) => els[0]
 
+// 每个用例动态 import 整页(重模块图),隔离即 ~3.4s、全量并行时逼近默认 5s 上限;
+// 超时会被误报为失败并污染下一用例的 DOM 断言,抬高本文件上限。
+vi.setConfig({ testTimeout: 15_000 })
+
 describe('AgentStatus (agents page) — copy & rotate', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -134,9 +138,14 @@ describe('AgentStatus (agents page) — copy & rotate', () => {
     await vi.waitFor(() => {
       expect(screen.getByText(/install\.sh \| sh -s -- --server /)).toBeInTheDocument()
     })
-    // Docker tab 切换后生成 docker run（--network host 硬前提）
+    // Docker tab:双块——compose(推荐标记)+ 一键启动 docker run(--network host 硬前提)
     await userEvent.click(screen.getByRole('tab', { name: 'Docker' }))
+    expect(screen.getByText('Docker Compose')).toBeInTheDocument()
+    expect(screen.getByText('Recommended')).toBeInTheDocument()
+    expect(screen.getByText(/network_mode: host/)).toBeInTheDocument()
+    expect(screen.getByText(/docker compose up -d/)).toBeInTheDocument()
     expect(screen.getByText(/docker run -d .*--network host/)).toBeInTheDocument()
+    expect(screen.getByText('One-liner')).toBeInTheDocument()
     // 等待行（自动检测提示）
     expect(
       screen.getByText('Waiting for the agent to connect — this page updates automatically.'),

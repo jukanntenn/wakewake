@@ -44,6 +44,9 @@ const enMessages = {
       waiting: 'Waiting for the agent to connect — this page updates automatically.',
       tabLinux: 'Linux',
       tabDocker: 'Docker',
+      composeTitle: 'Docker Compose',
+      composeRecommended: 'Recommended',
+      runTitle: 'One-liner',
     },
     online: { title: 'Agent connected', desc: 'The agent is running.', cta: 'Go to devices' },
     offline: {

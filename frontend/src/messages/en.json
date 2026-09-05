@@ -222,7 +222,10 @@
       "copyCommand": "Copy command",
       "waiting": "Waiting for the agent to connect — this page updates automatically.",
       "tabLinux": "Linux",
-      "tabDocker": "Docker"
+      "tabDocker": "Docker",
+      "composeTitle": "Docker Compose",
+      "composeRecommended": "Recommended",
+      "runTitle": "One-liner"
     },
     "online": {
       "title": "Agent connected",

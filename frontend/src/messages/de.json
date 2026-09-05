@@ -138,7 +138,10 @@
       "copyCommand": "Befehl kopieren",
       "waiting": "Warte auf die Verbindung des Agenten — diese Seite aktualisiert sich automatisch.",
       "tabLinux": "Linux",
-      "tabDocker": "Docker"
+      "tabDocker": "Docker",
+      "composeTitle": "Docker Compose",
+      "composeRecommended": "Empfohlen",
+      "runTitle": "Einzeiler"
     },
     "online": {
       "title": "Agent verbunden",

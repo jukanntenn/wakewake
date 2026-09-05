@@ -23,3 +23,26 @@ export function buildAgentDockerCommand(serverUrl: string, pairingCode: string):
     DOCKER_IMAGE,
   ].join(' ')
 }
+
+/** Docker Compose YAML（推荐路径）：与 buildAgentDockerCommand 逐字段等价。
+ *  环境值加引号，避免含冒号的 URL 触发 YAML plain scalar 歧义；
+ *  末行以注释附带启动命令——复制粘贴即得合法 YAML 且自带说明。 */
+export function buildAgentComposeYaml(serverUrl: string, pairingCode: string): string {
+  return [
+    '# compose.yaml',
+    'services:',
+    '  wakewake-agent:',
+    `    image: ${DOCKER_IMAGE}`,
+    '    container_name: wakewake-agent',
+    '    network_mode: host # 硬前提：受限广播（RFC 919）不出 bridge 网段',
+    '    restart: unless-stopped',
+    '    environment:',
+    `      WAKEWAKE_SERVER_URL: "${serverUrl}"`,
+    `      WAKEWAKE_PAIRING_CODE: "${pairingCode}"`,
+    '    volumes:',
+    '      - wakewake-agent-data:/data',
+    'volumes:',
+    '  wakewake-agent-data:',
+    '# 启动: docker compose up -d',
+  ].join('\n')
+}

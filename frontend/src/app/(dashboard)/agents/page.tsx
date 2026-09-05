@@ -11,7 +11,11 @@ import { toast } from 'sonner'
 import { Check, Cloud, Copy, Home, Monitor, RefreshCw } from 'lucide-react'
 import { useDefaultAgent, useRotatePairingCode } from '@/hooks/useAgents'
 import { copyText } from '@/lib/clipboard'
-import { buildAgentDockerCommand, buildAgentInstallCommand } from '@/lib/agent-command'
+import {
+  buildAgentComposeYaml,
+  buildAgentDockerCommand,
+  buildAgentInstallCommand,
+} from '@/lib/agent-command'
 import { BrandMark } from '@/components/brand/brand-logo'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { RelativeTime } from '@/components/ui/relative-time'
@@ -49,6 +53,7 @@ export default function AgentsPage() {
   const origin = useSiteOrigin()
   const [cmdTab, setCmdTab] = useState<CommandTab>('linux')
   const [cmdCopied, setCmdCopied] = useState(false)
+  const [composeCopied, setComposeCopied] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
   // rotate 两段式 armed 态（§11.B.6）：第一次点击 armed，3s 内再点执行，超时/移出恢复。
   const [armed, setArmed] = useState(false)
@@ -65,6 +70,12 @@ export default function AgentsPage() {
     const id = setTimeout(() => setCodeCopied(false), 2000)
     return () => clearTimeout(id)
   }, [codeCopied])
+
+  useEffect(() => {
+    if (!composeCopied) return
+    const id = setTimeout(() => setComposeCopied(false), 2000)
+    return () => clearTimeout(id)
+  }, [composeCopied])
 
   useEffect(() => {
     return () => {
@@ -102,14 +113,25 @@ export default function AgentsPage() {
     }
   }
 
-  const onCopyCommand = async () => {
-    if (!command) return
-    if (await copyText(command)) {
-      setCmdCopied(true)
+  const copyWithToast = async (text: string | null) => {
+    if (!text) return false
+    if (await copyText(text)) {
       toast.success(t('copied'))
-    } else {
-      toast.error(t('copyFailed'))
+      return true
     }
+    toast.error(t('copyFailed'))
+    return false
+  }
+
+  const onCopyCommand = async () => {
+    if (!commands) return
+    const text = cmdTab === 'linux' ? commands.linux : commands.dockerRun
+    if (await copyWithToast(text)) setCmdCopied(true)
+  }
+
+  const onCopyCompose = async () => {
+    if (!commands) return
+    if (await copyWithToast(commands.dockerCompose)) setComposeCopied(true)
   }
 
   const onCopyCode = async () => {
@@ -135,11 +157,13 @@ export default function AgentsPage() {
 
   // 脱敏码含 ****（后端 mask_code），不可用于实际连接；rotate 是取回完整码的唯一途径。
   const isMasked = agent.pairing_code.includes('****')
-  const command =
+  const commands =
     !isMasked && origin
-      ? cmdTab === 'linux'
-        ? buildAgentInstallCommand(origin, agent.pairing_code)
-        : buildAgentDockerCommand(origin, agent.pairing_code)
+      ? {
+          linux: buildAgentInstallCommand(origin, agent.pairing_code),
+          dockerRun: buildAgentDockerCommand(origin, agent.pairing_code),
+          dockerCompose: buildAgentComposeYaml(origin, agent.pairing_code),
+        }
       : null
 
   const linkState: LinkState =
@@ -185,9 +209,11 @@ export default function AgentsPage() {
         >
           {!isMasked && origin && (
             <CommandCard
-              command={command}
-              copied={cmdCopied}
-              onCopy={onCopyCommand}
+              commands={commands}
+              commandCopied={cmdCopied}
+              composeCopied={composeCopied}
+              onCopyCommand={onCopyCommand}
+              onCopyCompose={onCopyCompose}
               copyLabel={t('guide.copyCommand')}
               tabs={COMMAND_TABS}
               activeTab={cmdTab}
@@ -205,9 +231,11 @@ export default function AgentsPage() {
               <p className="text-ink-muted mt-1 text-sm leading-relaxed">{t('guide.whereDesc')}</p>
             </div>
             <CommandCard
-              command={command}
-              copied={cmdCopied}
-              onCopy={onCopyCommand}
+              commands={commands}
+              commandCopied={cmdCopied}
+              composeCopied={composeCopied}
+              onCopyCommand={onCopyCommand}
+              onCopyCompose={onCopyCompose}
               copyLabel={t('guide.copyCommand')}
               tabs={COMMAND_TABS}
               activeTab={cmdTab}
@@ -361,19 +389,75 @@ function Connector({ linkState, label }: { linkState: LinkState; label: string }
   )
 }
 
-function CommandCard({
-  command,
+/** 命令/文件内容展示:`$ ` 提示符按需,`#` 注释行弱化。 */
+function CommandPre({ text, prompt }: { text: string | null; prompt: boolean }) {
+  return (
+    <pre className="space-y-1.5 overflow-x-auto p-4 font-mono text-xs leading-relaxed">
+      {text ? (
+        text.split('\n').map((line, i) => (
+          <span key={`${i}-${line}`} className="block">
+            {prompt && <span className="text-ink-subtle">$ </span>}
+            <span className={line.startsWith('#') ? 'text-ink-subtle' : 'text-ink'}>{line}</span>
+          </span>
+        ))
+      ) : (
+        <span className="text-ink-subtle block">…</span>
+      )}
+    </pre>
+  )
+}
+
+/** Docker tab 双块的块头:标签(+可选推荐 chip)+ 独立复制按钮。 */
+function BlockHeader({
+  label,
+  recommended,
   copied,
   onCopy,
+  copyLabel,
+  disabled,
+}: {
+  label: string
+  recommended?: string
+  copied: boolean
+  onCopy: () => void
+  copyLabel: string
+  disabled?: boolean
+}) {
+  return (
+    <div className="border-hairline flex items-center justify-between gap-2 border-b px-4 py-2">
+      <div className="flex items-center gap-2">
+        <span className="text-ink-muted font-mono text-xs">{label}</span>
+        {recommended && (
+          <span className="border-primary/40 bg-primary/10 text-primary rounded-full border px-2 py-0.5 text-[11px] font-medium">
+            {recommended}
+          </span>
+        )}
+      </div>
+      <Button variant="secondary" size="sm" onClick={onCopy} disabled={disabled}>
+        {copied ? <Check className="text-success h-4 w-4" /> : <Copy className="h-4 w-4" />}
+        {copyLabel}
+      </Button>
+    </div>
+  )
+}
+
+function CommandCard({
+  commands,
+  commandCopied,
+  composeCopied,
+  onCopyCommand,
+  onCopyCompose,
   copyLabel,
   tabs,
   activeTab,
   onTabChange,
   t,
 }: {
-  command: string | null
-  copied: boolean
-  onCopy: () => void
+  commands: { linux: string; dockerRun: string; dockerCompose: string } | null
+  commandCopied: boolean
+  composeCopied: boolean
+  onCopyCommand: () => void
+  onCopyCompose: () => void
   copyLabel: string
   tabs: ReadonlyArray<{ id: CommandTab; labelKey: 'guide.tabLinux' | 'guide.tabDocker' }>
   activeTab: CommandTab
@@ -403,23 +487,43 @@ function CommandCard({
             </button>
           ))}
         </div>
-        <Button variant="secondary" size="sm" onClick={onCopy} disabled={!command}>
-          {copied ? <Check className="text-success h-4 w-4" /> : <Copy className="h-4 w-4" />}
-          {copyLabel}
-        </Button>
-      </div>
-      <pre className="space-y-1.5 overflow-x-auto p-4 font-mono text-xs leading-relaxed">
-        {command ? (
-          command.split('\n').map((line) => (
-            <span key={line} className="block">
-              <span className="text-ink-subtle">$ </span>
-              <span className="text-ink">{line}</span>
-            </span>
-          ))
-        ) : (
-          <span className="text-ink-subtle block">…</span>
+        {/* Docker 的复制按钮在各子块头内(两块各自复制);Linux 保持顶部单按钮。 */}
+        {activeTab === 'linux' && (
+          <Button variant="secondary" size="sm" onClick={onCopyCommand} disabled={!commands}>
+            {commandCopied ? (
+              <Check className="text-success h-4 w-4" />
+            ) : (
+              <Copy className="h-4 w-4" />
+            )}
+            {copyLabel}
+          </Button>
         )}
-      </pre>
+      </div>
+      {activeTab === 'linux' ? (
+        <CommandPre text={commands?.linux ?? null} prompt />
+      ) : (
+        <>
+          <BlockHeader
+            label={t('guide.composeTitle')}
+            recommended={t('guide.composeRecommended')}
+            copied={composeCopied}
+            onCopy={onCopyCompose}
+            copyLabel={copyLabel}
+            disabled={!commands}
+          />
+          <CommandPre text={commands?.dockerCompose ?? null} prompt={false} />
+          <div className="border-hairline border-t">
+            <BlockHeader
+              label={t('guide.runTitle')}
+              copied={commandCopied}
+              onCopy={onCopyCommand}
+              copyLabel={copyLabel}
+              disabled={!commands}
+            />
+            <CommandPre text={commands?.dockerRun ?? null} prompt />
+          </div>
+        </>
+      )}
     </div>
   )
 }
