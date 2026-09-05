@@ -126,15 +126,51 @@ pub fn password_reset_rate_limit_layer(
     trust_proxy: bool,
     client_ip_header: Option<&str>,
 ) -> GovernorLayer<IpAddr> {
+    hourly_ip_layer(
+        trust_proxy,
+        client_ip_header,
+        3,
+        "password reset rate limit config",
+    )
+}
+
+/// 邮箱验证 resend 限流：per-client-IP，6 req/hour（独立组，与 password-reset 分桶）。
+///
+/// 曾与 password-reset 共用 3/hour：真实用户等邮件时每分钟点一次，3 次即被锁
+/// 20 分钟（governor 每 20 min 回 1 个令牌），而前端文案只说"等一分钟"。
+/// 防邮件轰炸仍有三层兜底：服务层 per-user 60s 冷却、per-user 200 封/天预算
+/// （mailer.max_resend_emails_per_day）、本 per-IP 6/hour。
+#[must_use]
+pub fn email_resend_rate_limit_layer(
+    trust_proxy: bool,
+    client_ip_header: Option<&str>,
+) -> GovernorLayer<IpAddr> {
+    hourly_ip_layer(
+        trust_proxy,
+        client_ip_header,
+        6,
+        "email resend rate limit config",
+    )
+}
+
+/// per-IP 每小时 N 次的 governor layer 公共形态（password-reset / email-resend 共用）。
+fn hourly_ip_layer(
+    trust_proxy: bool,
+    client_ip_header: Option<&str>,
+    per_hour: u32,
+    label: &str,
+) -> GovernorLayer<IpAddr> {
     let cfg = GovernorConfigBuilder::default()
         .with_extractor(ClientIpExtractor::new(trust_proxy, client_ip_header))
         .expect_connect_info()
-        .quota_default(Quota::requests_per_hour(axum_governor::nz!(3u32)))
+        .quota_default(Quota::requests_per_hour(
+            std::num::NonZeroU32::new(per_hour).expect("non-zero hourly quota"),
+        ))
         .max_keys(50_000)
         .gc_interval(Duration::from_mins(1))
         .error_handler(rate_limit_error_handler)
         .finish()
-        .expect("password reset rate limit config");
+        .expect(label);
     GovernorLayer::new(cfg)
 }
 
@@ -175,6 +211,23 @@ where
         router
     } else {
         router.layer(auth_rate_limit_layer(trust_proxy, client_ip_header))
+    }
+}
+
+/// 条件挂载 email-resend 端点限流。
+pub fn apply_email_resend_rate_limit<S>(
+    router: Router<S>,
+    disabled: bool,
+    trust_proxy: bool,
+    client_ip_header: Option<&str>,
+) -> Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    if disabled {
+        router
+    } else {
+        router.layer(email_resend_rate_limit_layer(trust_proxy, client_ip_header))
     }
 }
 

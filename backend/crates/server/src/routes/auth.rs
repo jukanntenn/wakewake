@@ -27,6 +27,8 @@ pub fn routes() -> Router<Arc<AppState>> {
 ///
 /// - register/login/refresh/pow：per-IP 10/min（authentication.md §七层1）。
 /// - password-reset/*：per-IP 3/hour（更严，防邮件轰炸）。
+/// - verify-email/resend：per-IP 6/hour（独立组；曾与 password-reset 共用 3/hour，
+///   急用户 3 次即锁 20 min，与前端"等一分钟"文案不符）。
 /// - `disabled=true` 跳过 governor layer（仅旁路频率，不旁路业务配额）。
 /// - `trust_proxy`：限流 key 是否读转发头（A-05B，与 §11.C.2 对齐）。
 /// - `client_ip_header`：权威客户端 IP 头（如 CF-Connecting-IP，cloudflare-edge
@@ -58,7 +60,8 @@ pub fn routes_with_rate_limit(
         client_ip_header,
     );
 
-    // 邮箱验证：verify 用 auth 限流组（与 login 同级），resend 用 password-reset 限流组（防邮件轰炸）。
+    // 邮箱验证：verify 用 auth 限流组（与 login 同级），resend 用独立 6/hour 组
+    // （防邮件轰炸；与 password-reset 分桶，见 rate_limit.rs email_resend 注释）。
     let email_verify = Router::new().route("/auth/verify-email", post(verify_email));
     let email_verify = crate::middleware::rate_limit::apply_auth_rate_limit(
         email_verify,
@@ -68,7 +71,7 @@ pub fn routes_with_rate_limit(
     );
 
     let email_resend = Router::new().route("/auth/verify-email/resend", post(resend_verification));
-    let email_resend = crate::middleware::rate_limit::apply_password_reset_rate_limit(
+    let email_resend = crate::middleware::rate_limit::apply_email_resend_rate_limit(
         email_resend,
         disabled,
         trust_proxy,
