@@ -13,7 +13,7 @@ import { LandingHero } from '@/components/landing/landing-hero'
 import { HopsSection } from '@/components/landing/hops-section'
 import { TrustSection } from '@/components/landing/trust-section'
 import { DeploySection } from '@/components/landing/deploy-section'
-import { SpecSection } from '@/components/landing/spec-section'
+import { WhySection } from '@/components/landing/why-section'
 import { LandingFooter } from '@/components/landing/landing-footer'
 
 export default function LandingPage() {
@@ -32,7 +32,7 @@ export default function LandingPage() {
         <HopsSection />
         <TrustSection />
         <DeploySection />
-        <SpecSection />
+        <WhySection />
       </main>
       <LandingFooter />
     </div>

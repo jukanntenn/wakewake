@@ -6,7 +6,7 @@ import { LandingHero } from './landing-hero'
 import { HopsSection } from './hops-section'
 import { TrustSection } from './trust-section'
 import { DeploySection } from './deploy-section'
-import { SpecSection } from './spec-section'
+import { WhySection } from './why-section'
 import { LandingFooter } from './landing-footer'
 
 // 与 data-table.test.tsx 同款:局部 wrap + 真实 en.json 的 landing 命名空间(防文案漂移)。
@@ -55,11 +55,24 @@ describe('landing sections', () => {
     expect(screen.getByText(new RegExp('replaying old ciphertexts'))).toBeInTheDocument()
   })
 
-  it('spec section renders the four numbers', () => {
-    render(wrap(<SpecSection />))
-    expect(screen.getByText('100,000')).toBeInTheDocument()
-    expect(screen.getByText('~1.2 KB')).toBeInTheDocument()
-    expect(screen.getByText('2 GB')).toBeInTheDocument()
+  it('why section renders all eight benefit cards, no dev-only specs', () => {
+    render(wrap(<WhySection />))
+    const cardKeys = [
+      'item1',
+      'item2',
+      'item3',
+      'item4',
+      'item5',
+      'item6',
+      'item7',
+      'item8',
+    ] as const
+    for (const key of cardKeys) {
+      expect(screen.getByText(landingEn.landing.why[key].title)).toBeInTheDocument()
+    }
+    // 重设计回归:旧规格数字与开发规格不再出现(用户不关心技术规格)。
+    expect(screen.queryByText('100,000')).not.toBeInTheDocument()
+    expect(screen.queryByText('~1.2 KB')).not.toBeInTheDocument()
   })
 
   it('footer renders license and current-year copyright', () => {

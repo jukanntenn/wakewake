@@ -6,7 +6,7 @@
 import { useTranslations } from 'next-intl'
 
 interface SectionHeadingProps {
-  ns: 'landing.hops' | 'landing.trust' | 'landing.deploy' | 'landing.spec'
+  ns: 'landing.hops' | 'landing.trust' | 'landing.deploy' | 'landing.why'
 }
 
 export function SectionHeading({ ns }: SectionHeadingProps) {
