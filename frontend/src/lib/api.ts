@@ -18,12 +18,21 @@ export class ApiError extends Error {
   code: string
   status: number
   errors?: FieldError[]
-  constructor(code: string, message: string, status: number, errors?: FieldError[]) {
+  /** 429 时服务端 Retry-After 头(秒);其余状态无值。 */
+  retryAfterSeconds?: number
+  constructor(
+    code: string,
+    message: string,
+    status: number,
+    errors?: FieldError[],
+    retryAfterSeconds?: number,
+  ) {
     super(message)
     this.name = 'ApiError'
     this.code = code
     this.status = status
     this.errors = errors
+    this.retryAfterSeconds = retryAfterSeconds
   }
 }
 
@@ -398,7 +407,13 @@ export async function request<T>(endpoint: string, options: RequestOptions = {})
     const errBody = await response.json().catch(() => null)
     const code = errBody?.code ?? 'INTERNAL_ERROR'
     const message = errBody?.message ?? 'Request failed'
-    throw new ApiError(code, message, response.status, errBody?.errors)
+    // Retry-After:Delta-seconds(RFC 9110 §10.2.3;governor 429 一直发 delta-seconds 形态)。
+    const retryAfterRaw = Number(response.headers.get('Retry-After'))
+    const retryAfterSeconds =
+      response.status === 429 && Number.isFinite(retryAfterRaw)
+        ? Math.max(0, Math.ceil(retryAfterRaw))
+        : undefined
+    throw new ApiError(code, message, response.status, errBody?.errors, retryAfterSeconds)
   }
 
   if (response.status === 204) return undefined as T
