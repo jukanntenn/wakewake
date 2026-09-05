@@ -34,7 +34,8 @@ def warn(msg: str) -> None:
 
 def read_dev_pg_creds() -> tuple[str, str]:
     """POSTGRES_USER / POSTGRES_PASSWORD from devops/.env (dev compose defaults)."""
-    user, password = "wakewake", "wakewake_dev_password"
+    # 回退默认须与 devops/dev-compose.yml 的 POSTGRES_* 保持一致(单一真相源)。
+    user, password = "wakewake", "wakewake"
     env_file = REPO_ROOT / "devops" / ".env"
     if env_file.exists():
         for line in env_file.read_text().splitlines():

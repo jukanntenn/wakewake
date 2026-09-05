@@ -169,14 +169,24 @@ def start():
             "cargo",
             "watch",
             "-x",
-            "run -- --config config.local.toml serve",
+            "run --bin wakewake-server -- --config config.local.toml serve",
         ]
     else:
         logger.info(
             "cargo-watch not installed; backend won't auto-reload "
             "(cargo install cargo-watch)"
         )
-        backend_cmd = ["cargo", "run", "--", "--config", "config.local.toml", "serve"]
+        # --bin 必须显式:workspace 根有 server/agent/seed 三个 bin,裸 `cargo run` 二义性报错。
+        backend_cmd = [
+            "cargo",
+            "run",
+            "--bin",
+            "wakewake-server",
+            "--",
+            "--config",
+            "config.local.toml",
+            "serve",
+        ]
     spawn(
         "backend",
         backend_cmd,
