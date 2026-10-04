@@ -78,5 +78,6 @@ curl --resolve <domain>:443:<vps-ip> -sD - -o /dev/null https://<domain>/
 
 ## 9. Deploy and verify
 
-- 先完成上面的 Cloudflare 步骤（DNS 记录必须已生效——部署尾部的健康校验走 `https://wakewake.online`），然后执行 `ansible-playbook devops/ansible/deploy.yml -l prod -K`（`-K` 的 sudo 密码用于首次运行时的 Docker 安装 / swap / 网关任务）。
+- VPS 前置（运维 provisioning，本 playbook 不安装）：Docker Engine + compose 插件、部署用户在 `docker` 组、宿主 Caddy（`import /etc/caddy/conf.d/*.caddy`）在 443 监听。
+- 先完成上面的 Cloudflare 步骤（DNS 记录必须已生效——部署尾部的健康校验走 `https://wakewake.online`），然后执行 `ansible-playbook devops/ansible/deploy.yml -l prod -K`（`-K` 的 sudo 密码供网关任务：Origin Cert 安装、site 块、Caddy reload）。
 - 打开 `https://wakewake.online/api/v1/health` → `{"status":"ok"}`；playbook 尾部的 [`scripts/check_deploy.py`](../scripts/check_deploy.py) 会自动校验 health + git_sha。

@@ -78,5 +78,6 @@ After the first login, the admin UI's login history (`login_events.ip_address`) 
 
 ## 9. Deploy and verify
 
-- Complete the Cloudflare steps above (the DNS record must be live — the trailing health check goes through `https://wakewake.online`), then run `ansible-playbook devops/ansible/deploy.yml -l prod -K` (the `-K` sudo password feeds the Docker-install / swap / gateway tasks on first use).
+- VPS prerequisites (provisioned by ops, not by the playbook): Docker Engine with the compose plugin, the deploy user in the `docker` group, and the shared host Caddy (`import /etc/caddy/conf.d/*.caddy`) listening on 443.
+- Complete the Cloudflare steps above (the DNS record must be live — the trailing health check goes through `https://wakewake.online`), then run `ansible-playbook devops/ansible/deploy.yml -l prod -K` (the `-K` sudo password feeds the gateway tasks: origin-cert install, site block, Caddy reload).
 - Open `https://wakewake.online/api/v1/health` → `{"status":"ok"}`; the playbook's trailing check ([`scripts/check_deploy.py`](../scripts/check_deploy.py)) verifies health + git_sha automatically.

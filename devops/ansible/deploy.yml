@@ -8,8 +8,11 @@
 #   ansible-playbook devops/ansible/deploy.yml -l test
 #   ansible-playbook devops/ansible/deploy.yml -l prod -K
 #
-# prod 需要 -K（become 任务：首次安装 Docker / 安装宿主 Caddy 网关 site 块）。
-# test（fn）已有 Docker 且无网关任务，become 路径全部跳过，无需 -K。
+# 宿主机前置（运维负责 provisioning，本 playbook 不安装）：Docker Engine +
+# compose 插件已装，部署用户已在 docker 组；prod（宿主网关型）另需宿主
+# systemd Caddy 在 :443 以 import /etc/caddy/conf.d/*.caddy 方式运行。
+# prod 的 -K 供网关 become 任务（Origin Cert 安装 + site 块 + reload）；
+# test 无网关任务，无需 -K。
 #
 # 部署尾部健康校验：scripts/check_deploy.py 轮询 /api/v1/health 就绪后，比对
 # /api/v1/version 的 git_sha 与本地 HEAD（浮动 main tag 防"容器活着但跑旧镜像"）。
@@ -30,48 +33,6 @@
         fail_msg: >-
           Refusing to run without --limit. Specify the environment explicitly,
           e.g. -l test, to avoid deploying to every host at once.
-
-    # ── 宿主引导（按需）：Docker 安装 ──────────────────────────────────────
-    # prod 的 abj 是共用 VPS（django-dream-blog 同机），Docker 由本 playbook
-    # 首次部署时安装；已有 Docker 的主机（test/fn）以下全部跳过。
-    - name: Check whether Docker is installed
-      ansible.builtin.command: docker --version
-      register: docker_check
-      failed_when: false
-      changed_when: false
-
-    - name: Install Docker
-      become: true
-      ansible.builtin.apt:
-        name:
-          - docker.io
-          - docker-compose-v2
-        state: present
-        update_cache: true
-      when: docker_check.rc != 0
-
-    - name: Enable and start Docker
-      become: true
-      ansible.builtin.service:
-        name: docker
-        state: started
-        enabled: true
-      when: docker_check.rc != 0
-
-    - name: Add deploy user to docker group
-      become: true
-      ansible.builtin.user:
-        name: "{{ user }}"
-        groups: docker
-        append: true
-      when: docker_check.rc != 0
-
-    # usermod 只对新会话生效，本连接内 alice 仍无 docker 组：首次部署的 compose
-    # 任务以 root 跑（后续部署 docker_check.rc == 0，恢复非特权路径）。
-    - name: Route compose tasks through sudo for the first (Docker-installing) run
-      ansible.builtin.set_fact:
-        docker_become: true
-      when: docker_check.rc != 0
 
     - name: Ensure application directories exist
       ansible.builtin.file:
@@ -128,9 +89,8 @@
         pull: always
         state: present
         remove_orphans: true
-      become: "{{ docker_become | default(false) }}"
 
-    # ── 宿主 Caddy 网关（gateway_domain 定义的环境；markpost 同款拓扑）──────
+    # ── 宿主 Caddy 网关（gateway_domain 定义的环境，宿主网关型拓扑）──────────
     # 容器先就绪、网关后切换：reload 发生在应用已健康之后（回环端口无曝光窗口）。
     # site 块 = CF Origin Cert 终结 TLS + CF CIDR remote_ip 守卫 → 127.0.0.1:host_port。
     - name: Ensure gateway certs directory

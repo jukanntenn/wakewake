@@ -133,8 +133,8 @@ ansible.cfg                        根配置（inventory + avpm vault 身份，�
 devops/ansible/
   ansible.cfg                      目录局部配置（cd 进去跑同样免参数）
   hosts.yml                        inventory（test / test_agent / staging / prod）
-  deploy.yml                       统一部署 playbook，--limit 选环境（必填）+ 宿主引导
-                                   （Docker 安装，按需）+ 网关 site 安装 + 尾部健康校验
+  deploy.yml                       统一部署 playbook，--limit 选环境（必填；宿主 Docker
+                                   由运维预装）+ 网关 site 安装 + 尾部健康校验
   deploy-agent.yml                 agent 部署（本地构建 + supervisor 常驻；test 专用）
   group_vars/
     all.yml                        共享变量（端口、PG 库名/用户、路径）
