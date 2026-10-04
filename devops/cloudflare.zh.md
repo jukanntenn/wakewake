@@ -71,7 +71,9 @@ IP 链路：
 # A spoofed XFF through Cloudflare must NOT change the recorded client IP.
 curl -H 'X-Forwarded-For: 6.6.6.6' -sD - -o /dev/null https://<domain>/api/v1/health
 # A direct hit on the VPS IP (forged SNI, bypassing Cloudflare) must get 403.
-curl --resolve <domain>:443:<vps-ip> -sD - -o /dev/null https://<domain>/
+# -k is required: the origin presents the CF Origin Cert (Origin-CA-signed,
+# not publicly trusted), so client-side verification fails before the guard.
+curl -k --resolve <domain>:443:<vps-ip> -sD - -o /dev/null https://<domain>/
 ```
 
 首次登录后，admin 后台登录历史（`login_events.ip_address`）必须是访客真实 IP——既不是伪造的 `6.6.6.6`，也不是 Cloudflare 边缘地址。后端请求 span（`http_request`）带同一个 `client_ip`（来自网关原样透传的 `CF-Connecting-IP`）与 `cf_ray`；两者可对同一请求在 Cloudflare 与应用两层互相对账。

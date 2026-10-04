@@ -71,7 +71,9 @@ IP chain:
 # A spoofed XFF through Cloudflare must NOT change the recorded client IP.
 curl -H 'X-Forwarded-For: 6.6.6.6' -sD - -o /dev/null https://<domain>/api/v1/health
 # A direct hit on the VPS IP (forged SNI, bypassing Cloudflare) must get 403.
-curl --resolve <domain>:443:<vps-ip> -sD - -o /dev/null https://<domain>/
+# -k is required: the origin presents the CF Origin Cert (Origin-CA-signed,
+# not publicly trusted), so client-side verification fails before the guard.
+curl -k --resolve <domain>:443:<vps-ip> -sD - -o /dev/null https://<domain>/
 ```
 
 After the first login, the admin UI's login history (`login_events.ip_address`) must show the visitor's real IP — neither the spoofed `6.6.6.6` nor a Cloudflare edge address. Backend request spans (`http_request`) carry the same `client_ip` (from `CF-Connecting-IP`, which the gateway passes through untouched) plus `cf_ray` — the two corroborate one request across Cloudflare and the app.
