@@ -2,7 +2,7 @@ import { BasePage } from './BasePage'
 
 export class AdminUsersPage extends BasePage {
   async goto(): Promise<void> {
-    await super.goto('/dashboard/admin/users')
+    await super.goto('/admin/users')
     await this.waitForLoad()
   }
 

@@ -4,11 +4,11 @@ import { BasePage } from './BasePage'
 
 export class SettingsPage extends BasePage {
   async goto(): Promise<void> {
-    await super.goto('/dashboard/settings')
+    await super.goto('/settings')
     await this.waitForLoad()
     // 登录页头部自带主题/语言切换器：会话失效时点它们会假通过或超时，
     // 必须在这里以路由断言快速失败。
-    expect(this.currentPath()).toBe('/dashboard/settings')
+    expect(this.currentPath()).toBe('/settings')
   }
 
   /** 填写改密表单（placeholder 定位 currentPassword/newPassword）。 */

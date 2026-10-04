@@ -15,10 +15,10 @@ export class LoginPage extends BasePage {
     await this.page.locator('button[type=submit]').click()
   }
 
-  /** 登录并等待跳转 dashboard。 */
+  /** 登录并等待跳转 devices。 */
   async login(email: string, password: string): Promise<void> {
     await this.fill(email, password)
     await this.submit()
-    await this.page.waitForURL(/\/dashboard/, { timeout: 10_000 })
+    await this.page.waitForURL(/\/devices/, { timeout: 10_000 })
   }
 }

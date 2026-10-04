@@ -2,7 +2,7 @@ import { BasePage } from './BasePage'
 
 export class IntegrationsPage extends BasePage {
   async goto(): Promise<void> {
-    await super.goto('/dashboard/integrations')
+    await super.goto('/integrations')
     await this.waitForLoad()
   }
 
