@@ -23,6 +23,7 @@ test.describe('设置（场景 1）', () => {
   })
 
   test('主题切换持久化（data-testid=theme-toggle/dark）', async ({ page, settingsPage }) => {
+    test.skip(test.info().project.name === 'anonymous', 'settings 页需要登录态')
     await settingsPage.goto()
     // 切换到深色（next-themes 写 localStorage + html class）
     const beforeClass = await page.evaluate(() => document.documentElement.className)
@@ -38,6 +39,7 @@ test.describe('设置（场景 1）', () => {
   })
 
   test('语言切换持久化（data-testid=language-switcher）', async ({ page, settingsPage }) => {
+    test.skip(test.info().project.name === 'anonymous', 'settings 页需要登录态')
     await settingsPage.goto()
     const beforeLang = await page.evaluate(() => document.documentElement.lang)
     // 切到中文（或反向）。locale 存 localStorage key='locale'（i18n/constants.ts）
