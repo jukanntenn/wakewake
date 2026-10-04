@@ -2,9 +2,10 @@
 #
 # 所有环境共享同一路由逻辑（API/SSE 反代 + 静态前端托管 + 安全头 + 访问日志），
 # 每环境的 Caddyfile 只有一件事：import 本文件 + 声明站点地址和 TLS 层。
-# 改路由只改这里；站点变体共 4 份，每份对应一种 TLS 形态：
-#   docker/Caddyfile（镜像内置 HTTP；自部署 + staging）、docker/Caddyfile.local
-#   （自签；本地验收 + e2e）、devops/ansible/templates/Caddyfile.{test,prod}。
+# 改路由只改这里；站点变体共 3 份 + prod 宿主网关 site 块，每份对应一种 TLS 形态：
+#   docker/Caddyfile（镜像内置 HTTP；自部署 + staging + prod）、docker/Caddyfile.local
+#   （自签；本地验收 + e2e）、devops/ansible/templates/Caddyfile.test（test 自签）；
+#   prod 的 TLS 终结在宿主 systemd Caddy 网关（wakewake.caddy.j2）。
 #
 # 同步矩阵（本文件内部的不变量，改需整体一致）：
 #   8080：反代目标 = 容器内 backend 监听（config.toml [server].port）。

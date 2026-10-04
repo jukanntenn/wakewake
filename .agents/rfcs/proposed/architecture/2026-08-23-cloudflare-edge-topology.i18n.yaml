@@ -3,5 +3,5 @@
 # languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   hdsh pairing record .agents/rfcs/proposed/architecture/2026-08-23-cloudflare-edge-topology.md
-2026-08-23-cloudflare-edge-topology.md: add86497b3529ee41ccd8a2886f30c842ff3f735
-2026-08-23-cloudflare-edge-topology.zh.md: 51a9263cedadfabee9294b25684e406779431e0b
+2026-08-23-cloudflare-edge-topology.md: 9112f394cafb4718493bd94aed39b504730fb977
+2026-08-23-cloudflare-edge-topology.zh.md: 9f0be77f02782295191ecd27758921618e76d077

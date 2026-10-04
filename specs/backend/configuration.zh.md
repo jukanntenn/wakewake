@@ -49,7 +49,7 @@ CLI 参数（clap → set_override_option）  >  环境变量（WAKEWAKE_*）  >
 | `host` | string | `0.0.0.0` | `WAKEWAKE_SERVER__HOST` | 监听地址 |
 | `port` | u16 | `8080` | `WAKEWAKE_SERVER__PORT` | **不变量 8080**：镜像内 `docker/caddy/routes.caddy` 反代 `127.0.0.1:8080`，永不改 |
 | `trust_proxy` | bool | `true` | `WAKEWAKE_SERVER__TRUST_PROXY` | true=从 XFF 最左取客户端 IP（反代）；false=TCP 对端（直连部署） |
-| `client_ip_header` | Option\<string\> | 未设置 | `WAKEWAKE_SERVER__CLIENT_IP_HEADER` | 权威客户端 IP 头（如 CF 拓扑下的 `CF-Connecting-IP`），设置且 `trust_proxy=true` 时先于 XFF/X-Real-IP 读取。CF 后的 XFF 是追加链（最左可伪造），prod 必设；前提是接入层仅放行可信反代（Caddyfile.prod 的 `remote_ip` CF CIDR 守卫），否则该头本身可被直连伪造——两者同进同退 |
+| `client_ip_header` | Option\<string\> | 未设置 | `WAKEWAKE_SERVER__CLIENT_IP_HEADER` | 权威客户端 IP 头（如 CF 拓扑下的 `CF-Connecting-IP`），设置且 `trust_proxy=true` 时先于 XFF/X-Real-IP 读取。CF 后的 XFF 是追加链（最左可伪造），prod 必设；前提是接入层仅放行可信反代（宿主网关 site 块的 `remote_ip` CF CIDR 守卫），否则该头本身可被直连伪造——两者同进同退 |
 | `max_sse_connections` | usize | `2000` | `WAKEWAKE_SERVER__MAX_SSE_CONNECTIONS` | 全局 SSE 连接上限（0 = 不限制），超出返 503 SERVICE_UNAVAILABLE（agent 退避重连）。滥用兜底，非 per-user 配额（连接基数=已配对 agent 数，同 agent 重连覆盖不叠加） |
 
 ### `[database]`（必填）
@@ -243,18 +243,18 @@ example 文件是**主要用户文档**，schema 变更必须同步它。现有�
 | 远程 test/staging/prod | `ansible-playbook devops/ansible/deploy.yml -l <env>` | `group_vars/<env>/env.yml` + `vault.yml`（avpm 单变量加密）→ 渲染 `config.toml.j2` + `docker-compose.yml.j2` + Caddyfile | ansible vault（入库但加密） |
 | agent（bare-metal） | `deploy-agent.yml -l test_agent` | vault 的 `agent_server_url`/`agent_pairing_code` → 渲染 `agent-config.toml.j2` + supervisord conf | ansible vault |
 
-ansible 环境变量（`group_vars/<env>/env.yml`）：`image`（test=LAN registry 浮动 `main`；staging/prod=`wakewake_version` 钉版本）、`host_port`、`public_url`、`health_url`/`health_insecure`、`tls_profile`（http|https，分支 healthcheck 与 caddy-data 卷）、`caddyfile_template`（未定义 = 零挂载，用镜像内置 Caddyfile）、`mailer_*`。共享不变量在 `group_vars/all.yml`（8080/8443、PG 库名/用户、路径）。
+ansible 环境变量（`group_vars/<env>/env.yml`）：`image`（test=LAN registry 浮动 `main`；staging/prod=`wakewake_version` 钉版本）、`host_port`（prod 另有 `loopback_publish`=仅回环发布）、`public_url`、`health_url`/`health_insecure`、`tls_profile`（http|https，分支 healthcheck 与 caddy-data 卷）、`caddyfile_template`（未定义 = 零挂载，用镜像内置 Caddyfile）、prod 宿主网关变量（`gateway_domain`/`gateway_site_file`/`gateway_certs_dir`/`cloudflare_cidrs`）、`postgres_gucs`、`mailer_*`。共享不变量在 `group_vars/all.yml`（8080/8443、PG 库名/用户、路径、`postgres_gucs` 默认档）。
 
-### Caddyfile：4 份站点变体 + 1 份路由真源
+### Caddyfile：3 份站点变体 + 1 份路由真源 + prod 宿主网关
 
 路由唯一真源是 `docker/caddy/routes.caddy`（烤进镜像 `/app/caddy/routes.caddy`）：API/SSE 反代 + 静态前端 + 安全头 + 访问日志。**改路由只改这一处**。每环境 Caddyfile 只做两件事：import 路由 + 声明站点地址与 TLS 层：
 
 | 变体 | TLS 形态 | 使用环境 |
 |---|---|---|
-| `docker/Caddyfile`（镜像内置 `/app/Caddyfile`） | hostless `:8443` 纯 HTTP | 自部署 + staging（零挂载） |
+| `docker/Caddyfile`（镜像内置 `/app/Caddyfile`） | hostless `:8443` 纯 HTTP | 自部署 + staging + prod（零挂载） |
 | `docker/Caddyfile.local` | `tls internal` 自签（SAN localhost, app） | 本地验收 + e2e（共用） |
 | `devops/ansible/templates/Caddyfile.test` | `tls internal` + `fallback_sni`（IP 直连） | test |
-| `devops/ansible/templates/Caddyfile.prod` | CF Origin Cert（占位） | prod |
+| `devops/ansible/templates/wakewake.caddy.j2` | CF Origin Cert + CF CIDR 守卫——**宿主** systemd Caddy 的 site 块而非容器 Caddyfile；反代到仅回环发布的 `host_port` | prod（宿主网关 `:443`） |
 
 ## 9. 不变量清单（跨环境恒成立）
 

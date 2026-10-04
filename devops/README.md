@@ -13,8 +13,9 @@ Design goals: minimal mental overhead + byte-identical containers between stagin
 | Run E2E | `cd e2e && pnpm test` | none (compose ships test secrets) |
 | Self-deploy (single-machine user) | `cd docker && docker compose up -d` | `cp config.example.toml config.toml` (public_url + 3 secrets) + `cp .env.example .env` (PG password) |
 | Deploy remote test | `ansible-playbook devops/ansible/deploy.yml -l test` | none (`group_vars/test/` is settled) |
-| Deploy staging / prod | same with `-l staging` / `-l prod` | at launch: env.yml (domain/version) + vault (4 secrets) |
-| Deploy agent (bare-metal) | `ansible-playbook devops/ansible/deploy-agent.yml -l test_agent` | none (vault is settled) |
+| Deploy staging / prod | same with `-l staging` / `-l prod -K` | prod settled (secrets in vault); at staging launch: env.yml (domain) + vault |
+| Deploy agent (bare-metal test) | `ansible-playbook devops/ansible/deploy-agent.yml -l test_agent` | none (vault is settled) |
+| Deploy agent (Docker route) | compose with `network_mode: host` (contract: [agent-distribution](../specs/backend/agent-distribution.md)) | fn `/vol1/1000/docker/wakewake-agent` (pairing code via rotate) |
 
 Configuration layering (identical across environments): **TOML files first, override with `WAKEWAKE_*` environment variables when needed** (dynamic overrides for e2e/tests go through this layer); secrets live per environment: fixed values in dev / built-in test secrets for e2e / remote ansible vault / self-deploy local files (never committed).
 
@@ -22,15 +23,15 @@ Configuration layering (identical across environments): **TOML files first, over
 
 | | Local acceptance | test | staging | prod |
 |---|---|---|---|---|
-| **Where** | this machine | fn (LAN 192.168.5.200) | VPS (not live, placeholder) | VPS (not live, placeholder) |
+| **Where** | this machine | fn (LAN 192.168.5.200) | VPS (not live, placeholder) | VPS abj (59.110.22.138) |
 | **Image source** | local build | LAN `192.168.5.50:5000` | Docker Hub `jukanntenn/wakewake` | same as staging |
 | **Image tag** | `local` | `main` (floating, = working tree) | `X.Y.Z` (pinned exact version) | same as staging (same version) |
-| **In-container Caddy** | `tls internal` | `tls internal` (self-signed) | **HTTP** | **HTTPS** (CF Origin Cert) |
-| **TLS termination** | Caddy self-signed | Caddy self-signed | host tunnel (cloudflared-style) | Cloudflare direct origin pull |
-| **Entry** | — | direct LAN | tunnel → host_port | CF CDN → origin restricted to CF CIDRs |
+| **In-container Caddy** | `tls internal` | `tls internal` (self-signed) | **HTTP** | **HTTP** (same as staging) |
+| **TLS termination** | Caddy self-signed | Caddy self-signed | host tunnel (cloudflared-style) | host Caddy gateway (CF Origin Cert) |
+| **Entry** | — | direct LAN | tunnel → host_port | CF CDN → host `:443` gateway (CF CIDRs only) → loopback host_port |
 | **debug** | — | all on (easy triage) | off | off |
 | **agent** | local | `danger-insecure-tls` | normal TLS | same as staging |
-| **Deploy** | compose up | `deploy.yml -l test` | `deploy.yml -l staging` | `deploy.yml -l prod` |
+| **Deploy** | compose up | `deploy.yml -l test` | `deploy.yml -l staging` | `deploy.yml -l prod -K` |
 
 Invariants (identical across the four environments): one s6 container (Caddy:`caddy_port` + backend:`backend_port`) + a sibling postgres over a Unix socket (the `postgres-socket` volume). Differences live only in the TLS layer, external ports, image source, and configuration.
 
@@ -90,8 +91,9 @@ git push origin main   ──▶  CI: lint/test/build/e2e（命令源 = prek，�
              # 改 group_vars/staging/env.yml 的 wakewake_version，重跑 ansible
              ↓ staging 验证通过
 [prod 发布]
-             # 同版本号，改 group_vars/prod/env.yml（域名/cert/邮件），重跑：
-             ansible-playbook devops/ansible/deploy.yml -l prod
+             # 同版本号：改 group_vars/prod/env.yml 的 wakewake_version，重跑
+             # （-K 供 become 任务用）：
+             ansible-playbook devops/ansible/deploy.yml -l prod -K
 ```
 
 Rollback: point `wakewake_version` back at the target version and re-run the playbook (images are immutable; a rollback takes seconds). Deploying staging/prod from a non-tag commit adds `-e verify_sha=no` to skip the sha comparison (the health check still runs).
@@ -131,20 +133,24 @@ ansible.cfg                        根配置（inventory + avpm vault 身份，�
 devops/ansible/
   ansible.cfg                      目录局部配置（cd 进去跑同样免参数）
   hosts.yml                        inventory（test / test_agent / staging / prod）
-  deploy.yml                       统一部署 playbook，--limit 选环境（必填）+ 尾部健康校验
-  deploy-agent.yml                 agent 部署（本地构建 + supervisor 常驻）
+  deploy.yml                       统一部署 playbook，--limit 选环境（必填）+ 宿主引导
+                                   （Docker 安装 / swap，按需）+ 网关 site 安装 + 尾部健康校验
+  deploy-agent.yml                 agent 部署（本地构建 + supervisor 常驻；test 专用）
   group_vars/
-    all.yml                        共享变量（端口、PG 库名/用户、路径）
+    all.yml                        共享变量（端口、PG 库名/用户、路径、postgres_gucs 默认档）
     test/{env.yml,vault.yml}       test：LAN registry 浮动 main + 自签 HTTPS + secrets（加密）
     staging/{env.yml,vault.yml}    staging：Docker Hub 钉版本 + 隧道前置（占位）
-    prod/{env.yml,vault.yml}       prod：CF 直连回源 + Origin Cert（占位）
-  host_vars/                       每主机事实（user / home）
+    prod/{env.yml,vault.yml}       prod：Docker Hub 钉版本 + 宿主 Caddy 网关前置 + secrets（加密）
+  host_vars/                       每主机事实（user / home；abj 含 swap_mb）
   templates/
-    docker-compose.yml.j2          通用（healthcheck / caddy-data 按 tls_profile 分支）
-    config.toml.j2                 通用（DSN password urlencode）
+    docker-compose.yml.j2          通用（healthcheck / caddy-data 按 tls_profile 分支；
+                                   loopback_publish=true 时端口仅回环发布）
+    config.toml.j2                 通用（DSN password urlencode；定义 bootstrap_admin_email
+                                   时渲染 [security]，密码走 vault）
     Caddyfile.test                 test：tls internal + fallback_sni
-    Caddyfile.prod                 prod：CF Origin Cert + CF CIDR 放行（remote_ip 守卫 + client_ip）
-                                   （staging 零挂载：直接用镜像内置 /app/Caddyfile）
+    wakewake.caddy.j2              宿主 Caddy 网关 site 块（prod）：CF Origin Cert + CF CIDR
+                                   放行（remote_ip 守卫）→ 127.0.0.1:host_port
+                                   （staging/prod 容器零挂载：直接用镜像内置 /app/Caddyfile）
 ```
 
 ### Vault (avpm single-variable encryption)
@@ -162,11 +168,10 @@ ansible-vault encrypt_string --vault-id wakewake-test@~/.local/bin/avpm-client \
 
 `~/.ansible-vault/wakewake-dev.pwd` exists only as a recovery backup should the keyring be lost; delete it once avpm sync is proven reliable.
 
-## TODO (when staging/prod go live)
+## Launch state
 
-- `hosts.yml`: fill real VPS IPs / users into the staging / prod groups
-- `host_vars/staging.yml` / `prod.yml`: rename to the host names, fill `user`/`home`
-- `group_vars/staging/env.yml` / `prod/env.yml`: fill `public_url` (real domain), enable `mailer_*` as needed
-- prod: run the Cloudflare console steps in [cloudflare.md](cloudflare.md) (zone, DNS, TLS mode, Origin Cert, edge protections), then uncomment origin_cert/origin_key in env.yml. The Caddyfile.prod CIDR allowlist and the backend `client_ip_header` are already wired via `cloudflare_cidrs` / `server_client_ip_header` in env.yml.
-- vault: `avpm-client set wakewake-staging / wakewake-prod` + encrypt per the field list at the top of vault.yml
-- GitHub secrets: `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` (for the CI publishing period; the token needs read/write/delete, delete to clean up temporary build-<arch> tags)
+Prod is wired for abj (host-gateway topology; the console runbook lives in [cloudflare.md](cloudflare.md)). Repo-side items done: prod inventory (`abj`), `host_vars/abj.yml`, prod `env.yml` (domain/version/GUC downgrade/gateway vars) + vault secrets, GitHub secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` (the token needs read/write/delete, delete to clean up temporary build-<arch> tags). The console steps (DNS record, TLS mode, Origin Cert creation + placement) execute at launch per cloudflare.md. Remaining:
+
+- staging (before it goes live): fill the `staging` group in `hosts.yml`, rename host_vars, set `public_url` / mailer in `group_vars/staging/env.yml`, encrypt the `wakewake-staging` vault per the field list at the top of vault.yml
+- prod mailer: disabled at launch — registration stays unverified (purged per `unverified_retention_days`) and password-reset email is unavailable; set SMTP + vault `mailer_smtp_password` when needed
+- prod agent: Docker route on fn (`network_mode: host`, contract in [agent-distribution](../specs/backend/agent-distribution.md)); pairing code comes from `POST /agents/default/pairing-code/rotate`

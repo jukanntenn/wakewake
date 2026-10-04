@@ -2,7 +2,7 @@
 
 English | [中文](cloudflare.zh.md)
 
-Cloudflare console operations for the prod environment (visitor → Cloudflare CDN → direct origin pull to the VPS Caddy over a CF Origin Cert, Full-strict). Topology and environment table live in [README.md](README.md); the staging tunnel is not a Cloudflare product, so staging has no steps on this page. Repo-side launch steps (inventory, env.yml, vault, image tags): [README.md](README.md#todo-when-stagingprod-go-live).
+Cloudflare console operations for the prod environment. Topology (host gateway): visitor → Cloudflare CDN (orange cloud, Full-strict) → host systemd Caddy on `:443` (terminates TLS with a CF Origin Cert, admits only Cloudflare CIDR sources) → `127.0.0.1:8449` (container Caddy, plain HTTP). The container port is loopback-only; the host gateway is the single public entry. Why a host gateway instead of direct origin pull on a high port: on the Free plan only proxied port 443 has edge caching — every other port answers `CF-Cache-Status: DYNAMIC`, which would switch the whole zone (immutable frontend assets included) to uncached. Topology and environment table live in [README.md](README.md); the staging tunnel is not a Cloudflare product, so staging has no steps on this page. Repo-side launch steps (inventory, env.yml, vault, image tags): [README.md](README.md#todo-when-stagingprod-go-live).
 
 Prerequisites: a Cloudflare account; `wakewake.online` registered at a registrar; the VPS public IPv4 address.
 
@@ -25,23 +25,29 @@ Prerequisites: a Cloudflare account; `wakewake.online` registered at a registrar
 ## 4. Origin Certificate
 
 - **SSL/TLS** → **Origin Server** → **Origin Certificates** tab → **Create Certificate** → keep **Generate with Cloudflare** (RSA) and the default hostnames (`wakewake.online` + `*.wakewake.online`) → pick the longest validity offered → Key Format **PEM** → **Create**.
-- Copy the **Origin Certificate** to `{{ app_path }}/certs/origin.pem` and the **Private Key** to `{{ app_path }}/certs/origin.key` on the VPS (default `/home/<user>/docker/wakewake/certs/`), then `chmod 600` both — the key is displayed only once.
+- Copy the **Origin Certificate** to `{{ app_path }}/certs/origin.pem` and the **Private Key** to `{{ app_path }}/certs/origin.key` on the VPS (default `/home/<user>/docker/wakewake/certs/`), `chmod 600` both — the key is displayed only once. `deploy.yml` installs both into `/etc/caddy/certs/wakewake/` (root:caddy) and the gateway site block reads them there; the `certs/` copies are the durable source deploy runs from.
 
-## 5. Origin Rule (port rewrite)
+## 5. Host gateway (site block)
 
-- **Rules** → **Origin Rules** → **Create rule**: match `http.host eq "wakewake.online"`, then **Destination Port** → **Rewrite to** → `8449` → **Deploy**.
+Cloudflare connects on standard 443, where the shared host Caddy listens (`import /etc/caddy/conf.d/*.caddy`; no Cloudflare Origin Rule is involved). `deploy.yml -l prod -K` renders the wakewake site block ([`wakewake.caddy.j2`](ansible/templates/wakewake.caddy.j2)) into `/etc/caddy/conf.d/wakewake.caddy` and reloads Caddy:
 
-## 6. Origin firewall
+- `tls` with the Origin Cert pair from §4 — Full-strict origin pull.
+- `@not_cf not remote_ip <cloudflare_cidrs>` → **403**: any connection that bypasses Cloudflare (forged SNI straight to the VPS IP) is rejected.
+- `reverse_proxy 127.0.0.1:8449` — the loopback-only container publish; `CF-Connecting-IP` passes through untouched for the backend's authoritative client IP.
 
-- On the VPS firewall, allow inbound TCP `8449` only from the Cloudflare IP ranges (IPv4 + IPv6, https://www.cloudflare.com/ips/) plus SSH; default-deny everything else.
-- The container Caddy enforces the same allowlist at the application layer: `Caddyfile.prod` answers `403` to any connection whose source is outside `cloudflare_cidrs` (`group_vars/prod/env.yml`). The VPS firewall is the optional second layer — it also saves the TLS-handshake bandwidth that a 403 would otherwise spend.
+## 6. Origin lockdown
+
+- App layer (always on): the gateway site block from §5 is the enforcement — bypassing CF means bypassing every edge protection (rate limiting, WAF, caching), so non-CF sources get 403.
+- Host firewall (optional second layer): on a dedicated VPS, allow inbound 443 only from the Cloudflare IP ranges (https://www.cloudflare.com/ips/). Not applicable on abj — 443 is shared with other production sites; the site-block guard is the layer there.
+- VPS security group: 443 must be open (it already is for the co-hosted sites).
 
 ## 7. Edge protections (free plan)
 
+- **Rules → Cache Rules → Create rule** `wakewake-shell`: match `(not starts_with(http.request.uri.path, "/api/")) and (not starts_with(http.request.uri.path, "/_next/static/"))` → **Eligible for cache**, Edge TTL override **5 minutes**, Browser TTL **Respect Existing Headers**. Immutable `/_next/static/*` assets cache by default (origin sends `max-age=31536000, immutable`); this rule adds a short edge TTL for the HTML shell, whose origin `Cache-Control` is `max-age=0, must-revalidate` — browsers revalidate every navigation while the edge stops re-pulling the shell from the origin within the TTL window.
 - **Security → WAF → Rate limiting rules**: create the single rule the Free plan allows — expression `starts_with(http.request.uri.path, "/api/v1/auth/")`, action **Block**, response code `429`. Free-plan constraints: one rule, IP counting only, fixed 10 s counting / 10 s mitigation windows. Treat it as a coarse gate — Cloudflare documents that excess requests may still reach the origin before mitigation engages; the backend governor limits remain the precise layer.
 - **Bots → Bot Fight Mode stays OFF.** It challenges API and mobile-app traffic with no rule-based exemption, which would break the `wakewake-agent` SSE channel (a non-browser client). Browser pages get their protection from the rate limiting rule and the challenge tools below.
 - Emergency switches: **Security → Settings** holds Under Attack mode (a managed-challenge interstitial for the whole zone); up to 5 WAF custom rules can add a managed challenge on hot paths or block abusive countries/ASNs (country block via custom rules — IP Access Rules country blocking is Enterprise-only).
-- **Notifications**: enable **Origin Error Rate Alert** and **Passive Origin Monitoring** so a saturated 3 Mbps origin pages someone instead of failing silently.
+- **Notifications**: enable **Origin Error Rate Alert** and **Passive Origin Monitoring** so a saturated origin pages someone instead of failing silently.
 
 ## 8. Post-launch verification
 
@@ -64,13 +70,13 @@ IP chain:
 ```bash
 # A spoofed XFF through Cloudflare must NOT change the recorded client IP.
 curl -H 'X-Forwarded-For: 6.6.6.6' -sD - -o /dev/null https://<domain>/api/v1/health
-# A direct hit on the VPS IP (bypassing Cloudflare) must get 403.
-curl -k -sD - -o /dev/null https://<vps-ip>:8449/
+# A direct hit on the VPS IP (forged SNI, bypassing Cloudflare) must get 403.
+curl --resolve <domain>:443:<vps-ip> -sD - -o /dev/null https://<domain>/
 ```
 
-After the first login, the admin UI's login history (`login_events.ip_address`) must show the visitor's real IP — neither the spoofed `6.6.6.6` nor a Cloudflare edge address. Caddy access logs carry `client_ip` (real visitor) plus the `cf-ray` request header, and backend request spans (`http_request`) carry the same `client_ip` and `cf_ray`; the three corroborate one request across Cloudflare, Caddy, and the app.
+After the first login, the admin UI's login history (`login_events.ip_address`) must show the visitor's real IP — neither the spoofed `6.6.6.6` nor a Cloudflare edge address. Backend request spans (`http_request`) carry the same `client_ip` (from `CF-Connecting-IP`, which the gateway passes through untouched) plus `cf_ray` — the two corroborate one request across Cloudflare and the app.
 
 ## 9. Deploy and verify
 
-- Complete the repo-side checklist, then run `ansible-playbook devops/ansible/deploy.yml -l prod`.
+- Complete the Cloudflare steps above (the DNS record must be live — the trailing health check goes through `https://wakewake.online`), then run `ansible-playbook devops/ansible/deploy.yml -l prod -K` (the `-K` sudo password feeds the Docker-install / swap / gateway tasks on first use).
 - Open `https://wakewake.online/api/v1/health` → `{"status":"ok"}`; the playbook's trailing check ([`scripts/check_deploy.py`](../scripts/check_deploy.py)) verifies health + git_sha automatically.

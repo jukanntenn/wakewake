@@ -6,8 +6,10 @@
 # 从仓库任意目录运行（根 ansible.cfg 提供 inventory + avpm vault 身份）：
 #
 #   ansible-playbook devops/ansible/deploy.yml -l test
-#   ansible-playbook devops/ansible/deploy.yml -l staging
-#   ansible-playbook devops/ansible/deploy.yml -l prod
+#   ansible-playbook devops/ansible/deploy.yml -l prod -K
+#
+# prod 需要 -K（become 任务：首次安装 Docker / 创建 swap / 安装宿主 Caddy 网关
+# site 块）。test（fn）已有 Docker 且无网关任务，become 路径全部跳过，无需 -K。
 #
 # 部署尾部健康校验：scripts/check_deploy.py 轮询 /api/v1/health 就绪后，比对
 # /api/v1/version 的 git_sha 与本地 HEAD（浮动 main tag 防"容器活着但跑旧镜像"）。
@@ -29,12 +31,95 @@
           Refusing to run without --limit. Specify the environment explicitly,
           e.g. -l test, to avoid deploying to every host at once.
 
+    # ── 宿主引导（按需）：Docker 安装 + swap 兜底 ──────────────────────────
+    # prod 的 abj 是共用 VPS（django-dream-blog 同机），Docker 由本 playbook
+    # 首次部署时安装；已有 Docker 的主机（test/fn）以下全部跳过。
+    - name: Check whether Docker is installed
+      ansible.builtin.command: docker --version
+      register: docker_check
+      failed_when: false
+      changed_when: false
+
+    - name: Install Docker
+      become: true
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-compose-v2
+        state: present
+        update_cache: true
+      when: docker_check.rc != 0
+
+    - name: Enable and start Docker
+      become: true
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+      when: docker_check.rc != 0
+
+    - name: Add deploy user to docker group
+      become: true
+      ansible.builtin.user:
+        name: "{{ user }}"
+        groups: docker
+        append: true
+      when: docker_check.rc != 0
+
+    # usermod 只对新会话生效，本连接内 alice 仍无 docker 组：首次部署的 compose
+    # 任务以 root 跑（后续部署 docker_check.rc == 0，恢复非特权路径）。
+    - name: Route compose tasks through sudo for the first (Docker-installing) run
+      ansible.builtin.set_fact:
+        docker_become: true
+      when: docker_check.rc != 0
+
+    # 无 swap 的小内存共用主机（host_vars 定义 swap_mb 时启用；已有 swap 跳过）。
+    - name: Check existing swap
+      ansible.builtin.command: swapon --show=NAME --noheadings
+      register: swap_check
+      changed_when: false
+      when: swap_mb is defined
+
+    - name: Create swapfile ({{ swap_mb }} MB)
+      become: true
+      ansible.builtin.shell: |
+        set -eu
+        dd if=/dev/zero of=/swapfile bs=1M count={{ swap_mb }} status=none
+        chmod 600 /swapfile
+        mkswap /swapfile
+        swapon /swapfile
+        grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+        sysctl -w vm.swappiness=10 > /dev/null
+        grep -q '^vm.swappiness' /etc/sysctl.conf || echo 'vm.swappiness=10' >> /etc/sysctl.conf
+      when: swap_mb is defined and swap_check.stdout | trim | length == 0
+
     - name: Ensure application directories exist
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory
         mode: "0755"
       loop: "{{ app_dirs }}"
+
+    # ── 宿主 Caddy 网关前置校验：Origin Cert 必须先就位（cloudflare.md §4）──
+    - name: Check origin cert/key presence
+      ansible.builtin.stat:
+        path: "{{ app_path }}/certs/{{ item }}"
+      register: gateway_certs
+      loop:
+        - origin.pem
+        - origin.key
+      when: gateway_domain is defined
+
+    - name: Fail with instructions when origin certs are missing
+      ansible.builtin.fail:
+        msg: >-
+          {{ app_path }}/certs/origin.pem + origin.key not found.
+          Create the Cloudflare Origin Certificate first (devops/cloudflare.md §4)
+          and place both files there, then re-run the playbook.
+      when:
+        - gateway_domain is defined
+        - gateway_certs.results is defined
+        - gateway_certs.results | selectattr('stat.exists', 'equalto', false) | list | length > 0
 
     - name: Template docker-compose.yml
       ansible.builtin.template:
@@ -48,7 +133,7 @@
         dest: "{{ config_file }}"
         mode: "0600"
 
-    # tls_profile=http 的环境（staging）不定义 caddyfile_template：
+    # tls_profile=http 的环境（staging/prod）不定义 caddyfile_template：
     # 不渲染不挂载，容器直接用镜像内置 /app/Caddyfile（hostless :8443 plain HTTP）。
     - name: Template Caddyfile
       ansible.builtin.template:
@@ -63,6 +148,47 @@
         pull: always
         state: present
         remove_orphans: true
+      become: "{{ docker_become | default(false) }}"
+
+    # ── 宿主 Caddy 网关（gateway_domain 定义的环境；markpost 同款拓扑）──────
+    # 容器先就绪、网关后切换：reload 发生在应用已健康之后（回环端口无曝光窗口）。
+    # site 块 = CF Origin Cert 终结 TLS + CF CIDR remote_ip 守卫 → 127.0.0.1:host_port。
+    - name: Ensure gateway certs directory
+      become: true
+      ansible.builtin.file:
+        path: "{{ gateway_certs_dir }}"
+        state: directory
+        owner: root
+        group: caddy
+        mode: "0750"
+      when: gateway_domain is defined
+
+    - name: Install origin cert/key into the gateway
+      become: true
+      ansible.builtin.copy:
+        src: "{{ app_path }}/certs/{{ item.name }}"
+        dest: "{{ gateway_certs_dir }}/{{ item.name }}"
+        owner: root
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+        remote_src: true
+      loop:
+        - { name: origin.pem, group: caddy, mode: "0644" }
+        - { name: origin.key, group: caddy, mode: "0640" }
+      when: gateway_domain is defined
+      notify: reload gateway caddy
+
+    - name: Template gateway site block
+      become: true
+      ansible.builtin.template:
+        src: wakewake.caddy.j2
+        dest: "{{ gateway_site_file }}"
+        mode: "0644"
+      when: gateway_domain is defined
+      notify: reload gateway caddy
+
+    - name: Flush gateway reload before verifying health
+      ansible.builtin.meta: flush_handlers
 
     - name: Record expected git sha from local HEAD
       ansible.builtin.command: git rev-parse HEAD
@@ -84,3 +210,10 @@
       changed_when: false
       delegate_to: localhost
       run_once: true
+
+  handlers:
+    - name: reload gateway caddy
+      become: true
+      ansible.builtin.systemd:
+        name: caddy
+        state: reloaded

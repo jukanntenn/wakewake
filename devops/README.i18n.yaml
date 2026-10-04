@@ -3,5 +3,5 @@
 # languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   hdsh pairing record devops/README.md
-README.md: 3780521eabc41c4cd9c110bc31047170083d2f90
-README.zh.md: 76be7773f6ded397ffff2265ad22e13c40208ead
+README.md: 9a49d805546a843f1c39a5d95114463c180151e9
+README.zh.md: 7616c3f115b164c02e8c32f3aec07aad3e484451

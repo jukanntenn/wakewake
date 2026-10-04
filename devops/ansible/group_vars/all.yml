@@ -19,3 +19,12 @@ caddy_port: 8443
 # 连接——永不对外发布。
 postgres_db: wakewake
 postgres_user: wakewake
+
+# Postgres 调优 GUC（叠加在镜像默认 postgresql.conf 之上）。默认面向独占 2G VPS；
+# 内存降档的共用主机（prod/abj）在 group_vars/<env>/env.yml 覆盖。
+postgres_gucs:
+  - shared_buffers=256MB
+  - max_connections=50
+  - effective_cache_size=1GB
+  - maintenance_work_mem=128MB
+  - synchronous_commit=off

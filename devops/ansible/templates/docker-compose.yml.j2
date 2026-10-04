@@ -12,21 +12,20 @@ services:
     image: {{ image }}
     container_name: {{ app_name }}
     ports:
+{%- if loopback_publish | default(false) %}
+      # 宿主网关型环境（prod）：仅回环发布，对外唯一入口是宿主 Caddy :443。
+      - "127.0.0.1:{{ host_port }}:{{ caddy_port }}"
+{%- else %}
       - "{{ host_port }}:{{ caddy_port }}"
+{%- endif %}
     volumes:
       - {{ config_file }}:/app/config.toml:ro
       - {{ app_path }}/data:/app/data
 {% if caddyfile_template is defined %}
       # s6 caddy run 脚本硬编码读 /app/Caddyfile（docker/s6/s6-rc.d/caddy/run），
-      # 挂载点必须与之一致，否则 Caddy 起不来。未定义模板的环境（staging）不挂载，
-      # 直接用镜像内置 plain HTTP Caddyfile。
+      # 挂载点必须与之一致，否则 Caddy 起不来。未定义模板的环境（staging/prod）
+      # 不挂载，直接用镜像内置 plain HTTP Caddyfile（TLS 由外部终结）。
       - {{ caddyfile }}:/app/Caddyfile:ro
-{% endif %}
-{% if origin_cert is defined %}
-      # CF Origin Cert 只读挂载：宿主 {{ app_path }}/certs/（运维放置，操作见
-      # devops/cloudflare.md §4）→ 容器内 /app/certs，供 Caddyfile.prod 的 tls 读取。
-      # origin_cert/origin_key（prod env.yml）是容器内路径，解开注释即触发本挂载。
-      - {{ app_path }}/certs:/app/certs:ro
 {% endif %}
       - postgres-socket:/var/run/postgresql
 {% if tls_profile == 'https' %}
@@ -74,20 +73,15 @@ services:
       - POSTGRES_DB={{ postgres_db }}
       - POSTGRES_USER={{ postgres_user }}
       - POSTGRES_PASSWORD={{ db_password }}
-    # 5 个调优 GUC 叠加在镜像默认 postgresql.conf 之上。socket 目录保持镜像默认
+    # 调优 GUC 叠加在镜像默认 postgresql.conf 之上（清单在 group_vars/all.yml 的
+    # postgres_gucs，共用小内存主机按环境覆盖）。socket 目录保持镜像默认
     # /var/run/postgresql（entrypoint 拥有权限）；app 通过共享卷连接。
     command:
       - postgres
+{%- for guc in postgres_gucs %}
       - -c
-      - shared_buffers=256MB
-      - -c
-      - max_connections=50
-      - -c
-      - effective_cache_size=1GB
-      - -c
-      - maintenance_work_mem=128MB
-      - -c
-      - synchronous_commit=off
+      - {{ guc }}
+{%- endfor %}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - postgres-socket:/var/run/postgresql
