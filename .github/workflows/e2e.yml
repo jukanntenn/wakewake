@@ -1,5 +1,5 @@
 # E2E Tests workflow（e2e.md §10.1）。
-# 触发：main 推送 + 夜间 2 点 + 手动。分钟级（~10min 全套）。
+# 触发：main 推送 + 夜间 2 点 + 手动。全套 25–35 分钟量级（作业超时 45 分钟）。
 name: E2E Tests
 on:
   push:
@@ -22,7 +22,7 @@ concurrency:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
