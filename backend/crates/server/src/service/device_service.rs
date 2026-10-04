@@ -71,6 +71,11 @@ pub async fn create<D: CommandDispatcher>(
 
     // 同事务：配额锁 → count → insert device → bump version（§5.4）
     let mut tx = pool.begin().await.map_err(AppError::from)?;
+    // V3-38B：先锁 1:1 agent 父行，串行化该 user 的并发设备创建。
+    // SELECT...FOR UPDATE 在 0 设备行时不加锁；锁父行后 count_for_update 才能读到已提交的设备行。
+    agent_repo::lock_for_update(&mut *tx, agent.id)
+        .await
+        .map_err(AppError::from_repo)?;
     let count = device_repo::count_for_update(&mut *tx, user_id)
         .await
         .map_err(AppError::from_repo)?;

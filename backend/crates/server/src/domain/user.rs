@@ -15,12 +15,19 @@ pub struct User {
     /// 禁用时间（admin disable 时写入，enable 时清 null）。审计列，AdminUser 响应暴露。
     #[serde(with = "time::serde::rfc3339::option")]
     pub disabled_at: Option<OffsetDateTime>,
+    /// 禁用原因（admin disable 时填写，enable 时清 null）。当前态（§0.7）。
+    pub disabled_reason: Option<String>,
+    /// 禁用操作者 user_id（admin disable 时填写，enable 时清 null）。ON DELETE SET NULL（§8.2）。
+    pub disabled_by: Option<i64>,
     pub is_superuser: bool,
     /// 邮箱是否已验证（注册时 FALSE，点验证链接后 TRUE）。存量用户迁移后默认 TRUE。
     pub email_verified: bool,
     /// 上次发验证邮件时间（resend 限流，防邮件轰炸）。
     #[serde(with = "time::serde::rfc3339::option")]
     pub verification_sent_at: Option<OffsetDateTime>,
+    /// 上次发密码重置邮件时间（per-email 15min 节流，§七层4 / A-24）。
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub password_reset_sent_at: Option<OffsetDateTime>,
     /// 兼作无状态密码重置 token 的 HMAC 输入；null 时用空串占位。
     #[serde(with = "time::serde::rfc3339::option")]
     pub last_login: Option<OffsetDateTime>,
@@ -33,6 +40,7 @@ pub struct User {
 }
 
 /// 注册新用户输入（garde 校验编译期已知字段）。
+/// challenge/nonce：PoW（ui-ux-risk-control §8.6，SaaS 防批量注册）。
 #[derive(Debug, Clone, Deserialize, garde::Validate)]
 pub struct RegisterInput {
     #[garde(email)]
@@ -40,6 +48,12 @@ pub struct RegisterInput {
     // garde length 取字面量 usize（PASSWORD_MIN_LEN=8, PASSWORD_MAX_LEN=72）。
     #[garde(length(min = 8, max = 72))]
     pub password: String,
+    /// PoW challenge id（ui-ux-risk-control §8.6）。
+    #[garde(skip)]
+    pub challenge: String,
+    /// PoW nonce（客户端求解结果）。
+    #[garde(skip)]
+    pub nonce: String,
 }
 
 use crate::domain::{PASSWORD_MAX_LEN, PASSWORD_MIN_LEN};

@@ -31,7 +31,9 @@ services:
       WAKEWAKE_MAILER__FROM_NAME: WakeWake E2E
       RUST_LOG: info
     volumes:
-      - ./Caddyfile:/app/Caddyfile:ro
+      # 与本地验收共用同一自签 TLS 变体（docker/Caddyfile.local）：
+      # agent 容器经 docker DNS app:8443 访问，Playwright 经 localhost:8443。
+      - ../docker/Caddyfile.local:/app/Caddyfile:ro
     networks:
       - e2e-net
     healthcheck:
@@ -52,7 +54,7 @@ services:
     networks:
       - e2e-net
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-wakewake}"]
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-wakewake}", "-d", "${POSTGRES_DB:-wakewake_test}"]
       interval: 5s
       timeout: 3s
       retries: 10

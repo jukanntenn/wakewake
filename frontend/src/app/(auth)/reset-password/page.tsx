@@ -47,7 +47,7 @@ function ResetPasswordContent() {
       const userResp = await api.user.me()
       setAuth(data.access_token, userResp, data.refresh_token)
       toast.success(t('passwordReset'))
-      router.push('/dashboard')
+      router.push('/devices')
     } catch {
       toast.error(t('error.INVALID_TOKEN'))
     } finally {

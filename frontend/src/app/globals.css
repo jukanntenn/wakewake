@@ -75,3 +75,130 @@
     letter-spacing: -0.6px;
   }
 }
+
+/* ===== Landing 拓扑动画（零 JS，纯 CSS） =====
+ * 周期 7s：绿色"密文包"沿 browser→server→agent→device 三段边依次流动
+ * （SVG 路径用 pathLength=100 归一化，dash 单位与像素长度无关），
+ * 末段到达后终点状态点灰→绿，稍作停留后复位循环。
+ * prefers-reduced-motion：流动消失，终点常绿（唤醒完成的定格态）。
+ */
+@keyframes wk-packet-1 {
+  0% {
+    stroke-dashoffset: 8;
+    opacity: 1;
+  }
+  26% {
+    stroke-dashoffset: -100;
+    opacity: 1;
+  }
+  26.001%,
+  99.999% {
+    opacity: 0;
+  }
+  100% {
+    stroke-dashoffset: 8;
+    opacity: 0;
+  }
+}
+
+@keyframes wk-packet-2 {
+  0%,
+  30% {
+    stroke-dashoffset: 8;
+    opacity: 0;
+  }
+  30.001% {
+    opacity: 1;
+  }
+  58% {
+    stroke-dashoffset: -100;
+    opacity: 1;
+  }
+  58.001%,
+  99.999% {
+    opacity: 0;
+  }
+  100% {
+    stroke-dashoffset: 8;
+    opacity: 0;
+  }
+}
+
+@keyframes wk-packet-3 {
+  0%,
+  62% {
+    stroke-dashoffset: 8;
+    opacity: 0;
+  }
+  62.001% {
+    opacity: 1;
+  }
+  86% {
+    stroke-dashoffset: -100;
+    opacity: 1;
+  }
+  86.001%,
+  99.999% {
+    opacity: 0;
+  }
+  100% {
+    stroke-dashoffset: 8;
+    opacity: 0;
+  }
+}
+
+@keyframes wk-dot {
+  0%,
+  85% {
+    fill: var(--color-ink-subtle);
+  }
+  87%,
+  97% {
+    fill: var(--color-success);
+  }
+  100% {
+    fill: var(--color-ink-subtle);
+  }
+}
+
+.wk-packet {
+  stroke: var(--color-success);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 8 92;
+  fill: none;
+}
+
+.wk-packet-1 {
+  animation: wk-packet-1 7s linear infinite;
+}
+.wk-packet-2 {
+  animation: wk-packet-2 7s linear infinite;
+}
+.wk-packet-3 {
+  animation: wk-packet-3 7s linear infinite;
+}
+
+.wk-dot {
+  animation: wk-dot 7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wk-packet-1,
+  .wk-packet-2,
+  .wk-packet-3 {
+    animation: none;
+    opacity: 0;
+  }
+  .wk-dot {
+    animation: none;
+    fill: var(--color-success);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* 仅 landing 页启用锚点平滑滚动（#landing 为页根 id）。 */
+  html:has(#landing) {
+    scroll-behavior: smooth;
+  }
+}

@@ -1,0 +1,7 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob
+# hash of each side as of the last confirmed-consistent state. Both
+# languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   hdsh pairing record specs/backend/agent-distribution.md
+agent-distribution.md: ef295098289686ac80e58cba13afa374249958bb
+agent-distribution.zh.md: 828a5538df026b5b209e2c3339a0a65762c87a4a

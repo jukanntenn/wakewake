@@ -1,10 +1,8 @@
+// jest-dom 官方 vitest 入口：运行时注册 matchers + 编译期增强 vitest Assertion 类型
+// （tsc --noEmit 门禁覆盖测试文件，手动 expect.extend 只解决运行时、不带类型）。
+import '@testing-library/jest-dom/vitest'
 import { vi, afterEach } from 'vitest'
-import * as matchers from '@testing-library/jest-dom/matchers'
-import { expect } from 'vitest'
 import { cleanup } from '@testing-library/react'
-
-// Extend expect with jest-dom matchers
-expect.extend(matchers)
 
 // 每个测试后自动清理 DOM（防跨测试元素残留导致 multiple-found 错误）
 afterEach(() => {

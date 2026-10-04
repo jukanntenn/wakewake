@@ -1,269 +1,349 @@
 'use client'
 
-// Admin Users 页面（/admin/users）。AdminRoute 守卫。
-// 列全部用户 + disable/enable/重置密码/强制验证邮箱。
-// 重置密码用 Dialog 收集新密码；强制验证邮箱用确认 Dialog（破坏性操作的二次确认）。
+// Admin Users 页（ui-ux-risk-control §9.4）。
+// 调查型列表：DataTable + 搜索 + Status/Role 过滤 + 分页。
+// 操作：Disable（L3 ConfirmDialog 含封禁原因 input）/ Reset password（L3 含密码 input）/ Enable（L1）。
+// 封禁原因内联展示。admin 自我保护（自己的行操作禁用）。
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import Link from 'next/link'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
+import { ChevronLeft, MoreVertical } from 'lucide-react'
+import { type AdminUser, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
-import { ApiError } from '@/lib/api'
 import { useAdminUsers, useDisableUser, useEnableUser } from '@/hooks/useAdminUsers'
-import { useResetUserPassword, useVerifyUserEmail } from '@/hooks/useAdmin'
-import { Button } from '@/components/ui/button'
+import { useResetUserPassword } from '@/hooks/useAdmin'
 import { Input } from '@/components/ui/input'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-
-interface ResetState {
-  id: number
-  email: string
-}
-interface VerifyState {
-  id: number
-  email: string
-}
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Menu } from '@/components/ui/menu'
+import { DataTable, type Column } from '@/components/ui/data-table'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { StatusIndicator } from '@/components/ui/status-indicator'
+import { RelativeTime } from '@/components/ui/relative-time'
 
 export default function AdminUsersPage() {
   const t = useTranslations('admin')
   const tErr = useTranslations('error')
-  const user = useAuthStore((s) => s.user)
-  const { data: users, isLoading } = useAdminUsers()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const currentUser = useAuthStore((s) => s.user)
+
+  // URL query 同步（§11.B.4）：搜索词、过滤、页码同步到 URL。
+  const q = searchParams.get('q') ?? ''
+  const statusFilter = searchParams.get('status') ?? 'all' // all/active/disabled
+  const roleFilter = searchParams.get('role') ?? 'all' // all/user/admin
+  const page = Number(searchParams.get('page') ?? '1')
+  const pageSize = Number(searchParams.get('pageSize') ?? '10')
+
+  const is_active = statusFilter === 'all' ? undefined : statusFilter === 'active'
+  const { data: resp, isLoading } = useAdminUsers({
+    is_active,
+    q: q || undefined,
+    page,
+    page_size: pageSize,
+  })
+  const total = resp?.total ?? 0
+
   const disableMut = useDisableUser()
   const enableMut = useEnableUser()
   const resetMut = useResetUserPassword()
-  const verifyMut = useVerifyUserEmail()
-  const [resetTarget, setResetTarget] = useState<ResetState | null>(null)
-  const [verifyTarget, setVerifyTarget] = useState<VerifyState | null>(null)
+
+  const [disableTarget, setDisableTarget] = useState<AdminUser | null>(null)
+  const [disableReason, setDisableReason] = useState('')
+  const [resetTarget, setResetTarget] = useState<AdminUser | null>(null)
   const [newPassword, setNewPassword] = useState('')
 
-  const userList = users ?? []
+  // 客户端过滤：role（后端不支持 role 过滤，前端筛）
+  const filteredUsers = useMemo(() => {
+    const items = resp?.items ?? []
+    if (roleFilter === 'all') return items
+    return items.filter((u) => (roleFilter === 'admin' ? u.is_superuser : !u.is_superuser))
+  }, [resp?.items, roleFilter])
 
-  const onToggle = async (id: number, currentlyActive: boolean) => {
-    try {
-      if (currentlyActive) {
-        await disableMut.mutateAsync(id)
-        toast.success(t('disableSuccess'))
+  const updateQuery = (updates: Record<string, string | number>) => {
+    const params = new URLSearchParams(searchParams.toString())
+    for (const [k, v] of Object.entries(updates)) {
+      if (v === 'all' || v === '' || v === 1) {
+        params.delete(k)
       } else {
-        await enableMut.mutateAsync(id)
-        toast.success(t('enableSuccess'))
+        params.set(k, String(v))
       }
-    } catch (err) {
-      toast.error(tErr((err instanceof ApiError ? err.code : 'INTERNAL_ERROR') as 'SYNCING'))
     }
+    router.push(`/admin/users?${params.toString()}`)
   }
 
-  const openReset = (u: { id: number; email: string }) => {
-    setNewPassword('')
-    setResetTarget(u)
+  const onDisable = async () => {
+    if (!disableTarget) return
+    await disableMut.mutateAsync({ id: disableTarget.id, reason: disableReason || undefined })
+    toast.success(t('disableSuccess'))
+    setDisableTarget(null)
+    setDisableReason('')
   }
 
-  const submitReset = async () => {
+  const onResetPassword = async () => {
     if (!resetTarget) return
     if (newPassword.length < 8) {
-      toast.error(t('passwordTooShort'))
-      return
+      throw new Error(t('passwordTooShort'))
     }
+    await resetMut.mutateAsync({ id: resetTarget.id, newPassword })
+    toast.success(t('resetPasswordSuccess'))
+    setResetTarget(null)
+    setNewPassword('')
+  }
+
+  const onEnable = async (user: AdminUser) => {
     try {
-      await resetMut.mutateAsync({ id: resetTarget.id, newPassword })
-      toast.success(t('resetPasswordSuccess'))
-      setResetTarget(null)
+      await enableMut.mutateAsync(user.id)
+      toast.success(t('enableSuccess'))
     } catch (err) {
-      toast.error(tErr((err instanceof ApiError ? err.code : 'INTERNAL_ERROR') as 'SYNCING'))
+      toast.error(err instanceof ApiError ? tErr(err.code as never) : tErr('INTERNAL_ERROR'))
     }
   }
 
-  const submitVerify = async () => {
-    if (!verifyTarget) return
-    try {
-      await verifyMut.mutateAsync(verifyTarget.id)
-      toast.success(t('verifyEmailSuccess'))
-      setVerifyTarget(null)
-    } catch (err) {
-      toast.error(tErr((err instanceof ApiError ? err.code : 'INTERNAL_ERROR') as 'SYNCING'))
+  const columns: Column<AdminUser>[] = [
+    { key: 'email', label: t('email' as never) ?? 'User' },
+    { key: 'status', label: t('status') },
+    { key: 'role', label: t('role') },
+    { key: 'last_login', label: t('lastLogin') },
+    { key: 'actions', label: t('actions' as never) ?? '' },
+  ]
+
+  const renderCell = (user: AdminUser, key: string) => {
+    const isSelf = currentUser?.id === user.id
+    if (key === 'email') {
+      return (
+        <div className={user.is_active ? '' : 'opacity-60'}>
+          <span className="text-ink font-medium">{user.email}</span>
+          {!user.email_verified && <span className="text-ink-subtle ml-1 text-xs">✕</span>}
+        </div>
+      )
     }
+    if (key === 'status') {
+      return (
+        <span className="inline-flex items-center gap-1.5 text-sm">
+          <StatusIndicator color={user.is_active ? 'success' : 'neutral'} />
+          <span className="text-ink-muted">
+            {user.is_active ? (t('statusActive' as never) ?? t('active')) : t('disabled')}
+          </span>
+        </span>
+      )
+    }
+    if (key === 'role') {
+      return user.is_superuser ? (
+        <span className="text-primary text-sm">★ {t('superuser')}</span>
+      ) : (
+        <span className="text-ink-muted text-sm">{t('user' as never) ?? 'User'}</span>
+      )
+    }
+    if (key === 'last_login') {
+      return (
+        <span className="text-ink-muted text-sm">
+          <RelativeTime date={user.last_login} fallback={t('never')} />
+        </span>
+      )
+    }
+    if (key === 'actions') {
+      if (isSelf) {
+        return <span className="text-ink-subtle text-xs">({t('thisIsYou' as never) ?? 'you'})</span>
+      }
+      return (
+        <ActionsMenu
+          user={user}
+          onDisable={setDisableTarget}
+          onReset={setResetTarget}
+          onEnable={onEnable}
+        />
+      )
+    }
+    return null
   }
+
+  const hasActiveFilters = q || statusFilter !== 'all' || roleFilter !== 'all'
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* 面包屑 */}
+      <div className="flex items-center gap-2 text-sm">
+        <Link href="/admin" className="text-ink-muted hover:text-ink flex items-center gap-1">
+          <ChevronLeft className="h-4 w-4" />
+          {t('title')}
+        </Link>
+      </div>
       <h1 className="text-ink text-2xl font-semibold tracking-tight">{t('users')}</h1>
 
-      <div className="border-hairline bg-surface-1 shadow-card rounded-lg border p-6">
-        <h2 className="text-ink font-medium">{t('userManagement')}</h2>
-        <p className="text-ink-muted mt-2 text-sm">{t('userManagementDesc')}</p>
-
-        {isLoading ? (
-          <div className="text-ink-subtle mt-4 flex h-32 items-center justify-center text-sm">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            {t('loading')}
-          </div>
-        ) : userList.length > 0 ? (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-hairline text-ink-muted border-b text-left">
-                  <th className="py-2 pr-4 font-medium">ID</th>
-                  <th className="py-2 pr-4 font-medium">{t('email')}</th>
-                  <th className="py-2 pr-4 font-medium">{t('role')}</th>
-                  <th className="py-2 pr-4 font-medium">{t('status')}</th>
-                  <th className="py-2 pr-4 font-medium">{t('emailVerified')}</th>
-                  <th className="py-2 pr-4 font-medium">{t('created')}</th>
-                  <th className="py-2 pr-4 font-medium">{t('actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {userList.map((u) => {
-                  const isSelf = u.id === user?.id
-                  return (
-                    <tr key={u.id} className="border-hairline border-b">
-                      <td className="text-ink-subtle py-2 pr-4">{u.id}</td>
-                      <td className="text-ink py-2 pr-4">
-                        {u.email}
-                        {isSelf && (
-                          <span className="text-ink-subtle ml-1 text-xs">({t('you')})</span>
-                        )}
-                      </td>
-                      <td className="text-ink-muted py-2 pr-4">
-                        {u.is_superuser ? t('superuser') : t('user')}
-                      </td>
-                      <td className="py-2 pr-4">
-                        <span
-                          className={
-                            u.is_active
-                              ? 'inline-flex items-center text-green-600 dark:text-green-400'
-                              : 'text-ink-subtle inline-flex items-center'
-                          }
-                        >
-                          <span
-                            className={
-                              'mr-1.5 h-2 w-2 rounded-full ' +
-                              (u.is_active ? 'bg-green-500' : 'bg-gray-400')
-                            }
-                          />
-                          {u.is_active ? t('active') : t('disabled')}
-                        </span>
-                      </td>
-                      <td className="py-2 pr-4">
-                        {u.email_verified ? (
-                          <span className="text-green-600 dark:text-green-400">
-                            {t('verified')}
-                          </span>
-                        ) : (
-                          <span className="text-amber-600 dark:text-amber-400">
-                            {t('notVerified')}
-                          </span>
-                        )}
-                      </td>
-                      <td className="text-ink-subtle py-2 pr-4">
-                        {new Date(u.created_at).toLocaleString()}
-                      </td>
-                      <td className="py-2 pr-4">
-                        <div className="flex flex-wrap gap-1.5">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={isSelf || disableMut.isPending || enableMut.isPending}
-                            onClick={() => onToggle(u.id, u.is_active)}
-                          >
-                            {u.is_active ? t('disable') : t('enable')}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={isSelf || resetMut.isPending}
-                            onClick={() => openReset(u)}
-                          >
-                            {t('resetPassword')}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={isSelf || u.email_verified || verifyMut.isPending}
-                            onClick={() => setVerifyTarget(u)}
-                          >
-                            {t('forceVerify')}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="border-hairline text-ink-subtle mt-4 flex h-32 items-center justify-center rounded-sm border border-dashed text-sm">
-            {t('empty')}
-          </div>
+      {/* 搜索 + 过滤栏 */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Input
+          className="max-w-xs"
+          placeholder={t('searchUsers' as never) ?? 'Search email...'}
+          defaultValue={q}
+          onChange={(e) => {
+            // 300ms 防抖（§11.B.4）通过 debounce effect 简化：直接 push
+            updateQuery({ q: e.target.value, page: 1 })
+          }}
+        />
+        <Select
+          value={statusFilter}
+          onValueChange={(v) => updateQuery({ status: v ?? 'all', page: 1 })}
+        >
+          <SelectTrigger className="w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('filterAll' as never) ?? 'All'}</SelectItem>
+            <SelectItem value="active">{t('active')}</SelectItem>
+            <SelectItem value="disabled">{t('disabled')}</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={roleFilter}
+          onValueChange={(v) => updateQuery({ role: v ?? 'all', page: 1 })}
+        >
+          <SelectTrigger className="w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('filterAll' as never) ?? 'All'}</SelectItem>
+            <SelectItem value="user">{t('user' as never) ?? 'User'}</SelectItem>
+            <SelectItem value="admin">{t('superuser')}</SelectItem>
+          </SelectContent>
+        </Select>
+        {hasActiveFilters && (
+          <button
+            onClick={() => router.push('/admin/users')}
+            className="text-ink-muted hover:text-ink text-xs underline"
+          >
+            {t('filterClear' as never) ?? 'Clear'}
+          </button>
         )}
       </div>
 
-      {/* 重置密码 Dialog */}
-      <Dialog open={resetTarget !== null} onOpenChange={(o) => !o && setResetTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('resetPasswordTitle')}</DialogTitle>
-            <DialogDescription>
-              {t('resetPasswordDesc', { email: resetTarget?.email ?? '' })}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <label className="text-ink-muted text-sm">{t('newPassword')}</label>
-            <Input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder={t('newPasswordPlaceholder')}
-              autoFocus
-            />
-            <p className="text-ink-subtle text-xs">{t('resetPasswordWarning')}</p>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setResetTarget(null)}>
-              {t('cancel')}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={submitReset}
-              disabled={resetMut.isPending || newPassword.length < 8}
-            >
-              {resetMut.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                t('resetPassword')
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* 表格 */}
+      <DataTable
+        columns={columns}
+        rows={filteredUsers}
+        rowKey={(u) => u.id}
+        render={renderCell}
+        loading={isLoading}
+        empty={
+          <p className="text-ink-muted py-8 text-center">{t('empty' as never) ?? 'No users'}</p>
+        }
+        pagination={{
+          page,
+          pageSize,
+          total,
+          onPageChange: (p) => updateQuery({ page: p }),
+          onPageSizeChange: (s) => updateQuery({ pageSize: s, page: 1 }),
+        }}
+        mobile={{
+          primary: (u) => <span className={u.is_active ? '' : 'opacity-60'}>{u.email}</span>,
+          secondary: [
+            { key: 'status', label: t('status') },
+            { key: 'role', label: t('role') },
+            { key: 'last_login', label: t('lastLogin') },
+          ],
+          actions: (u) =>
+            currentUser?.id === u.id ? (
+              <span className="text-ink-subtle text-xs">({t('you' as never) ?? 'you'})</span>
+            ) : (
+              <ActionsMenu
+                user={u}
+                onDisable={setDisableTarget}
+                onReset={setResetTarget}
+                onEnable={onEnable}
+              />
+            ),
+        }}
+      />
 
-      {/* 强制验证邮箱确认 Dialog */}
-      <Dialog open={verifyTarget !== null} onOpenChange={(o) => !o && setVerifyTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('forceVerifyTitle')}</DialogTitle>
-            <DialogDescription>
-              {t('forceVerifyDesc', { email: verifyTarget?.email ?? '' })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setVerifyTarget(null)}>
-              {t('cancel')}
-            </Button>
-            <Button onClick={submitVerify} disabled={verifyMut.isPending}>
-              {verifyMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t('confirm')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* L3 禁用用户 ConfirmDialog（含封禁原因 input，§5.4） */}
+      <ConfirmDialog
+        open={!!disableTarget}
+        onConfirm={onDisable}
+        onClose={() => {
+          setDisableTarget(null)
+          setDisableReason('')
+        }}
+        variant="danger"
+        title={t('disableDialogTitle')}
+        description={t('disableDialogDesc', { email: disableTarget?.email ?? '' })}
+        confirmText={t('disable')}
+      >
+        <div className="mt-4 space-y-1.5">
+          <label className="text-ink-muted text-sm font-medium">{t('disableDialogReason')}</label>
+          <Input
+            value={disableReason}
+            onChange={(e) => setDisableReason(e.target.value)}
+            placeholder={t('disableDialogReasonPlaceholder')}
+          />
+        </div>
+      </ConfirmDialog>
+
+      {/* L3 重置密码 ConfirmDialog（含新密码 input，§5.4） */}
+      <ConfirmDialog
+        open={!!resetTarget}
+        onConfirm={onResetPassword}
+        onClose={() => {
+          setResetTarget(null)
+          setNewPassword('')
+        }}
+        variant="danger"
+        title={t('resetDialogTitle' as never) ?? t('resetPassword')}
+        description={t('resetDialogDesc' as never) ?? `Reset password for "${resetTarget?.email}"?`}
+        confirmText={t('resetPassword')}
+      >
+        <div className="mt-4 space-y-1.5">
+          <label className="text-ink-muted text-sm font-medium">
+            {t('resetDialogPasswordLabel' as never) ?? 'New password (min 8):'}
+          </label>
+          <Input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            minLength={8}
+          />
+        </div>
+      </ConfirmDialog>
     </div>
+  )
+}
+
+function ActionsMenu({
+  user,
+  onDisable,
+  onReset,
+  onEnable,
+}: {
+  user: AdminUser
+  onDisable: (u: AdminUser) => void
+  onReset: (u: AdminUser) => void
+  onEnable: (u: AdminUser) => void
+}) {
+  const t = useTranslations('admin')
+  return (
+    <Menu>
+      <Menu.Trigger className="text-ink-muted hover:bg-surface-2 rounded-md p-1">
+        <MoreVertical className="h-4 w-4" />
+      </Menu.Trigger>
+      <Menu.Popup>
+        {user.is_active ? (
+          <Menu.Item variant="destructive" onClick={() => onDisable(user)}>
+            {t('disable')}
+          </Menu.Item>
+        ) : (
+          <Menu.Item onClick={() => onEnable(user)}>{t('enable')}</Menu.Item>
+        )}
+        <Menu.Separator />
+        <Menu.Item onClick={() => onReset(user)}>{t('resetPassword')}</Menu.Item>
+      </Menu.Popup>
+    </Menu>
   )
 }

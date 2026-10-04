@@ -17,23 +17,31 @@
 //! - POST   /admin/integrations/:id/resync        强制重同步集成
 //! - POST   /admin/agents/:id/disconnect          强制断开 agent SSE
 //! - GET    /admin/audit-log                      审计日志（分页 + ?action）
+//!
+//! 风控运行时控制（admin-risk-controls WRFC）：
+//! - GET/POST /admin/mailer                       发信总闸 + 分路日预算
+//! - GET/POST /admin/pow                          PoW 难度运行时旋钮
+//! - GET/POST/DELETE /admin/ip-bans               应用层 IP 封禁（含自封守卫）
+//! - GET    /admin/risk                           风控聚合面板数据
 
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
-use axum::extract::{Path, Query, State};
+use axum::extract::{ConnectInfo, Path, Query, State};
 use axum::http::StatusCode;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
-use crate::error::{AppError, AppResult, ErrorCode};
+use crate::error::{AppError, AppResult, ErrorCode, FieldError};
 use crate::hub::CommandDispatcher;
 use crate::middleware::auth::AuthUser;
 use crate::service::admin_service;
+use crate::service::ip_ban::BanAddError;
+use crate::service::mailer_control::{MailLimits, MailerSnapshot};
 use crate::state::AppState;
 
 pub fn routes() -> Router<Arc<AppState>> {
@@ -49,6 +57,20 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/admin/agents", get(list_agents))
         .route("/admin/devices", get(list_devices))
         .route("/admin/wakes", get(list_wakes))
+        .route("/admin/integrations", get(list_integrations))
+        // Activity 统一时间线（login_events UNION admin_actions，§0.3）
+        .route("/admin/activity", get(list_activity))
+        // 维护模式（§9.10）
+        .route("/admin/maintenance", get(get_maintenance).post(set_maintenance))
+        // 风控运行时控制（admin-risk-controls WRFC）
+        .route("/admin/mailer", get(get_mailer).post(set_mailer))
+        .route("/admin/pow", get(get_pow).post(set_pow))
+        .route(
+            "/admin/ip-bans",
+            get(list_ip_bans).post(add_ip_ban),
+        )
+        .route("/admin/ip-bans/{id}", delete(remove_ip_ban))
+        .route("/admin/risk", get(risk_overview))
         // 风控操作
         .route("/admin/devices/{did}/resync", post(resync_device))
         .route("/admin/integrations/{id}/resync", post(resync_integration))
@@ -106,6 +128,8 @@ async fn stats(State(state): State<Arc<AppState>>) -> AppResult<Json<StatsRespon
 #[derive(Debug, Deserialize)]
 struct ListUsersQuery {
     is_active: Option<bool>,
+    /// email 前缀搜索（§11.C.4，UX-62）。
+    q: Option<String>,
     page: Option<i64>,
     page_size: Option<i64>,
 }
@@ -116,6 +140,8 @@ struct AdminUserResponse {
     email: String,
     is_active: bool,
     disabled_at: Option<String>,
+    disabled_reason: Option<String>,
+    disabled_by: Option<i64>,
     is_superuser: bool,
     email_verified: bool,
     last_login: Option<String>,
@@ -129,6 +155,8 @@ impl AdminUserResponse {
             email: u.email.clone(),
             is_active: u.is_active,
             disabled_at: u.disabled_at.and_then(|t| t.format(&Rfc3339).ok()),
+            disabled_reason: u.disabled_reason.clone(),
+            disabled_by: u.disabled_by,
             is_superuser: u.is_superuser,
             email_verified: u.email_verified,
             last_login: u.last_login.and_then(|t| t.format(&Rfc3339).ok()),
@@ -152,7 +180,8 @@ async fn list_users(
     let page = q.page.unwrap_or(1).max(1);
     let page_size = q.page_size.unwrap_or(20).clamp(1, 100);
     let (items, total) =
-        admin_service::list_users(&state.pool, q.is_active, page, page_size).await?;
+        admin_service::list_users(&state.pool, q.is_active, q.q.as_deref(), page, page_size)
+            .await?;
     Ok(Json(ListEnvelope {
         items: items.iter().map(AdminUserResponse::from_user).collect(),
         page,
@@ -161,12 +190,21 @@ async fn list_users(
     }))
 }
 
+#[derive(Debug, Default, Deserialize)]
+struct DisableUserBody {
+    /// 封禁原因（可选，ui-ux-risk-control §5.4/§8.2）。
+    #[serde(default)]
+    reason: Option<String>,
+}
+
 async fn disable_user(
     State(state): State<Arc<AppState>>,
     actor: AuthUser,
     Path(id): Path<i64>,
+    body: Option<Json<DisableUserBody>>,
 ) -> AppResult<(StatusCode, Json<AdminUserResponse>)> {
-    let user = admin_service::disable_user(&state, actor.user_id, id).await?;
+    let reason = body.and_then(|Json(b)| b.reason);
+    let user = admin_service::disable_user(&state, actor.user_id, id, reason.as_deref()).await?;
     Ok((StatusCode::OK, Json(AdminUserResponse::from_user(&user))))
 }
 
@@ -210,6 +248,8 @@ async fn verify_email(
 #[derive(Debug, Deserialize)]
 struct ListAgentsQuery {
     user_id: Option<i64>,
+    /// email 前缀搜索（§11.C.4）。
+    q: Option<String>,
     page: Option<i64>,
     page_size: Option<i64>,
 }
@@ -254,10 +294,11 @@ async fn list_agents(
 ) -> AppResult<Json<ListEnvelope<AdminAgentResponse>>> {
     let page = q.page.unwrap_or(1).max(1);
     let page_size = q.page_size.unwrap_or(20).clamp(1, 100);
-    let rows = admin_service::list_all_agents(&state.pool, q.user_id, page, page_size)
-        .await
-        .map_err(AppError::from_repo)?;
-    let total = admin_service::count_all_agents(&state.pool, q.user_id)
+    let rows =
+        admin_service::list_all_agents(&state.pool, q.user_id, q.q.as_deref(), page, page_size)
+            .await
+            .map_err(AppError::from_repo)?;
+    let total = admin_service::count_all_agents(&state.pool, q.user_id, q.q.as_deref())
         .await
         .map_err(AppError::from_repo)?;
     let items = rows
@@ -279,8 +320,10 @@ async fn list_agents(
 #[derive(Debug, Deserialize)]
 struct ListDevicesQuery {
     user_id: Option<i64>,
-    /// device-sync-v3：过滤维度从 sync_status 改为派生 cloud_status。
+    /// device-sync-v3：过滤维度从旧 sync_status 改为派生 cloud_status。
     cloud_status: Option<String>,
+    /// device name 或 user email 前缀搜索（§9.6/§11.C.4）。
+    q: Option<String>,
     page: Option<i64>,
     page_size: Option<i64>,
 }
@@ -341,14 +384,20 @@ async fn list_devices(
         &state.pool,
         q.user_id,
         q.cloud_status.as_deref(),
+        q.q.as_deref(),
         page,
         page_size,
     )
     .await
     .map_err(AppError::from_repo)?;
-    let total = admin_service::count_all_devices(&state.pool, q.user_id, q.cloud_status.as_deref())
-        .await
-        .map_err(AppError::from_repo)?;
+    let total = admin_service::count_all_devices(
+        &state.pool,
+        q.user_id,
+        q.cloud_status.as_deref(),
+        q.q.as_deref(),
+    )
+    .await
+    .map_err(AppError::from_repo)?;
     Ok(Json(ListEnvelope {
         items: items.iter().map(AdminDeviceResponse::from_row).collect(),
         page,
@@ -364,7 +413,17 @@ async fn list_devices(
 #[derive(Debug, Deserialize)]
 struct ListWakesQuery {
     user_id: Option<i64>,
-    before: Option<String>,
+    /// email / device name 前缀搜索（§9.9）。
+    q: Option<String>,
+    /// wake type 过滤：wol / bemfa_wake（§9.9）。
+    wake_type: Option<String>,
+    /// result 过滤：success / failed / expired（§9.9）。
+    result: Option<String>,
+    /// ISO8601 时间范围起点（§9.9 Date 过滤）。
+    since: Option<String>,
+    /// ISO8601 时间范围终点。
+    until: Option<String>,
+    page: Option<i64>,
     page_size: Option<i64>,
 }
 
@@ -400,25 +459,49 @@ impl AdminWakeResponse {
 async fn list_wakes(
     State(state): State<Arc<AppState>>,
     Query(q): Query<ListWakesQuery>,
-) -> AppResult<Json<serde_json::Value>> {
+) -> AppResult<Json<ListEnvelope<AdminWakeResponse>>> {
+    let page = q.page.unwrap_or(1).max(1);
     let page_size = q.page_size.unwrap_or(20).clamp(1, 100);
-    let before = q
-        .before
+    let since = q
+        .since
+        .as_deref()
+        .and_then(|s| OffsetDateTime::parse(s, &Rfc3339).ok());
+    let until = q
+        .until
         .as_deref()
         .and_then(|s| OffsetDateTime::parse(s, &Rfc3339).ok());
 
-    let items = admin_service::list_all_wakes(&state.pool, q.user_id, before, page_size)
-        .await
-        .map_err(AppError::from_repo)?;
-    let total = admin_service::count_all_wakes(&state.pool, q.user_id, before)
-        .await
-        .map_err(AppError::from_repo)?;
+    let items = admin_service::list_all_wakes_offset(
+        &state.pool,
+        q.user_id,
+        q.q.as_deref(),
+        q.wake_type.as_deref(),
+        q.result.as_deref(),
+        since,
+        until,
+        page,
+        page_size,
+    )
+    .await
+    .map_err(AppError::from_repo)?;
+    let total = admin_service::count_all_wakes_offset(
+        &state.pool,
+        q.user_id,
+        q.q.as_deref(),
+        q.wake_type.as_deref(),
+        q.result.as_deref(),
+        since,
+        until,
+    )
+    .await
+    .map_err(AppError::from_repo)?;
     let items: Vec<_> = items.iter().map(AdminWakeResponse::from_row).collect();
-    Ok(Json(json!({
-        "items": items,
-        "page_size": page_size,
-        "total": total,
-    })))
+    Ok(Json(ListEnvelope {
+        items,
+        page,
+        page_size,
+        total,
+    }))
 }
 
 // ============================================================================
@@ -510,4 +593,542 @@ async fn audit_log(
         page_size,
         total,
     }))
+}
+
+// ============================================================================
+// Activity 统一时间线（login_events UNION admin_actions，ui-ux-risk-control §0.3/§9.5）
+// ============================================================================
+
+#[derive(Debug, Deserialize)]
+struct ActivityQuery {
+    /// login / audit（可选过滤）。
+    kind: Option<String>,
+    /// success / failed（仅 login 有效）。
+    result: Option<String>,
+    /// email / IP / action 前缀搜索。
+    q: Option<String>,
+    /// ISO8601 时间范围。
+    since: Option<String>,
+    until: Option<String>,
+    page: Option<i64>,
+    page_size: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+struct ActivityResponse {
+    kind: String,
+    created_at: String,
+    actor_id: Option<i64>,
+    actor_label: String,
+    action: String,
+    detail: ActivityDetail,
+}
+
+#[derive(Debug, Serialize)]
+struct ActivityDetail {
+    ip: Option<String>,
+    user_agent: Option<String>,
+    failure_code: Option<String>,
+    target: Option<String>,
+    reason: Option<String>,
+}
+
+impl ActivityResponse {
+    fn from_row(r: &admin_service::ActivityRow) -> Self {
+        Self {
+            kind: r.kind.clone(),
+            created_at: r.created_at.format(&Rfc3339).unwrap_or_default(),
+            actor_id: r.actor_id,
+            actor_label: r.actor_label.clone(),
+            action: r.action.clone(),
+            detail: ActivityDetail {
+                ip: r.detail_ip.clone(),
+                user_agent: r.detail_ua.clone(),
+                failure_code: r.detail_failure_code.clone(),
+                target: r.detail_target.clone(),
+                reason: r.detail_reason.clone(),
+            },
+        }
+    }
+}
+
+async fn list_activity(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<ActivityQuery>,
+) -> AppResult<Json<ListEnvelope<ActivityResponse>>> {
+    let page = q.page.unwrap_or(1).max(1);
+    let page_size = q.page_size.unwrap_or(20).clamp(1, 100);
+    let since = q
+        .since
+        .as_deref()
+        .and_then(|s| OffsetDateTime::parse(s, &Rfc3339).ok());
+    let until = q
+        .until
+        .as_deref()
+        .and_then(|s| OffsetDateTime::parse(s, &Rfc3339).ok());
+    let items = admin_service::list_activity(
+        &state.pool,
+        q.kind.as_deref(),
+        q.result.as_deref(),
+        q.q.as_deref(),
+        since,
+        until,
+        page,
+        page_size,
+    )
+    .await
+    .map_err(AppError::from_repo)?;
+    let total = admin_service::count_activity(
+        &state.pool,
+        q.kind.as_deref(),
+        q.result.as_deref(),
+        q.q.as_deref(),
+        since,
+        until,
+    )
+    .await
+    .map_err(AppError::from_repo)?;
+    Ok(Json(ListEnvelope {
+        items: items.iter().map(ActivityResponse::from_row).collect(),
+        page,
+        page_size,
+        total,
+    }))
+}
+
+// ============================================================================
+// Integration 跨用户列表（ui-ux-risk-control §9.8）
+// ============================================================================
+
+#[derive(Debug, Deserialize)]
+struct ListIntegrationsQuery {
+    user_id: Option<i64>,
+    /// status 过滤（§8.5 七态派生，前端过滤；后端返回全部字段，前端按 status 筛）。
+    status: Option<String>,
+    q: Option<String>,
+    page: Option<i64>,
+    page_size: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+struct AdminIntegrationResponse {
+    id: i64,
+    provider: String,
+    user_id: i64,
+    user_email: String,
+    /// 派生 status（§8.5 七态全序）。
+    status: String,
+    mqtt_connected: bool,
+    last_error: Option<String>,
+    last_report_at: Option<String>,
+    created_at: String,
+}
+
+impl AdminIntegrationResponse {
+    fn from_row(r: &admin_service::AdminIntegrationRow) -> Self {
+        let status = derive_integration_status(r);
+        Self {
+            id: r.id,
+            provider: r.provider.clone(),
+            user_id: r.user_id,
+            user_email: r.user_email.clone(),
+            status,
+            mqtt_connected: r.mqtt_connected,
+            last_error: r.last_error.clone(),
+            last_report_at: r.last_report_at.and_then(|t| t.format(&Rfc3339).ok()),
+            created_at: r.created_at.format(&Rfc3339).unwrap_or_default(),
+        }
+    }
+}
+
+/// 派生集成 status（§8.5 七态全序，前端后端一致）。
+/// 注意：admin 列表无 agent_online 信息，agent_offline 态此处不判定（简化）。
+fn derive_integration_status(r: &admin_service::AdminIntegrationRow) -> String {
+    if !r.enabled {
+        return "disabled".into();
+    }
+    if r.last_error.is_some() {
+        return "error".into();
+    }
+    if r.last_report_at.is_none() {
+        return "connecting".into();
+    }
+    if r.mqtt_connected {
+        "connected".into()
+    } else {
+        "disconnected".into()
+    }
+}
+
+async fn list_integrations(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<ListIntegrationsQuery>,
+) -> AppResult<Json<ListEnvelope<AdminIntegrationResponse>>> {
+    let page = q.page.unwrap_or(1).max(1);
+    let page_size = q.page_size.unwrap_or(20).clamp(1, 100);
+    let rows = admin_service::list_all_integrations(
+        &state.pool,
+        q.user_id,
+        q.q.as_deref(),
+        page,
+        page_size,
+    )
+    .await
+    .map_err(AppError::from_repo)?;
+    let total = admin_service::count_all_integrations(&state.pool, q.user_id, q.q.as_deref())
+        .await
+        .map_err(AppError::from_repo)?;
+    // status 过滤在后端派生后做（§8.5 七态派生无法纯 SQL 过滤）。
+    let items: Vec<_> = rows
+        .iter()
+        .map(AdminIntegrationResponse::from_row)
+        .filter(|r| q.status.as_deref().is_none_or(|s| r.status == s))
+        .collect();
+    let total = if q.status.is_some() {
+        i64::try_from(items.len()).unwrap_or(0)
+    } else {
+        total
+    };
+    Ok(Json(ListEnvelope {
+        items,
+        page,
+        page_size,
+        total,
+    }))
+}
+
+// ============================================================================
+// 维护模式（ui-ux-risk-control §9.10）
+// ============================================================================
+
+#[derive(Debug, Serialize)]
+struct MaintenanceResponse {
+    enabled: bool,
+    mode: String,
+    message: String,
+}
+
+async fn get_maintenance(
+    State(state): State<Arc<AppState>>,
+) -> AppResult<Json<MaintenanceResponse>> {
+    let m = state.maintenance.snapshot();
+    Ok(Json(MaintenanceResponse {
+        enabled: m.enabled,
+        mode: m.mode.as_str().into(),
+        message: m.message,
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+struct SetMaintenanceBody {
+    enabled: bool,
+    mode: String,
+    #[serde(default)]
+    message: Option<String>,
+}
+
+async fn set_maintenance(
+    State(state): State<Arc<AppState>>,
+    actor: AuthUser,
+    Json(body): Json<SetMaintenanceBody>,
+) -> AppResult<Json<MaintenanceResponse>> {
+    let mode = crate::config::MaintenanceMode::parse(&body.mode).ok_or_else(|| {
+        AppError::validation(vec![crate::error::FieldError::new("mode", "one_of")])
+    })?;
+    let message = body.message.unwrap_or_default();
+    state
+        .maintenance
+        .set(body.enabled, mode, message.clone(), Some(actor.user_id))
+        .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+
+    // 审计：maintenance.enabled / disabled（§8.5）。
+    let action = if body.enabled {
+        "maintenance.enabled"
+    } else {
+        "maintenance.disabled"
+    };
+    let detail = serde_json::json!({ "mode": body.mode, "message": message });
+    if let Err(e) = crate::repo::admin_repo::insert_action(
+        &state.pool,
+        actor.user_id,
+        action,
+        None,
+        None,
+        None,
+        &detail,
+    )
+    .await
+    {
+        tracing::warn!(error = ?e, "audit {} failed", action);
+    }
+
+    let m = state.maintenance.snapshot();
+    Ok(Json(MaintenanceResponse {
+        enabled: m.enabled,
+        mode: m.mode.as_str().into(),
+        message: m.message,
+    }))
+}
+
+// ============================================================================
+// 邮件发信运行时控制（总闸 + 分路日预算，admin-risk-controls WRFC）
+// ============================================================================
+
+#[derive(Debug, Serialize)]
+struct MailerResponse {
+    #[serde(flatten)]
+    snapshot: MailerSnapshot,
+}
+
+async fn get_mailer(State(state): State<Arc<AppState>>) -> AppResult<Json<MailerResponse>> {
+    Ok(Json(MailerResponse {
+        snapshot: state.mailer_control.snapshot(),
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+struct SetMailerBody {
+    enabled: Option<bool>,
+    limits: Option<MailLimits>,
+}
+
+async fn set_mailer(
+    State(state): State<Arc<AppState>>,
+    actor: AuthUser,
+    Json(body): Json<SetMailerBody>,
+) -> AppResult<Json<MailerResponse>> {
+    if body.enabled.is_none() && body.limits.is_none() {
+        return Err(AppError::validation(vec![FieldError::new(
+            "enabled", "required",
+        )]));
+    }
+    if let Some(enabled) = body.enabled {
+        state
+            .mailer_control
+            .set_enabled(enabled, Some(actor.user_id));
+        let action = if enabled {
+            "mailer.enabled"
+        } else {
+            "mailer.disabled"
+        };
+        audit_ok(&state, &actor, action, &serde_json::json!({})).await;
+    }
+    if let Some(limits) = body.limits {
+        state.mailer_control.set_limits(limits, Some(actor.user_id));
+        audit_ok(
+            &state,
+            &actor,
+            "mailer.limits",
+            &serde_json::json!({ "limits": limits }),
+        )
+        .await;
+    }
+    Ok(Json(MailerResponse {
+        snapshot: state.mailer_control.snapshot(),
+    }))
+}
+
+// ============================================================================
+// PoW 难度运行时旋钮（admin-risk-controls WRFC）
+// ============================================================================
+
+#[derive(Debug, Serialize)]
+struct PowResponse {
+    difficulty: u8,
+    max_difficulty: u8,
+}
+
+async fn get_pow(State(state): State<Arc<AppState>>) -> AppResult<Json<PowResponse>> {
+    Ok(Json(PowResponse {
+        difficulty: state.pow.difficulty(),
+        max_difficulty: crate::service::pow::MAX_DIFFICULTY,
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+struct SetPowBody {
+    difficulty: u8,
+}
+
+async fn set_pow(
+    State(state): State<Arc<AppState>>,
+    actor: AuthUser,
+    Json(body): Json<SetPowBody>,
+) -> AppResult<Json<PowResponse>> {
+    state
+        .pow
+        .set_difficulty(body.difficulty)
+        .map_err(|_| AppError::validation(vec![FieldError::new("difficulty", "max")]))?;
+    audit_ok(
+        &state,
+        &actor,
+        "pow.difficulty",
+        &serde_json::json!({ "difficulty": body.difficulty }),
+    )
+    .await;
+    Ok(Json(PowResponse {
+        difficulty: state.pow.difficulty(),
+        max_difficulty: crate::service::pow::MAX_DIFFICULTY,
+    }))
+}
+
+// ============================================================================
+// 应用层 IP 封禁（admin-risk-controls WRFC）
+// ============================================================================
+
+fn requester_ip(state: &AppState, headers: &axum::http::HeaderMap, peer: SocketAddr) -> IpAddr {
+    crate::util::client_ip_from_headers(
+        headers,
+        peer,
+        state.settings.server.client_ip_header.as_deref(),
+        state.settings.server.trust_proxy,
+    )
+    .unwrap_or_else(|| peer.ip())
+}
+
+async fn list_ip_bans(
+    State(state): State<Arc<AppState>>,
+) -> AppResult<Json<Vec<serde_json::Value>>> {
+    // BanEntry 已 Serialize；经 json! 中转保持响应形状与 serde derive 解耦。
+    let items = state
+        .ip_bans
+        .list()
+        .into_iter()
+        .map(|e| serde_json::to_value(e).unwrap_or_else(|_| serde_json::json!({})))
+        .collect();
+    Ok(Json(items))
+}
+
+#[derive(Debug, Deserialize)]
+struct AddIpBanBody {
+    /// 精确 IP 或 CIDR（"203.0.113.5" / "198.51.100.0/24"）。
+    target: String,
+    #[serde(default)]
+    reason: Option<String>,
+    /// TTL 小时数；None = 永久。
+    #[serde(default)]
+    ttl_hours: Option<i64>,
+}
+
+async fn add_ip_ban(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: axum::http::HeaderMap,
+    actor: AuthUser,
+    Json(body): Json<AddIpBanBody>,
+) -> AppResult<(StatusCode, Json<serde_json::Value>)> {
+    if body.ttl_hours.is_some_and(|h| h < 1) {
+        return Err(AppError::validation(vec![FieldError::new(
+            "ttl_hours",
+            "min",
+        )]));
+    }
+    // 自封守卫：目标覆盖请求者自身 IP → 拒绝（否则一次误操作即锁死管理员）。
+    let self_ip = requester_ip(&state, &headers, peer);
+    if state.ip_bans.would_cover(&body.target, self_ip) {
+        return Err(AppError::validation(vec![FieldError::new(
+            "target", "self_ban",
+        )]));
+    }
+    let entry = state
+        .ip_bans
+        .add(
+            &body.target,
+            body.reason.as_deref().unwrap_or(""),
+            body.ttl_hours.map(|h| h * 3600),
+            actor.user_id,
+        )
+        .map_err(|e| match e {
+            BanAddError::Invalid => {
+                AppError::validation(vec![FieldError::new("target", "invalid_format")])
+            },
+            BanAddError::Duplicate => AppError::code(ErrorCode::IntegrationExists),
+        })?;
+    audit_ok(
+        &state,
+        &actor,
+        "ip_ban.add",
+        &serde_json::json!({ "target": entry.target, "ttl_hours": body.ttl_hours }),
+    )
+    .await;
+    let value = serde_json::to_value(&entry).map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+    Ok((StatusCode::CREATED, Json(value)))
+}
+
+async fn remove_ip_ban(
+    State(state): State<Arc<AppState>>,
+    actor: AuthUser,
+    Path(id): Path<Uuid>,
+) -> AppResult<StatusCode> {
+    let entry = state
+        .ip_bans
+        .remove(id)
+        .ok_or(AppError::code(ErrorCode::UserNotFound))?;
+    audit_ok(
+        &state,
+        &actor,
+        "ip_ban.remove",
+        &serde_json::json!({ "target": entry.target }),
+    )
+    .await;
+    Ok(StatusCode::OK)
+}
+
+// ============================================================================
+// 风控聚合面板（GET /admin/risk，admin-risk-controls WRFC）
+// ============================================================================
+
+#[derive(Debug, Serialize)]
+struct RiskResponse {
+    registrations_24h: i64,
+    registrations_7d: i64,
+    unverified_count: i64,
+    oldest_unverified_age_hours: Option<i64>,
+    failed_logins_24h: i64,
+    top_failed_ips: Vec<crate::repo::admin_repo::TopFailedIpRow>,
+    top_failed_emails: Vec<crate::repo::admin_repo::TopFailedEmailRow>,
+    mailer: MailerSnapshot,
+    pow_difficulty: u8,
+    ip_ban_count: usize,
+    /// 进程内累计 429（重启归零；对账走 CF 分析页）。
+    rate_limited_since_start: u64,
+    rate_limited_uptime_secs: u64,
+}
+
+async fn risk_overview(State(state): State<Arc<AppState>>) -> AppResult<Json<RiskResponse>> {
+    let agg = crate::repo::admin_repo::risk_aggregates(&state.pool)
+        .await
+        .map_err(AppError::from_repo)?;
+    let (rate_limited, uptime) = crate::observability::metrics::rate_limited_snapshot();
+    Ok(Json(RiskResponse {
+        registrations_24h: agg.registrations_24h,
+        registrations_7d: agg.registrations_7d,
+        unverified_count: agg.unverified_count,
+        oldest_unverified_age_hours: agg.oldest_unverified_age_hours,
+        failed_logins_24h: agg.failed_logins_24h,
+        top_failed_ips: agg.top_failed_ips,
+        top_failed_emails: agg.top_failed_emails,
+        mailer: state.mailer_control.snapshot(),
+        pow_difficulty: state.pow.difficulty(),
+        ip_ban_count: state.ip_bans.active_count(),
+        rate_limited_since_start: rate_limited,
+        rate_limited_uptime_secs: uptime,
+    }))
+}
+
+/// admin 写操作审计（best-effort；与 admin_service::audit 同语义，路由层便捷入口）。
+async fn audit_ok(state: &AppState, actor: &AuthUser, action: &str, detail: &serde_json::Value) {
+    if let Err(e) = crate::repo::admin_repo::insert_action(
+        &state.pool,
+        actor.user_id,
+        action,
+        None,
+        None,
+        None,
+        detail,
+    )
+    .await
+    {
+        tracing::warn!(error = ?e, "audit {} failed", action);
+    }
 }

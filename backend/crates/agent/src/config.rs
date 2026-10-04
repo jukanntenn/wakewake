@@ -1,4 +1,4 @@
-//! Agent 配置（config-rs + clap，configuration.md §4 Agent schema）。
+//! Agent 配置（config-rs + clap，specs/backend/configuration.md §4 Agent schema）。
 //!
 //! 三层覆盖：CLI 参数 > 环境变量 > TOML 文件 > 内置默认值。
 //! 文件搜索：~/.wakewake/config.toml 或 ./wakewake.toml 或 --config 指定。
@@ -40,6 +40,26 @@ pub struct Cli {
     /// 也可通过配置文件 `pairing_code` 或环境变量 `WAKEWAKE_PAIRING_CODE` 提供。
     #[arg(long)]
     pub pairing_code: Option<String>,
+    /// 子命令（当前仅 `service install`，常驻运行）。
+    #[command(subcommand)]
+    pub command: Option<Commands>,
+}
+
+/// 顶层子命令。
+#[derive(clap::Subcommand, Debug, Clone)]
+pub enum Commands {
+    /// systemd 服务管理（常驻运行 + 开机自启）。
+    Service {
+        #[command(subcommand)]
+        command: ServiceCommand,
+    },
+}
+
+/// `service` 子命令组。
+#[derive(clap::Subcommand, Debug, Clone)]
+pub enum ServiceCommand {
+    /// 安装为 systemd 服务并启动（需 sudo；Docker 路径不需要）。
+    Install,
 }
 
 /// Agent 配置。
@@ -55,6 +75,11 @@ pub struct Settings {
     pub wol: WolSettings,
     #[serde(default)]
     pub log: LogSettings,
+    #[serde(default)]
+    pub bemfa: BemfaSettings,
+    /// TLS（自签场景的 CA 信任，specs/backend/agent-distribution.md）。
+    #[serde(default)]
+    pub tls: TlsSettings,
 }
 
 /// 默认 home `目录：$WAKEWAKE_HOME` > ~/.wakewake > ./.wakewake。
@@ -112,6 +137,32 @@ fn default_log_dir() -> Option<String> {
     None
 }
 
+/// Bemfa（巴法云）端点配置。真实云各 API 分散在多个域名（pro/apis.bemfa.com），
+/// `api_base` 仅作整体覆盖（基址 + 路径重组）——E2E/测试指向 mock 用，日常不设。
+#[derive(Debug, Clone, Deserialize)]
+pub struct BemfaSettings {
+    pub broker: String,
+    pub port: u16,
+    pub api_base: Option<String>,
+}
+
+impl Default for BemfaSettings {
+    fn default() -> Self {
+        Self {
+            broker: "bemfa.com".to_string(),
+            port: 9503,
+            api_base: None,
+        }
+    }
+}
+
+/// TLS 信任配置。`ca_cert` 指向内网自托管（Caddy `tls internal`）的 root CA 证书
+/// （PEM）——信任自己的 CA，而非关闭校验。默认 `None` 用系统信任库。
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct TlsSettings {
+    pub ca_cert: Option<PathBuf>,
+}
+
 impl WolSettings {
     pub fn broadcast_socket_addr(&self) -> Result<SocketAddr, std::net::AddrParseError> {
         self.broadcast_addr.parse()
@@ -127,7 +178,9 @@ impl Settings {
             .set_default("wol.packet_count", 3i64)?
             .set_default("wol.packet_delay_ms", 50i64)?
             .set_default("log.level", "info")?
-            .set_default("log.format", "pretty")?;
+            .set_default("log.format", "pretty")?
+            .set_default("bemfa.broker", "bemfa.com")?
+            .set_default("bemfa.port", 9503i64)?;
 
         // --config 指定的必须存在；否则搜默认路径
         builder = if let Some(path) = &cli.config {

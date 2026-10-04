@@ -35,8 +35,11 @@ static METER_PROVIDER: OnceLock<SdkMeterProvider> = OnceLock::new();
 
 /// Initialize tracing with JSON file output + optional OTLP export.
 ///
+/// Filter precedence: `RUST_LOG` (supports per-module directives) > `log_level`
+/// (from `log.level` config) — same chain as `management.rs` admin subcommand.
+///
 /// Returns a guard that must be dropped before shutdown to flush buffered logs.
-pub fn init_tracing(log_dir: &std::path::Path) -> TracingGuard {
+pub fn init_tracing(log_dir: &std::path::Path, log_level: &str) -> TracingGuard {
     let log_dir = log_dir.to_path_buf();
     let app_appender = rolling::daily(&log_dir, "app");
     let traces_appender = rolling::daily(&log_dir, "traces");
@@ -71,7 +74,8 @@ pub fn init_tracing(log_dir: &std::path::Path) -> TracingGuard {
         .with_file(false)
         .with_line_number(false);
 
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
 
     let otel_trace_provider = init_otel_traces(Some(traces_writer));
     let otel_log_provider = init_otel_logs(Some(logs_writer));

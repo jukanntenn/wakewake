@@ -81,7 +81,8 @@ mod tests {
         };
         let result = execute(&payload, &key, &state, &wol).await;
         assert!(!result.success);
-        assert!(result.message.contains("RSA decryption failed"));
+        // 非 base64 密文在 RSA 解密前就被拒（crypto::DecryptError::Base64）。
+        assert!(result.message.contains("base64 decode failed"));
     }
 
     #[tokio::test]

@@ -1,11 +1,27 @@
 # wakewake-agent
 
-WakeWake agent：SSE 客户端 + RSA 密钥管理 + WoL（magic packet）+ Bemfa MQTT 集成。
-运行在用户内网的目标机器上，接收 server 下发的唤醒命令并发送 magic packet。
+English | [中文](README.zh.md)
 
-## 快速开始
+The WakeWake agent: an SSE client + RSA key management + WoL (magic packets) + Bemfa MQTT integration. It runs on a target machine inside the user's LAN, receives wake commands dispatched by the server, and sends the magic packet.
 
-从 [releases](../../releases) 下载对应平台的二进制，或自行编译：
+## Installation
+
+### One-line install (recommended)
+
+The server's agents page generates a one-line command with the pairing code embedded (`--server` takes your origin):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jukanntenn/wakewake/main/install.sh \
+  | sh -s -- --server https://your-wakewake.example.com --code a1b2c3d4e5f60718
+```
+
+The script: platform detection → download the release binary (musl static) → sha256 verification → install → write `~/.wakewake/config.toml` → **start in the foreground** (the page turns green when pairing succeeds). It is idempotent — after the pairing code rotates, re-run the same one-liner.
+
+Supported platforms: `x86_64` / `aarch64` / `armv7` (Linux musl static; immune to old NAS firmware glibc). Windows / macOS are not supported yet (planned).
+
+### Manual download
+
+Download `wakewake-agent-<target>.tar.gz` from the [releases](https://github.com/jukanntenn/wakewake/releases), verify the `.sha256`, unpack and install; or build from source:
 
 ```bash
 cd backend
@@ -13,19 +29,29 @@ cargo build --release -p wakewake-agent
 # 产物：backend/target/release/wakewake-agent
 ```
 
-## 配置
+### Persistent run (bare-metal install)
 
-`server_url` 和 `pairing_code` 必填，三种方式任选其一（可混用，优先级高者覆盖低者）：
+After the foreground run checks out, Ctrl+C and install it as a systemd service (starts on boot, survives ssh disconnect):
 
-### 方式一：配置文件（推荐长期使用）
+```bash
+sudo wakewake-agent service install
+```
 
-搜索路径（按顺序，后者覆盖前者）：
+It runs as the original user (`SUDO_USER` is honored under sudo) and reads the `~/.wakewake/config.toml` written at install time.
 
-1. `$WAKEWAKE_HOME/config.toml`（默认 `~/.wakewake/config.toml`）
-2. `./wakewake.toml`（当前工作目录）
-3. `--config <路径>` 显式指定
+## Configuration
 
-创建配置文件（参考 [`config.example.toml`](./config.example.toml)）：
+`server_url` and `pairing_code` are required; pick any of the three ways (they mix; the higher priority overrides the lower):
+
+### Option 1: config file (recommended for long-term use)
+
+Search paths (in order; later overrides earlier):
+
+1. `$WAKEWAKE_HOME/config.toml` (default `~/.wakewake/config.toml`)
+2. `./wakewake.toml` (current working directory)
+3. `--config <path>` explicit
+
+Create the config file (see [`config.example.toml`](config.example.toml)):
 
 ```toml
 # ~/.wakewake/config.toml
@@ -33,13 +59,13 @@ server_url   = "https://wakewake.app"
 pairing_code = "a1b2c3d4e5f60718"
 ```
 
-然后直接运行（无需任何参数）：
+Then just run it (no arguments needed):
 
 ```bash
-./wakewake-agent
+wakewake-agent
 ```
 
-### 方式二：环境变量
+### Option 2: environment variables
 
 ```bash
 WAKEWAKE_SERVER_URL=https://wakewake.app \
@@ -47,51 +73,61 @@ WAKEWAKE_PAIRING_CODE=a1b2c3d4e5f60718 \
 ./wakewake-agent
 ```
 
-适合 Docker / systemd 场景。完整字段映射见 [`config.example.toml`](./config.example.toml)。
+Suited to Docker / systemd. The full field mapping lives in [`config.example.toml`](config.example.toml).
 
-### 方式三：CLI 参数
-
-```bash
-./wakewake-agent --server https://wakewake.app --pairing-code a1b2c3d4e5f60718
-```
-
-`--help` 查看全部参数。
-
-## 内网自托管（自签 TLS）
-
-若 server 部署在内网并用 Caddy `tls internal`（自签证书），agent 需编译时启用
-`danger-insecure-tls` feature 来信任自签证书：
+### Option 3: CLI arguments
 
 ```bash
-cargo build --release -p wakewake-agent --features danger-insecure-tls
-./wakewake-agent --server https://192.168.5.200:8449 --pairing-code <code>
+wakewake-agent --server https://wakewake.app --pairing-code a1b2c3d4e5f60718
 ```
 
-> ⚠️ `danger-insecure-tls` 会让 agent 信任**任何**证书（`danger_accept_invalid_certs(true)`）。
-> 仅适用于受信任的内网环境。生产环境请用合法证书 + 默认编译（不带此 feature）。
+`--help` lists every argument.
+
+## Self-hosting inside the LAN (self-signed TLS)
+
+If the server is deployed on the LAN behind Caddy `tls internal` (self-signed certificate), point the config at your root CA certificate (**trust your own CA; do not disable verification**):
+
+```toml
+# ~/.wakewake/config.toml
+[tls]
+ca_cert = "/etc/wakewake/caddy-root.crt"
+```
+
+Export the root CA (inside the unified image's /data volume):
+
+```bash
+docker exec <wakewake容器> cat /data/caddy/pki/authorities/local/root.crt > caddy-root.crt
+```
+
+The prebuilt binaries and the production image ship **no** "trust any certificate" switch. `danger-insecure-tls` is a compile-time feature used only by E2E tests (E2E builds its own binary with it; it is absent from release assets).
 
 ## Docker
 
-Docker 镜像通过环境变量注入配置，`WAKEWAKE_HOME=/data`（持久化 key.pem）：
+Inject configuration through environment variables with `WAKEWAKE_HOME=/data` (persists key.pem). **`--network host` is mandatory**: the magic packet is a directed broadcast (RFC 919 does not forward it across subnets), and under a bridge network the broadcast never leaves the container — silently (the agent reports success while the target NIC receives nothing):
 
 ```bash
 docker run -d \
+  --name wakewake-agent \
+  --network host \
+  --restart unless-stopped \
   -e WAKEWAKE_SERVER_URL=https://wakewake.app \
   -e WAKEWAKE_PAIRING_CODE=a1b2c3d4e5f60718 \
-  -v agent_data:/data \
-  ghcr.io/jukanntenn/wakewake-agent:latest
+  -v wakewake-agent-data:/data \
+  jukanntenn/wakewake-agent:latest
 ```
 
-## 首次连接
+Image: `jukanntenn/wakewake-agent` (Docker Hub, multi-arch amd64/arm64, published per release tag). There is no systemd inside the container; `--restart unless-stopped` provides persistence, no `service install` needed.
 
-agent 首次连接 server 时会：
+## First connection
 
-1. 生成 RSA-2048 密钥对（持久化到 `$WAKEWAKE_HOME/key.pem`，权限 0600）
-2. 通过 SSE 连接的 `X-Public-Key` 头上报公钥，完成配对
-3. 之后接收 state/command 事件
+On first connect the agent:
 
-pairing code 可在 server 的 agents 页轮换（旧码立即失效）。
+1. generates an RSA-2048 keypair (persisted to `$WAKEWAKE_HOME/key.pem`, mode 0600);
+2. reports the public key through the SSE connection's `X-Public-Key` header, completing pairing;
+3. then receives state/command events.
 
-## 配置字段
+The pairing code can be rotated on the server's agents page (the old code becomes invalid immediately).
 
-完整字段说明、环境变量映射、默认值见 [`config.example.toml`](./config.example.toml)。
+## Configuration fields
+
+The full field reference, environment variable mapping, and defaults live in [`config.example.toml`](config.example.toml).

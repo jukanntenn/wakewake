@@ -13,6 +13,9 @@ use crate::repo::user_repo;
 use crate::service::mailer_service::MailerService;
 use crate::service::secrets::{ResetTokenError, make_reset_token, verify_reset_token};
 
+/// per-email 重置邮件冷却（§七层4 / A-24）：同一邮箱 15min 内只发一封，防邮件轰炸。
+const RESET_COOLDOWN_SECS: i64 = 15 * 60;
+
 /// 请求重置：查 email（不存在也返 202 防枚举）→ 生成 HMAC token → 异步发邮件 → 202。
 /// `PoW` 校验由调用方（route 层）完成，此处假定已通过。
 pub async fn request(
@@ -26,34 +29,43 @@ pub async fn request(
         .map_err(AppError::from_repo)?;
 
     if let Some(user) = user {
-        let last_login_ts = user.last_login.map(time::OffsetDateTime::unix_timestamp);
-        let token = make_reset_token(
-            &settings.password_reset.secret,
-            user.id,
-            &user.password,
-            last_login_ts,
-        );
-        // 重置链接（前端 reset-password 页带 token 查询参数）。
-        // public_url 非 http(s) 时退化为相对路径（与 verify 同机制）。
-        let reset_url = crate::util::build_absolute_url(
-            &settings.app.public_url,
-            "/reset-password",
-            &[("token", &token)],
-        )
-        .unwrap_or_else(|| {
-            tracing::warn!(
-                public_url = %settings.app.public_url,
-                "app.public_url is not http(s); falling back to relative reset link"
-            );
-            format!("/reset-password?token={token}")
+        // per-email 节流（§七层4 / A-24）：15min 内不重发。静默跳过（仍返 202，不泄露邮箱存在性）。
+        let within_cooldown = user.password_reset_sent_at.is_some_and(|t| {
+            (time::OffsetDateTime::now_utc() - t).whole_seconds() < RESET_COOLDOWN_SECS
         });
-        // 异步发邮件（best-effort：失败记日志不影响 HTTP）。用 user.preferred_locale（backend/i18n.md §5）。
-        let locale = user.preferred_locale.as_deref().unwrap_or("en");
-        if let Err(e) = mailer
-            .send_password_reset(&user.email, locale, &reset_url)
-            .await
-        {
-            tracing::warn!(error = ?e, "password reset email send failed");
+        if !within_cooldown {
+            let last_login_ts = user.last_login.map(time::OffsetDateTime::unix_timestamp);
+            let token = make_reset_token(
+                &settings.password_reset.secret,
+                user.id,
+                &user.password,
+                last_login_ts,
+            );
+            // 重置链接（前端 reset-password 页带 token 查询参数）。
+            // public_url 非 http(s) 时退化为相对路径（与 verify 同机制）。
+            let reset_url = crate::util::build_absolute_url(
+                &settings.app.public_url,
+                "/reset-password",
+                &[("token", &token)],
+            )
+            .unwrap_or_else(|| {
+                tracing::warn!(
+                    public_url = %settings.app.public_url,
+                    "app.public_url is not http(s); falling back to relative reset link"
+                );
+                format!("/reset-password?token={token}")
+            });
+            // 异步发邮件（best-effort：失败记日志不影响 HTTP）。用 user.preferred_locale（backend/i18n.md §5）。
+            let locale = user.preferred_locale.as_deref().unwrap_or("en");
+            if let Err(e) = mailer
+                .send_password_reset(&user.email, locale, &reset_url)
+                .await
+            {
+                tracing::warn!(error = ?e, "password reset email send failed");
+            } else {
+                // 发送成功才记时间戳（失败不占用冷却窗口，允许立即重试）。
+                let _ = user_repo::touch_password_reset_sent(pool, user.id).await;
+            }
         }
     }
     // 无论 email 是否存在都返 202（防枚举，authentication.md §七层3）。

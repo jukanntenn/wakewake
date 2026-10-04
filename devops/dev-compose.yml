@@ -1,0 +1,36 @@
+# 开发基础设施（devops/dev.py 编排，通常不手动调用）。
+#
+# 只跑容器化才有意义的服务：postgres + mailpit（邮件捕获）。
+# backend 与 frontend 跑宿主进程（cargo watch / pnpm dev），由 dev.py 启停——
+# 与 devops/README.md 的部署拓扑（单镜像 s6）无关，开发栈追求热重载与调试便利。
+#
+# 凭据为固定开发值（localhost only），backend 经 backend/config.local.toml 的 DSN 连接。
+#   psql: postgres://wakewake:wakewake@localhost:5432/wakewake_dev
+#   mailpit Web UI: http://localhost:8025（SMTP 1025）
+name: wakewake-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: wakewake_dev
+      POSTGRES_USER: wakewake
+      POSTGRES_PASSWORD: wakewake
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wakewake -d wakewake_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+
+volumes:
+  pg_data:

@@ -2,11 +2,13 @@
   "name": "wakewake-web",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.1.3",
   "scripts": {
     "dev": "next dev --port ${FRONTEND_PORT:-3034}",
     "build": "next build",
     "serve": "npx serve out -p ${FRONTEND_PORT:-3034}",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest",

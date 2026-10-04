@@ -1,4 +1,5 @@
-# Build workflow —— 验证前后端都能成功构建。
+# Build workflow —— 验证前后端都能成功构建。命令源唯一（prek 的 manual stage
+# hooks：backend:build / frontend:build；本地按需 `prek run backend:build`）。
 name: Build
 
 on:
@@ -62,9 +63,9 @@ jobs:
       - uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
         with:
           workspaces: backend
-      - name: cargo build --release
-        working-directory: backend
-        run: cargo build --release
+      - run: pip install prek==0.4.10
+      - name: "prek (backend: build)"
+        run: prek run --all-files --hook-stage manual backend:build
 
   build-frontend:
     needs: changes
@@ -75,16 +76,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
         with:
-          version: 11
-          run_install: false
+          package_json_file: frontend/package.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '22'
+          node-version-file: frontend/.nvmrc
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
       - name: Install dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile
-      - name: Build
-        working-directory: frontend
-        run: pnpm build
+      - run: pip install prek==0.4.10
+      - name: "prek (frontend: build)"
+        run: prek run --all-files --hook-stage manual frontend:build

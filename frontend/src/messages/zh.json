@@ -16,13 +16,18 @@
     "copied": "已复制到剪贴板",
     "yes": "是",
     "no": "否",
-    "logout": "退出登录"
+    "logout": "退出登录",
+    "retry": "重试",
+    "view": "查看",
+    "back": "返回",
+    "menu": "菜单"
   },
   "auth": {
     "login": "登录",
     "logout": "退出登录",
     "register": "注册",
     "signingIn": "登录中...",
+    "signingUp": "创建账户中...",
     "email": "邮箱",
     "password": "密码",
     "confirmPassword": "确认密码",
@@ -38,17 +43,6 @@
     "sending": "发送中...",
     "noAccount": "还没有账户？",
     "hasAccount": "已有账户？",
-    "comingSoon": "此功能即将上线。",
-    "error": {
-      "INVALID_CREDENTIALS": "邮箱或密码错误",
-      "USER_EXISTS": "该邮箱已注册",
-      "AUTH_REQUIRED": "请登录后继续",
-      "TOKEN_EXPIRED": "会话已过期，请重新登录",
-      "RATE_LIMITED": "请求过于频繁，请稍后重试",
-      "EMAIL_NOT_VERIFIED": "登录前请先验证邮箱",
-      "INVALID_TOKEN": "此链接无效或已过期"
-    },
-    "signingUp": "创建账户中...",
     "signInLink": "登录",
     "signUpLink": "注册",
     "welcomeBack": "欢迎回来",
@@ -56,39 +50,53 @@
     "createAccount": "创建账户",
     "createAccountSubtitle": "几秒钟内开始管理你的设备。",
     "brandTagline": "随时随地，远程唤醒。",
+    "comingSoon": "此功能即将上线。",
     "checkEmail": "查收你的邮件",
     "checkEmailHint": "我们向 {email} 发送了一封验证邮件，点击其中的链接激活账户。",
     "checkEmailSpam": "没收到？请检查垃圾邮件文件夹。",
     "resendVerification": "重新发送",
     "resending": "发送中...",
     "resendSent": "若账户存在且未验证，新的验证链接已发送。",
-    "resendCooldown": "请等待一分钟后再请求重新发送。",
+    "resendCountdown": "重新发送({time})",
+    "resendRateLimited": "请求过于频繁,请等待倒计时结束后再试。",
     "verificationSent": "登录前请先查收邮件验证账户。",
     "verifyEmailTitle": "正在验证你的邮箱",
     "verifying": "验证中...",
-    "verifySuccess": "邮箱验证成功！正在前往控制台...",
+    "verifySuccess": "邮箱已验证！正在跳转到你的设备...",
     "verifyFailed": "验证失败",
     "verifyFailedHint": "此链接无效或已过期。",
     "backToLogin": "返回登录",
+    "error": {
+      "INVALID_CREDENTIALS": "邮箱或密码错误",
+      "USER_EXISTS": "该邮箱已注册",
+      "AUTH_REQUIRED": "请登录后继续",
+      "TOKEN_EXPIRED": "会话已过期，请重新登录",
+      "RATE_LIMITED": "请求过于频繁，请稍后重试",
+      "EMAIL_NOT_VERIFIED": "登录前请先验证邮箱",
+      "INVALID_TOKEN": "此链接无效或已过期",
+      "MAINTENANCE_REGISTRATION_CLOSED": "注册已临时关闭。",
+      "MAINTENANCE_READONLY": "系统处于只读模式，请稍后再试。",
+      "MAINTENANCE_FULL": "系统正在维护，请稍后再试。",
+      "SYNCING": "该资源状态已被其他操作改动，请刷新。",
+      "USER_DISABLED": "你的账号已被禁用，请联系管理员。",
+      "IP_BLOCKED": "你的 IP 地址已被封禁"
+    },
     "wrongEmail": "邮箱错了？",
-    "useDifferentEmail": "使用其他邮箱"
-  },
-  "dashboard": {
-    "title": "仪表板",
-    "overview": "管理您的设备并远程唤醒。",
-    "manageDevices": "设备",
-    "manageDevicesDesc": "添加、编辑并唤醒您的网络设备",
-    "setupAgent": "Agent",
-    "setupAgentDesc": "用配对码配对本地 agent",
-    "integrations": "集成",
-    "integrationsDesc": "连接巴法云等 IoT 平台"
+    "useDifferentEmail": "使用其他邮箱",
+    "creatingAccount": "创建账户中...",
+    "sendingResetLink": "正在发送重置链接...",
+    "passwordHint": "至少 8 个字符",
+    "passwordsDontMatch": "两次密码不一致",
+    "registrationClosed": "注册暂时关闭，请稍后再试。"
   },
   "navigation": {
     "devices": "设备",
     "agent": "Agent",
     "integrations": "集成",
     "history": "历史",
-    "admin": "管理"
+    "admin": "管理",
+    "settings": "设置",
+    "menu": "菜单"
   },
   "devices": {
     "title": "设备",
@@ -114,7 +122,6 @@
     "delete": "删除",
     "deleteSuccess": "设备已删除",
     "deleteFailed": "删除设备失败",
-    "deleteConfirm": "确定要删除此设备吗？",
     "noDevices": "暂无设备，添加一个开始使用。",
     "encryptionHint": "MAC 将用 agent 公钥加密，服务器永不见明文。",
     "invalidMac": "MAC 地址格式无效（如 AA:BB:CC:DD:EE:FF）",
@@ -130,7 +137,48 @@
     "cloudError": "云端同步失败：{error}",
     "cloudNone": "巴法云未启用",
     "driftDeleted": "云端 topic 曾被删除，已自动恢复",
-    "driftRenamed": "云端昵称曾被修改，已自动恢复"
+    "driftRenamed": "云端昵称曾被修改，已自动恢复",
+    "wakeTimeout": "唤醒超时 — agent 未在限定时间内响应",
+    "wakeFailed": "唤醒失败：{message}",
+    "deleteDialogTitle": "删除设备",
+    "deleteDialogDesc": "确定永久删除「{name}」？云端 topic 将被自动清理，此操作不可撤销。",
+    "quotaExceeded": "已达设备上限，最多 {max} 台。请先移除一个已有设备。",
+    "addDevice": "+ 添加设备",
+    "wakeUnavailable": "无法唤醒",
+    "details": "设备详情",
+    "detailIdentity": "身份",
+    "detailConnection": "连接",
+    "detailCloudSync": "云同步",
+    "colMac": "MAC 地址",
+    "colDescription": "描述",
+    "colCreated": "创建于",
+    "colAgent": "Agent",
+    "colLastSeen": "最近在线",
+    "colStatus": "状态",
+    "colLastSync": "上次同步",
+    "colLastDrift": "上次漂移",
+    "masked": "（已脱敏）",
+    "noDescription": "—",
+    "never": "—",
+    "noDrift": "—（无）",
+    "viewAgent": "查看 Agent",
+    "connectorNotReadyLink": "前往 Agent 页面 →",
+    "gate": {
+      "agentPendingTitle": "需要先连接 Agent",
+      "agentPendingDesc": "设备的 MAC 地址将使用 Agent 的公钥加密，完成 Agent 配对后才能添加设备。",
+      "quotaTitle": "设备数量已达上限",
+      "quotaDesc": "每个账户最多可添加 {max} 台设备，删除不再使用的设备后即可继续添加。",
+      "insecureTitle": "需要安全连接",
+      "insecureDesc": "MAC 加密依赖浏览器的 Web Crypto API，需要通过 HTTPS 或 localhost 访问。",
+      "cta": "去连接 Agent",
+      "dismiss": "知道了"
+    },
+    "notice": {
+      "pendingTitle": "Agent 尚未配对",
+      "pendingDesc": "设备需要已配对的 Agent 才能接收唤醒指令。",
+      "offlineTitle": "Agent 当前离线",
+      "offlineDesc": "设备仍可添加，保存后将待 Agent 上线时自动同步。"
+    }
   },
   "agents": {
     "title": "Agent",
@@ -140,10 +188,7 @@
     "title": "Agent",
     "pairingCode": "配对码",
     "rotate": "轮换配对码",
-    "rotateConfirm": "轮换将立即使旧码失效，确定继续？",
     "rotateSuccess": "配对码已轮换",
-    "copyHint": "用此配对码运行 agent：",
-    "setupInstructions": "在本地网络机器上运行：",
     "status": {
       "pending": "等待 agent 连接",
       "online": "在线",
@@ -158,7 +203,46 @@
     "rotateFailed": "轮换失败",
     "copiedNewCode": "新配对码已复制到剪贴板",
     "codeCopiedManualHint": "自动复制失败。新配对码已显示在上方，请手动选中复制。",
-    "maskedCodeHint": "当前配对码已脱敏。点击\"轮换配对码\"获取可用于连接的完整码。"
+    "maskedCodeHint": "当前配对码已脱敏。点击\"轮换配对码\"获取可用于连接的完整码。",
+    "confirmRotate": "再次点击确认",
+    "publicKeyNotAvailable": "agent 连接前不可用",
+    "advanced": "高级",
+    "model": {
+      "server": "wakewake 服务器",
+      "agent": "内网 Agent",
+      "device": "被唤醒设备",
+      "linked": "已连通",
+      "missing": "尚未连接",
+      "broken": "已断开"
+    },
+    "guide": {
+      "whereTitle": "在家庭网络中一台常开的机器上运行 Agent",
+      "whereDesc": "Agent 必须与被唤醒的设备位于同一路由器下（唤醒信号不会跨路由器转发）。NAS、小主机或闲置笔记本均可。",
+      "commandLabel": "启动命令",
+      "copyCommand": "复制命令",
+      "waiting": "正在等待 Agent 连接，页面将自动更新。",
+      "tabLinux": "Linux",
+      "tabDocker": "Docker",
+      "composeTitle": "Docker Compose",
+      "composeRecommended": "推荐",
+      "runTitle": "一键启动"
+    },
+    "online": {
+      "title": "Agent 已连接",
+      "desc": "Agent 正在运行。前往设备页添加设备，即可远程唤醒。",
+      "cta": "前往设备"
+    },
+    "offline": {
+      "title": "Agent 连接已断开",
+      "desc": "Agent 此前已配对成功。请确认运行 Agent 的机器已开机且网络可达；恢复后将自动重连，无需重新配置。",
+      "repairHint": "如需在新的机器上重新配对，请更换配对码后使用新命令。"
+    },
+    "advancedConfigTitle": "使用配置文件启动",
+    "advancedConfigDesc": "将以下内容保存为 ~/.wakewake/config.toml，之后直接运行 wakewake-agent，无需命令行参数。",
+    "service": {
+      "title": "开机自启（裸机安装）",
+      "desc": "前台首次验证成功后，把 agent 安装为 systemd 服务，重启与 ssh 断开后仍常驻运行。Docker 安装无需此步（--restart unless-stopped）。"
+    }
   },
   "integrations": {
     "title": "集成",
@@ -174,7 +258,6 @@
     "edit": "配置",
     "cancel": "取消",
     "save": "保存",
-    "deleteConfirm": "移除集成将断开巴法云连接。设备 topic 会保留在云端（可复用），但语音唤醒将不可用。确定继续？",
     "deleteRemoved": "已移除",
     "configHint": "敏感字段（UID / secretID / secretKey）用 agent 公钥端到端加密，server 永不可见。",
     "editConfig": "编辑配置",
@@ -199,7 +282,11 @@
     "mijiaStep2": "打开米家 App → 我的 → 其他平台设备 → 添加 → 选择「巴法」",
     "mijiaStep3": "输入巴法云账号（对应上方 UID 的账号）",
     "mijiaStep4": "对小爱说「打开{device}」即可唤醒电脑",
-    "mijiaWarning": "不绑定米家，巴法云端 topic 仍会创建，但小爱无法语音控制。"
+    "mijiaWarning": "不绑定米家，巴法云端 topic 仍会创建，但小爱无法语音控制。",
+    "deleteDialogTitle": "移除集成",
+    "deleteDialogDesc": "确定断开巴法云？设备 topic 会保留在云端（可复用），但语音唤醒将不可用。",
+    "toggleSuccess": "{action} 成功",
+    "toggleFailed": "{action} 失败"
   },
   "wakes": {
     "title": "唤醒历史",
@@ -227,7 +314,8 @@
     "passwordChanged": "密码已更改，请重新登录。",
     "saving": "保存中...",
     "language": "语言",
-    "confirmPassword": "确认新密码"
+    "confirmPassword": "确认新密码",
+    "passwordsDontMatch": "两次密码不一致"
   },
   "admin": {
     "title": "管理",
@@ -239,7 +327,7 @@
     "user": "用户",
     "userManagement": "用户管理",
     "userManagementDesc": "查看与管理全部注册用户。",
-    "email": "邮箱",
+    "email": "用户",
     "status": "状态",
     "created": "创建时间",
     "actions": "操作",
@@ -269,9 +357,9 @@
     "cancel": "取消",
     "statUsers": "用户总数",
     "statActiveUsers": "{n} 活跃",
-    "statAgents": "Agent 数",
-    "statOnlineAgents": "{n} 在线",
-    "statDevices": "设备数",
+    "statAgents": "Agent",
+    "statOnlineAgents": "{n} / {total} 在线",
+    "statDevices": "设备",
     "statIntegrations": "{n} 集成",
     "statWakes": "唤醒事件",
     "statSyncing": "同步中设备",
@@ -319,7 +407,180 @@
     "colAction": "动作",
     "colTarget": "目标",
     "colDetail": "详情",
-    "pagination": "第 {page} / {total} 页"
+    "colProvider": "Provider",
+    "colLastReport": "最近上报",
+    "colType": "类型",
+    "colResult": "结果",
+    "pagination": {
+      "showing": "显示第 {from}–{to} 条，共 {total} 条",
+      "prev": "上一页",
+      "next": "下一页",
+      "perPage": "{count} / 页"
+    },
+    "activity": "活动",
+    "integrations": "集成",
+    "wakes": "唤醒",
+    "maintenance": {
+      "title": "维护",
+      "normal": "正常 — 无维护进行中",
+      "active": "维护进行中",
+      "severity": "严重级别",
+      "severityRegistration": "暂停注册",
+      "severityRegistrationDesc": "新注册被阻止，已有用户不受影响。",
+      "severityReadonly": "只读",
+      "severityReadonlyDesc": "所有写操作被阻止，用户仍可登录并查看数据。",
+      "severityFull": "完全锁定",
+      "severityFullDesc": "除管理员外全部访问被阻止。用于重大事件。",
+      "enableTitle": "启用维护",
+      "enableDesc": "选择严重级别。留言可选但建议填写。",
+      "enable": "启用维护",
+      "enabledToast": "维护已启用",
+      "disableTitle": "停用维护",
+      "disableDesc": "恢复正常访问，所有用户恢复原有权限。",
+      "disable": "停用维护",
+      "disabledToast": "维护已停用",
+      "message": "留言（可选）",
+      "messagePlaceholder": "将展示给用户在维护页面。"
+    },
+    "activityDesc": "登录事件和审计追踪",
+    "devicesDesc": "跨用户设备监控",
+    "integrationsDesc": "跨用户集成监控",
+    "wakesDesc": "跨用户唤醒审计历史",
+    "maintenanceDesc": "紧急控制和维护模式",
+    "backToAdmin": "管理",
+    "searchUsers": "输入邮箱开头...",
+    "searchDevices": "设备名或用户邮箱...",
+    "searchActivity": "邮箱、IP 或动作...",
+    "searchAgents": "Agent 或用户邮箱...",
+    "searchIntegrations": "Provider 或用户邮箱...",
+    "searchWakes": "设备或用户邮箱...",
+    "filterStatus": "状态",
+    "filterRole": "角色",
+    "filterCloud": "云端",
+    "filterType": "类型",
+    "filterResult": "结果",
+    "filterDate": "日期",
+    "filterClear": "清除筛选",
+    "lastLogin": "最后登录",
+    "never": "从未",
+    "thisIsYou": "这是你自己 — 操作已禁用",
+    "disableDialogTitle": "禁用用户",
+    "disableDialogDesc": "确定禁用「{email}」？该用户将立即被登出，其 agent 也会断开。",
+    "disableDialogReason": "原因（可选）：",
+    "disableDialogReasonPlaceholder": "如：滥用 — 批量注册",
+    "resetDialogTitle": "重置密码",
+    "resetDialogDesc": "为「{email}」设置新密码。其旧密码将失效，并在所有设备被登出。",
+    "resetDialogPasswordLabel": "新密码（至少 8 个字符）：",
+    "disconnectFailedHint": "Agent 未在线",
+    "statusActive": "正常",
+    "disable": "禁用",
+    "enable": "启用",
+    "unknown": "未知",
+    "emptyActivity": "暂无活动。",
+    "emptyIntegrations": "暂无集成。",
+    "emptyWakes": "暂无唤醒记录。",
+    "filterLogins": "登录",
+    "filterAdminActions": "管理操作",
+    "filterSuccess": "成功",
+    "filterFailed": "失败",
+    "loginSuccess": "成功",
+    "loginFailed": "失败",
+    "operationsTitle": "运维",
+    "systemTitle": "系统",
+    "auditAction": {
+      "integration": {
+        "create": "创建集成",
+        "update": "更新集成",
+        "delete": "删除集成",
+        "resync": "重同步集成"
+      },
+      "agent": {
+        "rotate_code": "轮换配对码",
+        "disconnect": "断开 Agent"
+      },
+      "user": {
+        "change_password": "修改密码",
+        "disable": "禁用用户",
+        "enable": "启用用户",
+        "reset_password": "重置密码",
+        "verify_email": "验证邮箱"
+      },
+      "device": {
+        "resync": "重同步设备"
+      },
+      "maintenance": {
+        "enabled": "启用维护模式",
+        "disabled": "停用维护模式"
+      }
+    },
+    "risk": "风控",
+    "riskDesc": "滥用信号一览：注册量、发信消耗、失败登录、封禁",
+    "riskRegistrations24h": "注册（24h）",
+    "riskRegistrations7d": "注册（7 天）",
+    "riskUnverified": "未验证账号",
+    "riskOldest": "最老 {n} 小时",
+    "riskFailedLogins": "失败登录（24h）",
+    "riskEmailsToday": "今日发信",
+    "riskBlocked": "被拦截",
+    "riskRateLimited": "429 次数（自重启）",
+    "riskPow": "PoW 难度",
+    "riskIpBans": "生效中的 IP 封禁",
+    "riskTopIps": "失败登录 Top IP（24h）",
+    "riskTopEmails": "被攻击邮箱 Top（24h）",
+    "riskNoData": "过去 24 小时无失败记录",
+    "riskTargets": "个目标",
+    "riskBan": "封禁",
+    "riskViewAll": "管理封禁",
+    "mailer": {
+      "title": "邮件与注册风控",
+      "desc": "运行时总闸、分路日预算与 PoW 难度 —— 即时生效，重启保持。",
+      "switchTitle": "出站邮件",
+      "switchDesc": "关闭 = 不发送任何验证/重发/重置邮件（注册仍可用，账号停留未验证；密码重置返回 503）。",
+      "on": "开启",
+      "off": "关闭",
+      "turnOff": "停止发信",
+      "turnOn": "恢复发信",
+      "limitsTitle": "日预算",
+      "limitsDesc": "按路径的 UTC 日限额，0 = 不限；耗尽时该路径按邮件关闭降级。",
+      "limitRegister": "注册验证邮件",
+      "limitResend": "验证邮件重发",
+      "limitReset": "密码重置邮件",
+      "save": "保存预算",
+      "saved": "预算已更新",
+      "sentToday": "今日已发",
+      "blockedToday": "今日被拦",
+      "mailerUpdated": "发信开关已更新",
+      "powTitle": "注册 PoW 难度",
+      "powDesc": "遭遇机器人攻击时上调（6–7 ≈ 成本提升 256–4096 倍）。仅对新签发挑战生效；0 = 完全关闭 PoW。",
+      "powSave": "更新难度",
+      "powSaved": "PoW 难度已更新"
+    },
+    "ipBans": {
+      "title": "IP 封禁",
+      "desc": "与限流同口径的应用层封禁，支持精确 IP 或 CIDR；到期自动失效。",
+      "target": "IP 或 CIDR",
+      "targetPlaceholder": "如 203.0.113.5 或 198.51.100.0/24",
+      "reason": "原因（可选）",
+      "ttl": "时长",
+      "ttl1h": "1 小时",
+      "ttl24h": "24 小时",
+      "ttl7d": "7 天",
+      "ttlPermanent": "永久",
+      "add": "封禁",
+      "added": "已封禁",
+      "removed": "已解除封禁",
+      "remove": "解除",
+      "empty": "暂无封禁",
+      "expires": "到期",
+      "permanent": "永不",
+      "expiredTag": "已过期",
+      "colTarget": "目标",
+      "colReason": "原因",
+      "colCreated": "创建时间",
+      "colExpires": "到期时间",
+      "colActions": "操作",
+      "selfBan": "不能封禁自己的 IP"
+    }
   },
   "theme": {
     "light": "浅色",
@@ -344,7 +605,10 @@
     "VALIDATION_FAILED": "校验失败",
     "INTERNAL_ERROR": "出错了，请重试",
     "EMAIL_NOT_VERIFIED": "登录前请先验证邮箱",
-    "INVALID_TOKEN": "此链接无效或已过期"
+    "INVALID_TOKEN": "此链接无效或已过期",
+    "default": "出错了",
+    "checkConnection": "请检查网络连接后重试",
+    "IP_BLOCKED": "你的 IP 地址已被封禁"
   },
   "validation": {
     "required": "{field} 为必填项",
@@ -360,8 +624,157 @@
     "name": "名称",
     "email": "邮箱",
     "password": "密码",
-    "mac_encrypted": "MAC 地址",
-    "config.uid": "巴法 UID",
-    "config.topic_prefix": "主题前缀"
+    "mac_encrypted": "MAC 地址"
+  },
+  "status": {
+    "healthy": "系统运行正常",
+    "issues": "{count} 个问题需要处理",
+    "serviceDegraded": "服务降级",
+    "pending": "进行中"
+  },
+  "health": {
+    "healthy": "系统运行正常",
+    "issues": "{count} 个问题需要处理",
+    "serviceDegraded": "服务降级",
+    "devicesReady": "{count} 台设备就绪",
+    "deviceNeedsAttention": "{count} 台设备需要关注",
+    "devicesNeedAttention": "{count} 台设备需要关注",
+    "agentOnline": "Agent 在线",
+    "agentOffline": "Agent 离线",
+    "agentsOffline": "{count} 个 Agent 离线",
+    "cloudSyncOk": "云同步正常",
+    "cloudSyncError": "云同步错误",
+    "suspiciousLogin": "可疑登录：{ip} {count} 次失败",
+    "integrationError": "{count} 个集成错误",
+    "moreIssues": "还有 {count} 个问题",
+    "view": "查看"
+  },
+  "maintenance": {
+    "banner": "计划维护中 — 部分功能可能受限"
+  },
+  "empty": {
+    "devices": "暂无设备",
+    "devicesDesc": "添加你的第一台设备以开始远程唤醒",
+    "addDevice": "添加设备",
+    "wakes": "暂无唤醒历史",
+    "wakesDesc": "唤醒一台设备以在此查看",
+    "wakesCta": "前往设备 →",
+    "integrations": "未连接集成",
+    "integrationsDesc": "连接巴法云以启用语音控制",
+    "users": "未找到用户",
+    "activity": "暂无活动",
+    "activityDesc": "登录事件和管理操作将显示在此",
+    "agents": "未找到 Agent",
+    "adminDevices": "未找到设备",
+    "adminIntegrations": "未找到集成",
+    "adminWakes": "未找到唤醒历史",
+    "searchNoResults": "没有匹配\"{query}\"的结果",
+    "onboarding": {
+      "step1": "连接 Agent",
+      "step2": "添加设备",
+      "step3": "远程开机",
+      "desc": "Agent 是运行在家庭网络中的常驻程序，负责接收指令并向你的设备发送唤醒信号。"
+    }
+  },
+  "landing": {
+    "nav": {
+      "howItWorks": "工作原理",
+      "security": "安全",
+      "deploy": "部署",
+      "signIn": "登录",
+      "menu": "菜单"
+    },
+    "hero": {
+      "title": "在任何地方,唤醒家里的设备。",
+      "subtitle": "人在外面,一条密文穿过云端,家里的机器就亮了。",
+      "facts": "不开端口 · 不暴露内网 · 服务器只见密文",
+      "ctaPrimary": "开始使用",
+      "ctaGithub": "GitHub",
+      "diagramAlt": "拓扑:浏览器经 TLS 将 RSA 加密的 MAC 发往 2 GB VPS 上的 WakeWake 服务器;家里的 agent 保持出站 SSE 连接,解密后向局域网广播 UDP 魔术包唤醒设备",
+      "noteBrowser": "MAC 明文不出浏览器",
+      "noteServer": "服务器只见密文",
+      "noteAgent": "只出站,零入站",
+      "noteDevice": "点亮 = 唤醒"
+    },
+    "hops": {
+      "kicker": "工作原理",
+      "title": "一次唤醒,恰好三跳",
+      "hop1": {
+        "title": "加密发生在你的浏览器里",
+        "body": "浏览器用 agent 公钥加密 MAC。从收到到落库,服务器只见过密文。"
+      },
+      "hop2": {
+        "title": "agent 只出站,而且只出不进",
+        "body": "agent 保持一条出站 SSE 长连接,命令沿它回家。没有任何入站端口指向你家——路由器零配置。"
+      },
+      "hop3": {
+        "title": "一枚魔术包点亮机器",
+        "body": "agent 解密 MAC,向局域网广播魔术包。它不扫描、不转发、不代理任何流量。"
+      }
+    },
+    "trust": {
+      "kicker": "信任",
+      "title": "把最难的问题先问了",
+      "q1": "数据库被整个拖走,会怎样?",
+      "a1": "什么也拿不到。MAC 在浏览器侧加密,库里只有 RSA-OAEP 密文;私钥只存在 agent 本地磁盘,别处没有。",
+      "q2": "家里要开端口、要公网 IP 吗?",
+      "a2": "都不用。agent 只出站拨号,没有任何入站洞指向家里,路由器一行都不用改。",
+      "q3": "服务器被完全攻破,最坏情况是什么?",
+      "a3": "至多重放旧密文,让你已登记的设备开机。读不到 MAC、伪造不了新设备、也碰不到你的内网。",
+      "q4": "内网里的其他设备会被波及吗?",
+      "a4": "不会。agent 只发广播魔术包——不扫描、不转发、不代理任何流量。"
+    },
+    "deploy": {
+      "kicker": "部署",
+      "title": "三行命令,跑在你自己的 VPS 上",
+      "body": "单镜像,Caddy 前置。迁移与初始管理员在启动时自动完成——没有会被忘记的迁移步骤。",
+      "terminalLabel": "compose · 2 GB VPS 足矣",
+      "chip1": "单镜像 · amd64 + arm64",
+      "chip2": "启动自动迁移",
+      "chip3": "bootstrap admin 幂等"
+    },
+    "why": {
+      "kicker": "为什么选 WakeWake",
+      "title": "不靠平台,不升硬件,不开端口",
+      "item1": {
+        "title": "零入站端口",
+        "body": "agent 只出站连接——路由器零配置,内网不暴露。"
+      },
+      "item2": {
+        "title": "端到端加密",
+        "body": "MAC 在你的浏览器里加密,密钥在家里生成,服务器只见密文。"
+      },
+      "item3": {
+        "title": "小服务器即可",
+        "body": "2 GB VPS 就能跑,一个容器,别无他物。"
+      },
+      "item4": {
+        "title": "一个镜像,哪儿都能跑",
+        "body": "多架构单镜像,x86 / ARM 通吃。"
+      },
+      "item5": {
+        "title": "唤醒历史完整可查",
+        "body": "每次唤醒都有记录:谁、何时、哪台设备。"
+      },
+      "item6": {
+        "title": "分组与备注",
+        "body": "设备分组管理,备注随心。"
+      },
+      "item7": {
+        "title": "语音唤醒",
+        "body": "通过巴法云联动,一句话点亮设备。"
+      },
+      "item8": {
+        "title": "开源,自托管",
+        "body": "AGPL-3.0,数据握在你自己手里。"
+      }
+    },
+    "closing": {
+      "line": "跑起来只要三行命令。"
+    },
+    "footer": {
+      "docs": "架构文档",
+      "selfHosted": "self-hosted"
+    }
   }
 }

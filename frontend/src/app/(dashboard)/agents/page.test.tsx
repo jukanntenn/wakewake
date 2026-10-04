@@ -13,24 +13,29 @@ vi.mock('sonner', () => ({ toast }))
 const mockCopyText = vi.fn()
 vi.mock('@/lib/clipboard', () => ({ copyText: (...args: unknown[]) => mockCopyText(...args) }))
 
-// Mock hooks
+// Mock hooks（可变 agent 状态：默认 pending，个别用例切 online/offline）
 const mockRotate = vi.fn()
+const agentState = vi.hoisted(() => ({
+  data: {
+    aid: 'test-aid',
+    name: 'Home Agent',
+    status: 'pending', // pending → 完整码（非脱敏）
+    pairing_code: 'a1b2c3d4e5f60718',
+    public_key: '-----BEGIN PUBLIC KEY-----\nTEST\n-----END PUBLIC KEY-----',
+    last_seen: '2026-07-16T00:00:00Z',
+    created_at: '2026-01-01T00:00:00Z',
+  },
+}))
 vi.mock('@/hooks/useAgents', () => ({
-  useDefaultAgent: () => ({
-    data: {
-      aid: 'test-aid',
-      name: 'Home Agent',
-      status: 'pending', // pending → 完整码（非脱敏）
-      pairing_code: 'a1b2c3d4e5f60718',
-      public_key: '-----BEGIN PUBLIC KEY-----\nTEST\n-----END PUBLIC KEY-----',
-      last_seen: '2026-07-16T00:00:00Z',
-      created_at: '2026-01-01T00:00:00Z',
-    },
-  }),
+  useDefaultAgent: () => ({ data: agentState.data }),
   useRotatePairingCode: () => ({ mutateAsync: mockRotate, isPending: false }),
 }))
 
 const first = (els: HTMLElement[]) => els[0]
+
+// 每个用例动态 import 整页(重模块图),隔离即 ~3.4s、全量并行时逼近默认 5s 上限;
+// 超时会被误报为失败并污染下一用例的 DOM 断言,抬高本文件上限。
+vi.setConfig({ testTimeout: 15_000 })
 
 describe('AgentStatus (agents page) — copy & rotate', () => {
   beforeEach(() => {
@@ -78,19 +83,22 @@ describe('AgentStatus (agents page) — copy & rotate', () => {
     expect(toast.success).not.toHaveBeenCalled()
   })
 
-  it('rotate: success + copy success → toast.success + toast.message(newCode)', async () => {
+  it('rotate: L2 two-step → first click arms, second click executes + copy success', async () => {
     mockRotate.mockResolvedValue({ pairing_code: 'newcode1234567890' })
     mockCopyText.mockResolvedValue(true)
-    // confirm() 在 jsdom 默认返回 true（不弹真实对话框）
     HTMLDialogElement.prototype.showModal = vi.fn()
-    window.confirm = vi.fn(() => true)
     const { default: AgentsPage } = await import('./page')
     renderWithProviders(<AgentsPage />)
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: 'Rotate Code' }))
+    const rotateBtn = screen.getByRole('button', { name: 'Rotate Code' })
+    // 第一次点击：armed（不执行 rotate）
+    await user.click(rotateBtn)
+    expect(mockRotate).not.toHaveBeenCalled()
 
-    // 等异步 mutateAsync 完成
+    // 第二次点击：执行（3s 窗口内）
+    await user.click(rotateBtn)
+
     await vi.waitFor(() => {
       expect(mockRotate).toHaveBeenCalled()
     })
@@ -101,15 +109,17 @@ describe('AgentStatus (agents page) — copy & rotate', () => {
     expect(toast.message).toHaveBeenCalledWith('New code copied to clipboard')
   })
 
-  it('rotate: success + copy fail → toast.warning (不再静默吞错)', async () => {
+  it('rotate: L2 two-step → success + copy fail → toast.warning', async () => {
     mockRotate.mockResolvedValue({ pairing_code: 'newcode1234567890' })
     mockCopyText.mockResolvedValue(false)
-    window.confirm = vi.fn(() => true)
     const { default: AgentsPage } = await import('./page')
     renderWithProviders(<AgentsPage />)
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: 'Rotate Code' }))
+    const rotateBtn = screen.getByRole('button', { name: 'Rotate Code' })
+    // 两步点击
+    await user.click(rotateBtn)
+    await user.click(rotateBtn)
 
     await vi.waitFor(() => {
       expect(mockCopyText).toHaveBeenCalledWith('newcode1234567890')
@@ -121,10 +131,50 @@ describe('AgentStatus (agents page) — copy & rotate', () => {
     expect(toast.message).not.toHaveBeenCalled()
   })
 
-  it('shows setup instructions when code is full (pending)', async () => {
+  it('pending: shows install command (origin embedded) + auto-waiting line', async () => {
     const { default: AgentsPage } = await import('./page')
     renderWithProviders(<AgentsPage />)
-    // 完整码 → 显示命令块（含 wakewake-agent 命令）
-    expect(first(screen.getAllByText(/Run on/))).toBeInTheDocument()
+    // 命令模板槽（Linux tab 默认）：一行安装命令含 install.sh + --server origin
+    await vi.waitFor(() => {
+      expect(screen.getByText(/install\.sh \| sh -s -- --server /)).toBeInTheDocument()
+    })
+    // Docker tab:双块——compose(推荐标记)+ 一键启动 docker run(--network host 硬前提)
+    await userEvent.click(screen.getByRole('tab', { name: 'Docker' }))
+    expect(screen.getByText('Docker Compose')).toBeInTheDocument()
+    expect(screen.getByText('Recommended')).toBeInTheDocument()
+    expect(screen.getByText(/network_mode: host/)).toBeInTheDocument()
+    expect(screen.getByText(/docker compose up -d/)).toBeInTheDocument()
+    expect(screen.getByText(/docker run -d .*--network host/)).toBeInTheDocument()
+    expect(screen.getByText('One-liner')).toBeInTheDocument()
+    // 等待行（自动检测提示）
+    expect(
+      screen.getByText('Waiting for the agent to connect — this page updates automatically.'),
+    ).toBeInTheDocument()
+  })
+
+  it('online: collapsed summary with devices CTA', async () => {
+    agentState.data = { ...agentState.data, status: 'online' }
+    try {
+      const { default: AgentsPage } = await import('./page')
+      renderWithProviders(<AgentsPage />)
+      const cta = screen.getByRole('link', { name: 'Go to devices' })
+      expect(cta).toHaveAttribute('href', '/devices')
+      expect(screen.getByText('Agent connected')).toBeInTheDocument()
+    } finally {
+      agentState.data = { ...agentState.data, status: 'pending' }
+    }
+  })
+
+  it('offline: repair guidance with rotate entry', async () => {
+    agentState.data = { ...agentState.data, status: 'offline', pairing_code: 'a1b2****' }
+    try {
+      const { default: AgentsPage } = await import('./page')
+      renderWithProviders(<AgentsPage />)
+      expect(screen.getByText('Agent disconnected')).toBeInTheDocument()
+      // 脱敏码 → 不渲染命令卡（--server 命令不应出现）
+      expect(screen.queryByText(/wakewake-agent --server /)).not.toBeInTheDocument()
+    } finally {
+      agentState.data = { ...agentState.data, status: 'pending', pairing_code: 'a1b2c3d4e5f60718' }
+    }
   })
 })

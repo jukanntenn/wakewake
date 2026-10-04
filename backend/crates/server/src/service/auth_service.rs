@@ -7,12 +7,22 @@
 use sqlx::PgPool;
 use time::{Duration, OffsetDateTime};
 
-use crate::config::Settings;
+use crate::config::{MaintenanceMode, Settings};
 use crate::domain::user::User;
 use crate::error::{AppError, AppResult, ErrorCode};
-use crate::repo::{refresh_token_repo, user_repo};
+use crate::repo::{login_event_repo, refresh_token_repo, user_repo};
 use crate::service::jwt;
+use crate::service::mailer_control::MailPath;
 use crate::service::mailer_service::MailerService;
+use crate::service::maintenance::MaintenanceHandle;
+
+/// 登录审计上下文（IP + UA），用于写 login_events（ui-ux-risk-control §8.3）。
+/// handler 从请求头/连接信息构造，传给 login()。
+#[derive(Debug, Clone, Default)]
+pub struct LoginAudit {
+    pub ip: Option<String>,
+    pub user_agent: Option<String>,
+}
 
 /// Token 对（access + refresh 明文 + refresh hash + `expires_in`）。
 pub struct AuthTokens {
@@ -49,29 +59,37 @@ pub async fn register(
     // 创建默认 agent（1:1）。
     let _agent = crate::service::agent_service::create_default(pool, user.id).await?;
 
-    // 发验证邮件（best-effort：mailer 未启用则跳过，用户仍可通过 resend 触发）。
-    if mailer.is_enabled() {
-        crate::service::email_verification_service::send_verification_email(
-            pool, settings, mailer, &user,
-        )
-        .await;
-    }
+    // 发验证邮件（best-effort）：不经预检 gate，直接走发送层——acquire 内部
+    // 判定总闸/预算，拒绝时 warn + blocked 计数（静默降级路径也要可见），
+    // 用户仍可通过 resend 触发。
+    crate::service::email_verification_service::send_verification_email(
+        pool,
+        settings,
+        mailer,
+        &user,
+        MailPath::Register,
+    )
+    .await;
     Ok(user)
 }
 
-/// 登录：校验密码（常量时间）+ 抹平时序 + 失败锁定。
+/// 登录：校验密码（常量时间）+ 抹平时序 + 失败锁定 + 写 login_events（ui-ux-risk-control §8.3）。
+/// full 维护模式下非 admin 用户登录成功后被拒（§11.A.6，共识 2：下沉 service）。
 /// 失败返 `INVALID_CREDENTIALS。≥5` 次连续失败锁定 15min（authentication.md §八）。
 pub async fn login(
     pool: &PgPool,
     settings: &Settings,
     lockout: &crate::service::login_lockout::LoginLockout,
+    maintenance: &MaintenanceHandle,
     email: &str,
     password: &str,
+    audit: &LoginAudit,
 ) -> AppResult<(User, AuthTokens)> {
     use crate::domain::BCRYPT_COST;
 
     // 账号级失败锁定检查（authentication.md §八）
     if lockout.is_locked(email) {
+        record_login_event(pool, None, email, false, audit, Some("RATE_LIMITED")).await;
         return Err(AppError::code(ErrorCode::RateLimited));
     }
 
@@ -84,14 +102,24 @@ pub async fn login(
     //     仍跑 bcrypt 抹平时序，避免"返 USER_DISABLED 快 / 返 INVALID_CREDENTIALS 慢"的侧信道。
     let user = match user {
         Some(u) if u.is_active => u,
-        Some(_) => {
+        Some(disabled_user) => {
             let _ = bcrypt::hash(password, BCRYPT_COST);
             let _ = lockout.record_failure(email);
+            record_login_event(
+                pool,
+                Some(disabled_user.id),
+                email,
+                false,
+                audit,
+                Some("USER_DISABLED"),
+            )
+            .await;
             return Err(AppError::code(ErrorCode::UserDisabled));
         },
         None => {
             let _ = bcrypt::hash(password, BCRYPT_COST);
             let _ = lockout.record_failure(email);
+            record_login_event(pool, None, email, false, audit, Some("INVALID_CREDENTIALS")).await;
             return Err(AppError::code(ErrorCode::InvalidCredentials));
         },
     };
@@ -99,20 +127,81 @@ pub async fn login(
     let valid = bcrypt::verify(password, &user.password).unwrap_or(false);
     if !valid {
         let _ = lockout.record_failure(email);
+        record_login_event(
+            pool,
+            Some(user.id),
+            email,
+            false,
+            audit,
+            Some("INVALID_CREDENTIALS"),
+        )
+        .await;
         return Err(AppError::code(ErrorCode::InvalidCredentials));
     }
 
     // 邮箱未验证：拦截登录，引导用户完成验证流程（不清除失败计数，防止枚举侧信道）。
     if !user.email_verified {
+        record_login_event(
+            pool,
+            Some(user.id),
+            email,
+            false,
+            audit,
+            Some("EMAIL_NOT_VERIFIED"),
+        )
+        .await;
         return Err(AppError::code(ErrorCode::EmailNotVerified));
     }
 
     // 成功 → 清除失败计数（authentication.md §八）
     lockout.record_success(email);
 
+    // full 维护模式：非 admin 用户登录成功后被拒（ui-ux-risk-control §11.A.6，共识 2）。
+    // admin 可登录以管理维护状态。登录页本身放行（中间件不拦 login 路径）。
+    let m = maintenance.snapshot();
+    if m.enabled && matches!(m.mode, MaintenanceMode::Full) && !user.is_superuser {
+        record_login_event(
+            pool,
+            Some(user.id),
+            email,
+            false,
+            audit,
+            Some("MAINTENANCE_FULL"),
+        )
+        .await;
+        return Err(AppError::code(ErrorCode::MaintenanceFull));
+    }
+
+    // 登录成功事件
+    record_login_event(pool, Some(user.id), email, true, audit, None).await;
+
     let _ = user_repo::touch_last_login(pool, user.id).await;
     let tokens = issue_token_pair(pool, settings, user.id, &user.email, user.is_superuser).await?;
     Ok((user, tokens))
+}
+
+/// best-effort 写 login_event（失败仅 warn，不阻断登录主流程）。
+async fn record_login_event(
+    pool: &PgPool,
+    user_id: Option<i64>,
+    email: &str,
+    success: bool,
+    audit: &LoginAudit,
+    failure_code: Option<&str>,
+) {
+    if let Err(e) = login_event_repo::insert(
+        pool,
+        user_id,
+        email,
+        success,
+        audit.ip.as_deref(),
+        audit.user_agent.as_deref(),
+        failure_code,
+    )
+    .await
+    {
+        tracing::warn!(error = ?e, "login_event write failed");
+    }
 }
 
 /// 刷新 access + refresh rotation + 重放检测（authentication.md §二）。
@@ -193,6 +282,22 @@ pub async fn change_password(
         .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
     let _ = user_repo::update_password(pool, user_id, &new_hash).await;
     let _ = refresh_token_repo::revoke_all_for_user(pool, user_id).await;
+
+    // 审计：用户自己改密（ui-ux-risk-control §8.5，actor=用户自己）。
+    if let Err(e) = crate::repo::admin_repo::insert_action(
+        pool,
+        user_id,
+        "user.change_password",
+        Some(user_id),
+        None,
+        None,
+        &serde_json::json!({}),
+    )
+    .await
+    {
+        tracing::warn!(error = ?e, "audit user.change_password failed");
+    }
+
     Ok(())
 }
 

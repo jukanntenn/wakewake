@@ -1,0 +1,77 @@
+# wakewake 路由唯一真源（Caddyfile snippet，烤进镜像 /app/caddy/routes.caddy）。
+#
+# 所有环境共享同一路由逻辑（API/SSE 反代 + 静态前端托管 + 安全头 + 访问日志），
+# 每环境的 Caddyfile 只有一件事：import 本文件 + 声明站点地址和 TLS 层。
+# 改路由只改这里；站点变体共 4 份，每份对应一种 TLS 形态：
+#   docker/Caddyfile（镜像内置 HTTP；自部署 + staging）、docker/Caddyfile.local
+#   （自签；本地验收 + e2e）、devops/ansible/templates/Caddyfile.{test,prod}。
+#
+# 同步矩阵（本文件内部的不变量，改需整体一致）：
+#   8080：反代目标 = 容器内 backend 监听（config.toml [server].port）。
+#   /app/frontend/out：静态导出目录（Dockerfile COPY --from=frontend）。
+
+(wakewake_routes) {
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	encode zstd gzip
+
+	# API（非 SSE）
+	@api path /api/*
+	handle @api {
+		reverse_proxy 127.0.0.1:8080 {
+			# 下游代理信任表：只有受信来源的入站 X-Forwarded-For 才被透传给 backend
+			# （Caddy ≥2.7 安全行为：不受信来源的 XFF 会被改写为对端 IP）。
+			# 默认 = Cloudflare 全段（生产：CF→Caddy 链）+ RFC1918（自部署 LAN 与
+			# 压测 rig 的 docker bridge）。漏配的后果：所有用户按代理边缘 IP 共享
+			# per-IP 限流桶（R3 压测实测发现）。改表 = 同改这两处（同步矩阵）。
+			trusted_proxies 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32 172.16.0.0/12 192.168.0.0/16 10.0.0.0/8
+			transport http {
+				versions h2c
+			}
+			flush_interval -1
+			health_uri /api/v1/health
+			health_interval 10s
+		}
+	}
+
+	# SSE（独立 handle，禁缓冲，flush_interval -1 + X-Accel-Buffering no）
+	@sse path /api/v1/agents/self/events
+	handle @sse {
+		reverse_proxy 127.0.0.1:8080 {
+			# 同上（两处 reverse_proxy 必须同表——同步矩阵）
+			trusted_proxies 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32 172.16.0.0/12 192.168.0.0/16 10.0.0.0/8
+			transport http {
+				versions h2c
+			}
+			flush_interval -1
+			header_up X-Accel-Buffering no
+		}
+	}
+
+	# 静态前端（Next.js out/）
+	handle {
+		root * /app/frontend/out
+
+		@immutable path /_next/static/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+		# HTML 外壳（SPA 路由经 try_files 全部落到 index.html）：浏览器每次导航
+		# 条件请求（ETag 304），配合 CF Cache Rule 的短 Edge TTL——浏览器侧零陈旧，
+		# 边缘 5 分钟内不回源（3Mbps 源站出口预算的关键卸载点）。
+		@shell not path /_next/static/*
+		header @shell Cache-Control "public, max-age=0, must-revalidate"
+
+		try_files {path} {path}.html {path}/index.html /index.html
+		file_server {
+			precompressed gzip
+		}
+	}
+
+	log {
+		output stderr
+		format console
+	}
+}

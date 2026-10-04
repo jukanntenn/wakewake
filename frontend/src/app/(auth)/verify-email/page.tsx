@@ -31,7 +31,7 @@ function VerifyEmailContent() {
         if (cancelled) return
         setAuth(resp.access_token, resp.user, resp.refresh_token)
         setPhase('success')
-        setTimeout(() => router.replace('/dashboard'), 1500)
+        setTimeout(() => router.replace('/devices'), 1500)
       } catch {
         if (!cancelled) setPhase('failed')
       }

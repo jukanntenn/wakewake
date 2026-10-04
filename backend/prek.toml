@@ -1,0 +1,70 @@
+# prek 后端项目配置（workspace 模式由根 prek.toml 自动发现；
+# hooks 以 CWD=backend/ 运行，files 匹配仅见 backend/ 内文件）。
+#
+# 组别与分层见根 prek.toml 头部说明。CI 调用形态：
+#   prek run --all-files --group format --group lint backend/   # lint.yml
+#   prek run --all-files backend:test                           # test.yml（带 PG）
+#   prek run --all-files --hook-stage manual backend:build      # build.yml
+#
+# fmt-check 定义在 fmt 之前：CI 的按组调用按定义序执行，先在干净树上 --check
+# 抓未格式化，再跑改写型 fmt——顺序反了会让检查看到已被修复的树。
+
+default_install_hook_types = ["pre-commit", "pre-push"]
+
+exclude = """^(target/|\\.cargo/|bin/|data/)"""
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "fmt-check"
+name = "cargo fmt --check"
+language = "system"
+entry = "cargo fmt --check"
+files = "\\.rs$|^rustfmt\\.toml$"
+pass_filenames = false
+stages = ["pre-push"]
+groups = ["lint"]
+
+[[repos.hooks]]
+id = "fmt"
+name = "cargo fmt"
+language = "system"
+entry = "cargo fmt"
+files = "\\.rs$|^rustfmt\\.toml$"
+pass_filenames = false
+stages = ["pre-commit"]
+groups = ["format"]
+
+[[repos.hooks]]
+id = "clippy"
+name = "cargo clippy --all-targets --all-features"
+language = "system"
+# 与 CI 完全同命令。存量 pedantic warning 清零前不加 -D warnings（见 backend/AGENTS.md），
+# 清零后此处与 CI 同步加回。
+entry = "cargo clippy --all-targets --all-features"
+files = "\\.rs$|\\.toml$|^Cargo\\.lock$"
+pass_filenames = false
+stages = ["pre-push"]
+groups = ["lint"]
+
+[[repos.hooks]]
+id = "test"
+name = "cargo test (workspace w/ PG, --lib fallback)"
+language = "system"
+entry = "python3 ../scripts/backend_tests.py"
+files = "\\.rs$|\\.toml$|^Cargo\\.lock$"
+pass_filenames = false
+stages = ["pre-push"]
+groups = ["check"]
+
+[[repos.hooks]]
+id = "build"
+name = "cargo build --release"
+language = "system"
+entry = "cargo build --release"
+files = "\\.rs$|\\.toml$|^Cargo\\.lock$"
+pass_filenames = false
+# manual：本地不自动跑（clippy --all-targets 已覆盖编译检查），仅 CI build 门禁调用。
+stages = ["manual"]
+groups = ["check"]

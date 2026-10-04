@@ -5,12 +5,22 @@
 // react-hook-form + garde 风格校验。
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { useTranslations } from 'next-intl'
 import { useDefaultAgent } from '@/hooks/useAgents'
 import { useCreateDevice, usePatchDevice } from '@/hooks/useDevices'
-import { encryptWithPublicKey, maskMACAddress, isValidMAC, formatMAC } from '@/lib/crypto'
+import {
+  encryptWithPublicKey,
+  maskMACAddress,
+  isValidMAC,
+  formatMAC,
+  MAC_REGEX,
+} from '@/lib/crypto'
 import { type Device, type CreateDeviceInput, type FieldError, ApiError } from '@/lib/api'
+
+// 表单打开期间 agent 被重置/换码的竞态信号：错误行附内联链接，而不是一句无去向的红字。
+class AgentNotReadyError extends Error {}
 
 interface FormValues {
   name: string
@@ -37,6 +47,8 @@ export function DeviceForm({ device, onDone }: DeviceFormProps) {
     handleSubmit,
     formState: { errors },
   } = useForm<FormValues>({
+    // onTouched：MAC 格式失焦即校验（报错前置），不等到提交。
+    mode: 'onTouched',
     defaultValues: {
       name: device?.name ?? '',
       mac: '',
@@ -44,9 +56,11 @@ export function DeviceForm({ device, onDone }: DeviceFormProps) {
     },
   })
   const [submitErr, setSubmitErr] = useState<string | null>(null)
+  const [needsAgent, setNeedsAgent] = useState(false)
 
   const onSubmit = async (values: FormValues) => {
     setSubmitErr(null)
+    setNeedsAgent(false)
     try {
       if (isEdit && device) {
         // 编辑：MAC 仅在用户重新输入时更新（公钥变更场景）
@@ -55,7 +69,7 @@ export function DeviceForm({ device, onDone }: DeviceFormProps) {
           description: values.description || null,
         }
         if (values.mac && isValidMAC(values.mac)) {
-          if (!agent?.public_key) throw new Error(t('connectorNotReady'))
+          if (!agent?.public_key) throw new AgentNotReadyError()
           const macEncrypted = await encryptWithPublicKey(formatMAC(values.mac), agent.public_key)
           patch.mac_encrypted = macEncrypted
           patch.mac_display = maskMACAddress(formatMAC(values.mac))
@@ -63,7 +77,7 @@ export function DeviceForm({ device, onDone }: DeviceFormProps) {
         await patchMut.mutateAsync({ did: device.did, data: patch })
       } else {
         // 创建：必须加密 MAC
-        if (!agent?.public_key) throw new Error(t('connectorNotReady'))
+        if (!agent?.public_key) throw new AgentNotReadyError()
         const formatted = formatMAC(values.mac)
         if (!isValidMAC(formatted)) throw new Error(t('invalidMac'))
         const macEncrypted = await encryptWithPublicKey(formatted, agent.public_key)
@@ -77,7 +91,9 @@ export function DeviceForm({ device, onDone }: DeviceFormProps) {
       }
       onDone()
     } catch (err) {
-      if (err instanceof ApiError) {
+      if (err instanceof AgentNotReadyError) {
+        setNeedsAgent(true)
+      } else if (err instanceof ApiError) {
         setSubmitErr(mapApiErrorToMessage(err, tErr, tCode, t))
       } else {
         setSubmitErr(err instanceof Error ? err.message : String(err))
@@ -103,11 +119,14 @@ export function DeviceForm({ device, onDone }: DeviceFormProps) {
       <div className="space-y-1">
         <label className="text-ink-muted text-sm">{t('macAddress')}</label>
         <input
-          {...register('mac')}
+          {...register('mac', {
+            pattern: { value: MAC_REGEX, message: t('invalidMac') },
+          })}
           className="border-hairline bg-surface-1 text-ink focus:border-primary w-full rounded-sm border px-3 py-2 font-mono outline-none"
           placeholder={t('macAddressPlaceholder')}
           disabled={isEdit}
         />
+        {errors.mac && <span className="text-destructive text-xs">{errors.mac.message}</span>}
         {isEdit && <span className="text-ink-subtle text-xs">{t('macLockedOnEdit')}</span>}
         {!isEdit && <span className="text-ink-subtle text-xs">{t('encryptionHint')}</span>}
       </div>
@@ -119,6 +138,14 @@ export function DeviceForm({ device, onDone }: DeviceFormProps) {
           placeholder={t('descriptionPlaceholder')}
         />
       </div>
+      {needsAgent && (
+        <p className="text-destructive text-sm">
+          {t('connectorNotReady')}{' '}
+          <Link href="/agents" className="underline underline-offset-2">
+            {t('connectorNotReadyLink')}
+          </Link>
+        </p>
+      )}
       {submitErr && <p className="text-destructive text-sm">{submitErr}</p>}
       <div className="flex justify-end gap-2">
         <button

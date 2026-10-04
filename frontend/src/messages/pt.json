@@ -1,7 +1,26 @@
 {
   "common": {
     "logout": "Sair",
-    "loading": "..."
+    "loading": "...",
+    "appName": "WakeWake",
+    "error": "An error occurred",
+    "save": "Save",
+    "saving": "Saving...",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "close": "Close",
+    "confirm": "Confirm",
+    "processing": "Processing...",
+    "copied": "Copied to clipboard",
+    "yes": "Yes",
+    "no": "No",
+    "retry": "Tentar novamente",
+    "view": "Ver",
+    "back": "Voltar",
+    "menu": "Menu"
   },
   "auth": {
     "login": "Entrar",
@@ -17,7 +36,8 @@
       "AUTH_REQUIRED": "...",
       "TOKEN_EXPIRED": "...",
       "EMAIL_NOT_VERIFIED": "Verifique seu e-mail antes de entrar",
-      "INVALID_TOKEN": "Este link é inválido ou expirou"
+      "INVALID_TOKEN": "Este link é inválido ou expirou",
+      "IP_BLOCKED": "Seu endereço IP foi bloqueado"
     },
     "signingUp": "Criando conta...",
     "sending": "Enviando...",
@@ -36,7 +56,8 @@
     "resendVerification": "Reenviar e-mail",
     "resending": "Enviando...",
     "resendSent": "Se a conta existe e não está verificada, um novo link foi enviado.",
-    "resendCooldown": "Aguarde um minuto antes de solicitar outro.",
+    "resendCountdown": "Reenviar ({time})",
+    "resendRateLimited": "Muitas solicitações — aguarde a contagem regressiva terminar e tente novamente.",
     "verificationSent": "Verifique sua conta por e-mail antes de entrar.",
     "verifyEmailTitle": "Verificando seu e-mail",
     "verifying": "Verificando...",
@@ -45,18 +66,31 @@
     "verifyFailedHint": "Este link é inválido ou expirou.",
     "backToLogin": "Voltar para login",
     "wrongEmail": "E-mail errado?",
-    "useDifferentEmail": "Usar outro e-mail"
-  },
-  "dashboard": {
-    "title": "Painel",
-    "overview": "Gerencie seus dispositivos e ative-os remotamente."
+    "useDifferentEmail": "Usar outro e-mail",
+    "logout": "Logout",
+    "email": "Email",
+    "confirmPassword": "Confirm Password",
+    "name": "Name",
+    "newPassword": "New Password",
+    "currentPassword": "Current Password",
+    "resetEmailHint": "Enter your email to receive a reset link.",
+    "resetLinkSent": "If the email exists, a reset link has been sent.",
+    "sendResetLink": "Send Reset Link",
+    "passwordReset": "Password reset successfully.",
+    "creatingAccount": "Creating account...",
+    "sendingResetLink": "Sending reset link...",
+    "passwordHint": "8+ characters",
+    "passwordsDontMatch": "Passwords don't match",
+    "registrationClosed": "O registro está temporariamente fechado. Tente novamente mais tarde."
   },
   "navigation": {
     "devices": "Dispositivos",
     "agent": "Agente",
     "integrations": "Integrações",
     "history": "Histórico",
-    "admin": "Admin"
+    "admin": "Admin",
+    "settings": "Configurações",
+    "menu": "Menu"
   },
   "devices": {
     "title": "Dispositivos",
@@ -75,11 +109,100 @@
     "rotateFailed": "Falha ao girar o código",
     "copiedNewCode": "Novo código copiado para a área de transferência",
     "codeCopiedManualHint": "Não foi possível copiar automaticamente. O novo código é exibido acima — selecione e copie manualmente.",
-    "maskedCodeHint": "O código de pareamento está mascarado. Clique em \"Girar código\" para obter um código completo para conectar."
+    "maskedCodeHint": "O código de pareamento está mascarado. Clique em \"Girar código\" para obter um código completo para conectar.",
+    "rotate": "Rotate Code",
+    "rotateSuccess": "Pairing code rotated",
+    "status": {
+      "pending": "Waiting for agent connection",
+      "online": "Online",
+      "offline": "Offline"
+    },
+    "lastSeen": "Last seen",
+    "publicKey": "Public Key",
+    "never": "Never",
+    "confirmRotate": "Click again to confirm",
+    "publicKeyNotAvailable": "Not available until agent connects",
+    "advanced": "Avançado",
+    "model": {
+      "server": "servidor wakewake",
+      "agent": "agente LAN",
+      "device": "Seus dispositivos",
+      "linked": "Conectado",
+      "missing": "Ainda não conectado",
+      "broken": "Desconectado"
+    },
+    "guide": {
+      "whereTitle": "Execute o agente em uma máquina sempre ligada na sua rede doméstica",
+      "whereDesc": "O agente deve estar no mesmo roteador dos dispositivos que você deseja acordar — o sinal de wake não atravessa roteadores. Um NAS, mini PC ou notebook reserva serve.",
+      "commandLabel": "Comando de inicialização",
+      "copyCommand": "Copiar comando",
+      "waiting": "Aguardando a conexão do agente — esta página é atualizada automaticamente.",
+      "tabLinux": "Linux",
+      "tabDocker": "Docker",
+      "composeTitle": "Docker Compose",
+      "composeRecommended": "Recomendado",
+      "runTitle": "Comando único"
+    },
+    "online": {
+      "title": "Agente conectado",
+      "desc": "O agente está em execução. Adicione um dispositivo para acordá-lo remotamente.",
+      "cta": "Ir para dispositivos"
+    },
+    "offline": {
+      "title": "Agente desconectado",
+      "desc": "O agente foi pareado anteriormente. Verifique se a máquina está ligada e acessível — ele reconecta automaticamente ao voltar, sem reconfiguração.",
+      "repairHint": "Para parear o agente em uma nova máquina, troque o código de pareamento e use o novo comando."
+    },
+    "advancedConfigTitle": "Iniciar com um arquivo de configuração",
+    "advancedConfigDesc": "Salve o conteúdo a seguir em ~/.wakewake/config.toml e execute wakewake-agent sem argumentos.",
+    "service": {
+      "title": "Executar na inicialização (instalação direta)",
+      "desc": "Após verificar a primeira execução em primeiro plano, instale o agente como serviço systemd para que sobreviva a reinicializações e desconexões SSH. Com Docker não é necessário (--restart unless-stopped)."
+    }
   },
   "integrations": {
     "title": "Integrações",
-    "comingSoon": "Em breve."
+    "comingSoon": "Em breve.",
+    "add": "Add Integration",
+    "bemfaDesc": "Enable voice control of devices via Bemfa cloud (Xiao Ai, Tmall Genie).",
+    "bemfaUidHint": "Bemfa console → Console → Private key (32-hex or 45-char)",
+    "connect": "Connect Bemfa",
+    "connected": "Connected",
+    "notConnected": "Not connected",
+    "enable": "Enable",
+    "disable": "Disable",
+    "edit": "Configure",
+    "cancel": "Cancel",
+    "save": "Save",
+    "deleteRemoved": "Removed",
+    "configHint": "Sensitive fields (UID / secretID / secretKey) are end-to-end encrypted with the agent's public key; the server never sees them.",
+    "editConfig": "Edit configuration",
+    "placeholderSecret": "Set, leave blank to keep unchanged",
+    "stateConnected": "Connected",
+    "stateConnecting": "Connecting…",
+    "stateConnectingHint": "Usually completes in seconds. If it stays here, check the UID or whether the agent is online.",
+    "stateAgentOffline": "Agent offline",
+    "stateAgentOfflineHint": "The wake agent is offline. The integration will sync automatically once it comes back.",
+    "stateDisconnected": "MQTT not connected",
+    "stateDisconnectedHint": "Bemfa MQTT connection failed. Check that the UID is correct.",
+    "stateError": "Sync error",
+    "stateDisabled": "Paused",
+    "stateDisabledHint": "Integration is paused. Bemfa device topics are retained but voice wake is disabled.",
+    "devicesSynced": "{count} devices synced",
+    "lastError": "Last error: {error}",
+    "v2Optional": "v2 API credentials (optional, recommended)",
+    "v2Toggle": "Use v2 API (requires real-name verification)",
+    "v2Hint": "Fill secretID/secretKey to use the recommended v2 API. Leave empty for v1 (UID only).",
+    "mijiaGuide": "How to enable voice control with Xiao Ai",
+    "mijiaStep1": "Ensure the Bemfa integration above is connected",
+    "mijiaStep2": "Open Mi Home app → Profile → Third-party devices → Add → select \"Bemfa\"",
+    "mijiaStep3": "Enter your Bemfa account (the one matching the UID above)",
+    "mijiaStep4": "Say \"Xiao Ai, turn on {device}\" to wake your computer",
+    "mijiaWarning": "Without Mi Home binding, Bemfa topics are still created, but voice control won't work.",
+    "deleteDialogTitle": "Remove integration",
+    "deleteDialogDesc": "Disconnect Bemfa? Device topics are retained on the cloud (reusable), but voice wake will be unavailable.",
+    "toggleSuccess": "{action} succeeded",
+    "toggleFailed": "{action} failed"
   },
   "wakes": {
     "title": "Histórico",
@@ -87,12 +210,28 @@
     "refresh": "Atualizar",
     "statusSuccess": "Sucesso",
     "statusExpired": "Expirado",
-    "statusFailed": "Falhou"
+    "statusFailed": "Falhou",
+    "device": "Device",
+    "type": "Type",
+    "typeManual": "Manual",
+    "typeVoice": "Voice",
+    "statusCol": "Status",
+    "time": "Time",
+    "loading": "Loading...",
+    "empty": "No wake history yet.",
+    "loadMore": "Load More"
   },
   "settings": {
     "title": "...",
     "comingSoon": "Em breve.",
-    "confirmPassword": "Confirmar nova senha"
+    "confirmPassword": "Confirmar nova senha",
+    "changePassword": "Change Password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "passwordChanged": "Password changed. Please sign in again.",
+    "saving": "Saving...",
+    "language": "Language",
+    "passwordsDontMatch": "Passwords don't match"
   },
   "admin": {
     "title": "Admin",
@@ -184,7 +323,148 @@
     "colAction": "Action",
     "colTarget": "Target",
     "colDetail": "Detail",
-    "pagination": "Page {page} / {total}"
+    "pagination": "Page {page} / {total}",
+    "activity": "Activity",
+    "integrations": "Integrations",
+    "wakes": "Wakes",
+    "maintenance": {
+      "title": "Maintenance",
+      "statusNormal": "Normal — no maintenance active",
+      "statusActive": "Maintenance active",
+      "enable": "Enable maintenance mode",
+      "disable": "Disable maintenance",
+      "affectsAll": "This affects all users. Choose a severity:",
+      "mode_registration": "Pause registration",
+      "mode_registrationDesc": "New signups blocked. Existing users unaffected.",
+      "mode_readonly": "Read-only",
+      "mode_readonlyDesc": "All write operations blocked. Users can still view.",
+      "mode_full": "Full lockdown",
+      "mode_fullDesc": "Only admins can sign in. All others turned away.",
+      "messageLabel": "Message to users (optional):",
+      "messagePlaceholder": "Scheduled maintenance in progress"
+    },
+    "activityDesc": "Login events and audit trail",
+    "devicesDesc": "Cross-user device monitoring",
+    "integrationsDesc": "Cross-user integration monitoring",
+    "wakesDesc": "Cross-user wake audit history",
+    "maintenanceDesc": "Emergency controls and maintenance mode",
+    "backToAdmin": "Admin",
+    "searchUsers": "Type the beginning of an email...",
+    "searchDevices": "Device name or user email...",
+    "searchActivity": "Email, IP, or action...",
+    "filterStatus": "Status",
+    "filterRole": "Role",
+    "filterCloud": "Cloud",
+    "filterType": "Type",
+    "filterResult": "Result",
+    "filterDate": "Date",
+    "filterClear": "Clear filters",
+    "lastLogin": "Last login",
+    "never": "Never",
+    "thisIsYou": "This is you — actions disabled",
+    "disableDialogTitle": "Disable user",
+    "disableDialogDesc": "Disable \"{email}\"? They will be immediately logged out and their agent disconnected.",
+    "disableDialogReason": "Reason (optional):",
+    "disableDialogReasonPlaceholder": "e.g. Abuse — bulk registration",
+    "resetDialogTitle": "Reset password",
+    "resetDialogDesc": "Set a new password for \"{email}\". Their old password will stop working and they'll be logged out everywhere.",
+    "resetDialogPasswordLabel": "New password (min 8 characters):",
+    "disconnectFailedHint": "Agent is not online",
+    "statusActive": "Active",
+    "auditAction": {
+      "integration": {
+        "create": "Integração criada",
+        "update": "Integração atualizada",
+        "delete": "Integração excluída",
+        "resync": "Integração ressincronizada"
+      },
+      "agent": {
+        "rotate_code": "Código de pareamento rotacionado",
+        "disconnect": "Agente desconectado"
+      },
+      "user": {
+        "change_password": "Senha alterada",
+        "disable": "Usuário desativado",
+        "enable": "Usuário ativado",
+        "reset_password": "Senha redefinida",
+        "verify_email": "E-mail verificado"
+      },
+      "device": {
+        "resync": "Dispositivo ressincronizado"
+      },
+      "maintenance": {
+        "enabled": "Manutenção ativada",
+        "disabled": "Manutenção desativada"
+      }
+    },
+    "risk": "Risco",
+    "riskDesc": "Sinais de abuso num relance: cadastros, e-mails enviados, logins falhados, bloqueios",
+    "riskRegistrations24h": "Cadastros (24h)",
+    "riskRegistrations7d": "Cadastros (7 dias)",
+    "riskUnverified": "Contas não verificadas",
+    "riskOldest": "mais antiga {n}h",
+    "riskFailedLogins": "Logins falhados (24h)",
+    "riskEmailsToday": "E-mails de hoje",
+    "riskBlocked": "bloqueados",
+    "riskRateLimited": "429 (desde a reinicialização)",
+    "riskPow": "Dificuldade PoW",
+    "riskIpBans": "Bloqueios de IP ativos",
+    "riskTopIps": "IPs com mais logins falhados (24h)",
+    "riskTopEmails": "E-mails mais visados (24h)",
+    "riskNoData": "Sem falhas nas últimas 24 horas",
+    "riskTargets": "alvos",
+    "riskBan": "Bloquear",
+    "riskViewAll": "Gerir bloqueios",
+    "mailer": {
+      "title": "Controles de e-mail e registro",
+      "desc": "Interruptor de emergência, orçamentos diários por caminho e dificuldade PoW — efeito imediato, persiste após reiniciar.",
+      "switchTitle": "E-mails de saída",
+      "switchDesc": "Desativado = nenhum e-mail de verificação/reenvio/redefinição é enviado (o registro continua funcionando, as contas ficam não verificadas; a redefinição retorna 503).",
+      "on": "Ativado",
+      "off": "Desativado",
+      "turnOff": "Parar envio",
+      "turnOn": "Retomar envio",
+      "limitsTitle": "Orçamentos diários",
+      "limitsDesc": "Limites diários UTC por caminho. 0 = ilimitado. Ao esgotar, o caminho degrada como se o e-mail estivesse desativado.",
+      "limitRegister": "Verificação de cadastro",
+      "limitResend": "Reenvio de verificação",
+      "limitReset": "Redefinição de senha",
+      "save": "Salvar orçamentos",
+      "saved": "Orçamentos atualizados",
+      "sentToday": "enviados hoje",
+      "blockedToday": "bloqueados hoje",
+      "mailerUpdated": "Interruptor de e-mail atualizado",
+      "powTitle": "Dificuldade PoW de registro",
+      "powDesc": "Aumentar sob ataque de bots (6–7 ≈ 256–4096× o custo). Afeta apenas novos desafios; 0 desativa o PoW completamente.",
+      "powSave": "Atualizar dificuldade",
+      "powSaved": "Dificuldade PoW atualizada"
+    },
+    "ipBans": {
+      "title": "Bloqueios de IP",
+      "desc": "Bloqueios a nível de aplicação com a mesma fonte de IP do rate limiting. IP exato ou CIDR. Bloqueios expirados deixam de aplicar automaticamente.",
+      "target": "IP ou CIDR",
+      "targetPlaceholder": "ex. 203.0.113.5 ou 198.51.100.0/24",
+      "reason": "Motivo (opcional)",
+      "ttl": "Duração",
+      "ttl1h": "1 hora",
+      "ttl24h": "24 horas",
+      "ttl7d": "7 dias",
+      "ttlPermanent": "Permanente",
+      "add": "Bloquear",
+      "added": "IP bloqueado",
+      "removed": "Bloqueio removido",
+      "remove": "Remover",
+      "empty": "Nenhum IP bloqueado",
+      "expires": "Expira",
+      "permanent": "Nunca",
+      "expiredTag": "Expirado",
+      "colTarget": "Alvo",
+      "colReason": "Motivo",
+      "colCreated": "Criado",
+      "colExpires": "Expira",
+      "colActions": "Ações",
+      "selfBan": "Não é possível bloquear o próprio IP"
+    }
   },
   "theme": {
     "light": "...",
@@ -208,7 +488,9 @@
     "VALIDATION_FAILED": "...",
     "INTERNAL_ERROR": "...",
     "EMAIL_NOT_VERIFIED": "Verifique seu e-mail antes de entrar",
-    "INVALID_TOKEN": "Este link é inválido ou expirou"
+    "INVALID_TOKEN": "Este link é inválido ou expirou",
+    "SERVICE_UNAVAILABLE": "This service is temporarily unavailable",
+    "IP_BLOCKED": "Seu endereço IP foi bloqueado"
   },
   "validation": {
     "required": "...",
@@ -224,15 +506,234 @@
     "name": "...",
     "email": "...",
     "password": "...",
-    "mac_encrypted": "...",
-    "config.uid": "...",
-    "config.topic_prefix": "..."
+    "mac_encrypted": "..."
   },
   "device": {
     "synced": "Sincronizado",
     "syncing": "Sincronizando",
     "syncError": "Erro de sync",
     "agentOnline": "Agente online",
-    "agentOffline": "Agente offline"
+    "agentOffline": "Agente offline",
+    "name": "Device Name",
+    "namePlaceholder": "My Computer",
+    "macAddress": "MAC Address",
+    "macAddressPlaceholder": "AA:BB:CC:DD:EE:FF",
+    "description": "Description",
+    "descriptionPlaceholder": "Office Desktop",
+    "wake": "Wake",
+    "waking": "Waking...",
+    "wakeSuccess": "Wake signal sent",
+    "wakeError": "Failed to send wake signal",
+    "create": "Add Device",
+    "edit": "Edit Device",
+    "save": "Save",
+    "saving": "Saving...",
+    "cancel": "Cancel",
+    "loading": "Loading devices...",
+    "delete": "Delete",
+    "deleteSuccess": "Device deleted",
+    "deleteFailed": "Failed to delete device",
+    "noDevices": "No devices found. Add one to get started.",
+    "encryptionHint": "MAC will be encrypted with your agent's public key. Server never sees plaintext.",
+    "invalidMac": "Invalid MAC address format (e.g. AA:BB:CC:DD:EE:FF)",
+    "connectorNotReady": "Agent is not connected yet. Pair it first.",
+    "macLockedOnEdit": "MAC cannot be changed after creation unless re-encrypting with a new key.",
+    "cloudNotObserved": "Waiting for cloud sync",
+    "cloudSyncing": "Syncing to cloud",
+    "cloudSynced": "Bemfa synced, voice wake available",
+    "cloudError": "Cloud sync failed: {error}",
+    "cloudNone": "Bemfa not enabled",
+    "driftDeleted": "Cloud topic was deleted, auto-recovered",
+    "driftRenamed": "Cloud name was modified, auto-recovered",
+    "wakeTimeout": "Wake timed out — agent did not respond in time",
+    "wakeFailed": "Wake failed: {message}",
+    "deleteDialogTitle": "Delete device",
+    "deleteDialogDesc": "Permanently remove \"{name}\"? Cloud topic will be cleaned up automatically. This cannot be undone.",
+    "quotaExceeded": "Device limit reached. You can have at most {max} devices. Remove an existing device first.",
+    "addDevice": "+ Add device",
+    "wakeUnavailable": "Wake unavailable",
+    "details": "Detalhes do dispositivo",
+    "detailIdentity": "IDENTIDADE",
+    "detailConnection": "CONEXÃO",
+    "detailCloudSync": "SYNC NUVEM",
+    "colMac": "Endereço MAC",
+    "colDescription": "Descrição",
+    "colCreated": "Criado em",
+    "colAgent": "Agente",
+    "colLastSeen": "Última conexão",
+    "colStatus": "Status",
+    "colLastSync": "Última sync",
+    "colLastDrift": "Último desvio",
+    "masked": "(mascarado)",
+    "noDescription": "—",
+    "never": "—",
+    "noDrift": "— (nenhuma)",
+    "viewAgent": "Ver agente",
+    "connectorNotReadyLink": "Ir para a página do agente →",
+    "gate": {
+      "agentPendingTitle": "Conecte primeiro o agente",
+      "agentPendingDesc": "Os endereços MAC dos dispositivos são criptografados com a chave pública do agente, por isso é preciso um agente pareado antes de adicionar um dispositivo.",
+      "quotaTitle": "Limite de dispositivos atingido",
+      "quotaDesc": "Cada conta pode ter até {max} dispositivos. Remova um dispositivo sem uso para adicionar outro.",
+      "insecureTitle": "Conexão segura necessária",
+      "insecureDesc": "A criptografia MAC usa a API Web Crypto do navegador, que exige acesso via HTTPS ou localhost.",
+      "cta": "Conectar agente",
+      "dismiss": "Entendi"
+    },
+    "notice": {
+      "pendingTitle": "Agente ainda não pareado",
+      "pendingDesc": "Os dispositivos precisam de um agente pareado para receber comandos de wake.",
+      "offlineTitle": "Agente offline",
+      "offlineDesc": "Ainda é possível adicionar dispositivos; eles serão sincronizados quando o agente reconectar."
+    }
+  },
+  "status": {
+    "healthy": "Todos os sistemas operacionais",
+    "issues": "{count} problemas precisam de atenção",
+    "serviceDegraded": "Serviço degradado"
+  },
+  "health": {
+    "healthy": "Todos os sistemas operacionais",
+    "issues": "{count} problemas precisam de atenção",
+    "serviceDegraded": "Serviço degradado",
+    "devicesReady": "{count} dispositivos prontos",
+    "deviceNeedsAttention": "{count} dispositivo precisa de atenção",
+    "devicesNeedAttention": "{count} dispositivos precisam de atenção",
+    "agentOnline": "Agent online",
+    "agentOffline": "Agent offline",
+    "agentsOffline": "{count} agents offline",
+    "cloudSyncOk": "Sincronização na nuvem OK",
+    "cloudSyncError": "Erro de sincronização na nuvem",
+    "suspiciousLogin": "Login suspeito: {count} falhas de {ip}",
+    "integrationError": "{count} erro de integração",
+    "moreIssues": "+ {count} outros problemas"
+  },
+  "maintenance": {
+    "banner": "Manutenção programada em andamento — alguns recursos podem ser limitados"
+  },
+  "empty": {
+    "devices": "Sem dispositivos ainda",
+    "devicesDesc": "Adicione seu primeiro dispositivo para iniciá-lo remotamente",
+    "addDevice": "Adicionar dispositivo",
+    "wakes": "Sem histórico ainda",
+    "wakesDesc": "Inicie um dispositivo para vê-lo aqui",
+    "wakesCta": "Ir para dispositivos →",
+    "integrations": "Sem integração conectada",
+    "integrationsDesc": "Conecte Bemfa para ativar controle por voz",
+    "users": "Sem usuários encontrados",
+    "activity": "Sem atividade ainda",
+    "activityDesc": "Eventos de login e ações administrativas aparecerão aqui",
+    "agents": "Sem agents encontrados",
+    "adminDevices": "Sem dispositivos encontrados",
+    "adminIntegrations": "Sem integrações encontradas",
+    "adminWakes": "Sem histórico encontrado",
+    "searchNoResults": "Sem resultados para \"{query}\"",
+    "onboarding": {
+      "step1": "Conectar agente",
+      "step2": "Adicionar dispositivo",
+      "step3": "Ligar remotamente",
+      "desc": "O agente é um pequeno programa da sua rede doméstica que entrega comandos de wake aos seus dispositivos."
+    }
+  },
+  "landing": {
+    "nav": {
+      "howItWorks": "Como funciona",
+      "security": "Segurança",
+      "deploy": "Implantação",
+      "signIn": "Entrar",
+      "menu": "Menu"
+    },
+    "hero": {
+      "title": "Acorde sua rede doméstica, de onde estiver.",
+      "subtitle": "Um segredo atravessa a nuvem, e a máquina em casa acende.",
+      "facts": "sem portas abertas · sem LAN exposta · o servidor só vê texto cifrado",
+      "ctaPrimary": "Começar",
+      "ctaGithub": "GitHub",
+      "diagramAlt": "Topologia: o navegador envia uma MAC cifrada com RSA via TLS ao servidor WakeWake num VPS de 2 GB; o agente em casa mantém uma conexão SSE de saída e difunde um pacote mágico UDP para acordar o dispositivo",
+      "noteBrowser": "A MAC em claro nunca sai do seu navegador",
+      "noteServer": "O servidor só vê texto cifrado",
+      "noteAgent": "Somente saída — sem portas de entrada",
+      "noteDevice": "Acende = acordado"
+    },
+    "hops": {
+      "kicker": "Como funciona",
+      "title": "Um acorde, exatamente três saltos",
+      "hop1": {
+        "title": "Cifrado no seu navegador",
+        "body": "Seu navegador cifra a MAC com a chave pública do agente. Do recebimento ao banco, o servidor só vê texto cifrado."
+      },
+      "hop2": {
+        "title": "O agente só dispara para fora",
+        "body": "O agente mantém uma conexão SSE de saída; os comandos chegam em casa por ela. Nenhuma porta de entrada aponta para sua casa — zero configuração no roteador."
+      },
+      "hop3": {
+        "title": "Um pacote mágico o acende",
+        "body": "O agente decifra a MAC e difunde um pacote mágico na sua LAN. Ele nunca escaneia, encaminha nem faz proxy de nada."
+      }
+    },
+    "trust": {
+      "kicker": "Confiança",
+      "title": "As perguntas difíceis, primeiro",
+      "q1": "E se roubarem o banco inteiro?",
+      "a1": "Nada útil. As MACs são cifradas no navegador; o banco guarda apenas texto cifrado RSA-OAEP. A chave privada vive no disco do agente — e em nenhum outro lugar.",
+      "q2": "Preciso abrir portas ou ter IP público em casa?",
+      "a2": "Nenhum dos dois. O agente só dispara para fora — não há buraco de entrada apontando para sua casa. Seu roteador fica intocado.",
+      "q3": "Se o servidor for totalmente comprometido, o pior caso?",
+      "a3": "No máximo, reproduzir textos cifrados antigos para ligar dispositivos já registrados. Não dá para ler MACs, forjar dispositivos novos nem alcançar sua LAN.",
+      "q4": "E o resto da minha LAN?",
+      "a4": "Intocada. O agente só envia pacotes mágicos por broadcast — sem escanear, sem encaminhar, sem proxy."
+    },
+    "deploy": {
+      "kicker": "Implantação",
+      "title": "Três comandos, no seu próprio VPS",
+      "body": "Uma única imagem multi-arquitetura, com Caddy na frente. Migrações e o admin inicial rodam automaticamente na inicialização — não há etapa de migração para esquecer.",
+      "terminalLabel": "compose · um VPS de 2 GB basta",
+      "chip1": "uma imagem · amd64 + arm64",
+      "chip2": "migrações na inicialização",
+      "chip3": "bootstrap admin idempotente"
+    },
+    "why": {
+      "kicker": "Por que WakeWake",
+      "title": "Sem plataforma, sem trocar de hardware, sem abrir portas",
+      "item1": {
+        "title": "Zero portas de entrada",
+        "body": "O agente faz apenas conexões de saída — o roteador não precisa de nada e a LAN fica invisível."
+      },
+      "item2": {
+        "title": "Criptografia ponta a ponta",
+        "body": "Os endereços MAC são criptografados no seu navegador com uma chave gerada em casa; o servidor só vê texto cifrado."
+      },
+      "item3": {
+        "title": "Roda num servidor pequeno",
+        "body": "Um VPS de 2 GB basta. Um contêiner, nada mais."
+      },
+      "item4": {
+        "title": "Uma imagem, em qualquer lugar",
+        "body": "Imagem única multiarquitetura — x86 ou ARM, onde você implantar."
+      },
+      "item5": {
+        "title": "Histórico completo de despertares",
+        "body": "Cada despertar é registrado: quem, quando, qual dispositivo."
+      },
+      "item6": {
+        "title": "Grupos e notas",
+        "body": "Organize seus dispositivos com grupos e notas."
+      },
+      "item7": {
+        "title": "Controle por voz",
+        "body": "Desperte dispositivos por voz com a integração Bemfa."
+      },
+      "item8": {
+        "title": "Código aberto e auto-hospedado",
+        "body": "AGPL-3.0. Seus dados ficam com você."
+      }
+    },
+    "closing": {
+      "line": "Funcionando em três comandos."
+    },
+    "footer": {
+      "docs": "Arquitetura",
+      "selfHosted": "self-hosted"
+    }
   }
 }

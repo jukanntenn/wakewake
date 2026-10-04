@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { renderWithProviders } from '@/test/test-utils'
+import type { Device, Integration } from '@/lib/api'
 
 // 不 mock next-intl——renderWithProviders 提供真实的 NextIntlClientProvider
 
@@ -14,8 +15,8 @@ const mockCreateIntegration = vi.fn().mockResolvedValue({})
 const mockPatchIntegration = vi.fn().mockResolvedValue({})
 const mockDeleteIntegration = vi.fn().mockResolvedValue({})
 const mockToggleIntegration = vi.fn().mockResolvedValue({})
-const mockUseIntegrations = vi.fn(() => ({ data: undefined }))
-const mockUseDevices = vi.fn(() => ({ data: [] }))
+const mockUseIntegrations = vi.fn((): { data: Integration[] | undefined } => ({ data: undefined }))
+const mockUseDevices = vi.fn((): { data: Device[] } => ({ data: [] }))
 
 const baseSchema = {
   properties: {
@@ -27,7 +28,7 @@ const baseSchema = {
 }
 
 vi.mock('@/hooks/useIntegrations', () => ({
-  useIntegrations: (...args: unknown[]) => mockUseIntegrations(...args),
+  useIntegrations: () => mockUseIntegrations(),
   useIntegrationSchema: () => ({ data: baseSchema }),
   useCreateIntegration: () => ({ mutateAsync: mockCreateIntegration, isPending: false }),
   usePatchIntegration: () => ({ mutateAsync: mockPatchIntegration, isPending: false }),
@@ -36,7 +37,7 @@ vi.mock('@/hooks/useIntegrations', () => ({
 }))
 
 vi.mock('@/hooks/useDevices', () => ({
-  useDevices: (...args: unknown[]) => mockUseDevices(...args),
+  useDevices: () => mockUseDevices(),
 }))
 
 vi.mock('@/hooks/useAgents', () => ({
@@ -229,7 +230,26 @@ describe('Integrations page (Bemfa)', () => {
       ],
     })
     mockUseDevices.mockReturnValue({
-      data: [{ did: 'a', name: 'PC', mac_display: 'AA:**:**:**:**:FF' }],
+      data: [
+        {
+          did: 'a',
+          name: 'PC',
+          mac_display: 'AA:**:**:**:**:FF',
+          description: null,
+          agent_online: true,
+          agent_name: null,
+          agent_last_seen: null,
+          projection_status: 'synced',
+          cloud_status: 'synced',
+          cloud_observed_name: null,
+          cloud_observed_at: null,
+          last_drift_at: null,
+          last_drift_kind: null,
+          last_error: null,
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+      ],
     })
 
     const { default: IntegrationsPage } = await import('./page')

@@ -21,7 +21,7 @@ use futures_util::StreamExt;
 use futures_util::stream::{self, Stream};
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult, ErrorCode};
 use crate::hub::{CommandDispatcher, SseEvent};
 use crate::middleware::agent_auth::AuthAgent;
 use crate::repo::agent_repo;
@@ -32,11 +32,31 @@ pub fn routes() -> Router<std::sync::Arc<AppState>> {
     Router::new().route("/agents/self/events", get(events))
 }
 
+/// 全局 SSE 连接上限判定（cloudflare-edge WRFC）：`max == 0` 不限制。
+/// 连接基数 = 订阅 agent 数——同 agent 重连由 Hub `insert` 覆盖旧连接自愈，
+/// 无法单 agent 叠加；基数上界 = 已配对 agent 数（受设备配额约束），此处是总量兜底。
+fn sse_cap_exceeded(hub: &crate::hub::Hub, max: usize) -> bool {
+    max > 0 && hub.connected_count() >= max
+}
+
 async fn events(
     State(state): State<std::sync::Arc<AppState>>,
     agent: AuthAgent,
     headers: HeaderMap,
 ) -> AppResult<Sse<impl Stream<Item = Result<Event, Infallible>>>> {
+    // 全局 SSE 连接上限（cloudflare-edge WRFC）：超出返 503，agent 按退避重连。
+    // 上限默认 2000（0 = 不限制，见 [server].max_sse_connections）。
+    let max = state.settings.server.max_sse_connections;
+    if sse_cap_exceeded(&state.hub, max) {
+        tracing::warn!(
+            agent_id = agent.agent_id,
+            connected = state.hub.connected_count(),
+            max,
+            "SSE connection cap reached, rejecting"
+        );
+        return Err(AppError::code(ErrorCode::ServiceUnavailable));
+    }
+
     // X-Public-Key 逻辑（§8.6 PEM 契约）：agent 发送纯 base64 体，server 重组标准 SPKI PEM。
     if let Some(pk) = headers.get("X-Public-Key").and_then(|v| v.to_str().ok()) {
         let current = agent_repo::find_by_id(&state.pool, agent.agent_id)
@@ -152,5 +172,34 @@ impl<F: FnOnce()> Stream for CleanupStream<F> {
     ) -> std::task::Poll<Option<Self::Item>> {
         let this = self.get_mut();
         this.inner.as_mut().poll_next(cx)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sse_cap_zero_is_unlimited() {
+        let hub = crate::hub::Hub::new();
+        assert!(!sse_cap_exceeded(&hub, 0));
+    }
+
+    #[test]
+    fn sse_cap_rejects_at_limit() {
+        let hub = crate::hub::Hub::new();
+        let _rx1 = hub.subscribe(1, 10);
+        assert!(!sse_cap_exceeded(&hub, 2));
+        let _rx2 = hub.subscribe(2, 10);
+        assert!(sse_cap_exceeded(&hub, 2));
+    }
+
+    #[test]
+    fn sse_cap_same_agent_reconnect_does_not_stack() {
+        // 同 agent 重连：Hub insert 覆盖旧连接，连接数不叠加（§5.4.1 自愈）。
+        let hub = crate::hub::Hub::new();
+        let _rx1 = hub.subscribe(1, 10);
+        let _rx2 = hub.subscribe(1, 20);
+        assert!(!sse_cap_exceeded(&hub, 2));
     }
 }

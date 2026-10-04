@@ -1,23 +1,22 @@
 # Lint workflow —— 双层路径过滤（paths-ignore 拦噪音 + dorny/paths-filter 精确路由）。
-# 触发：push 到 main + PR 到 main。改纯 markdown/docs 不触发。
+# 触发：push 到 main + PR 到 main。markdown/docs/specs 变更会触发 root 作业
+# （文档门控 doc-check 在 lint 组）；backend/frontend 作业仍由 dorny 精确路由。
+#
+# 命令源唯一：所有门禁命令定义在 prek（根/backend/frontend 三份 prek.toml，
+# format/lint/check 三组），CI 只按 项目:组 调用 prek——本地 prek 与 CI 跑的是
+# 同一条命令，杜绝"本地全绿、CI 报红"的 drift。
 name: Lint
 
 on:
   push:
     branches: [main]
     paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - 'specs/**'
       - '.gitignore'
       - 'LICENSE'
       - '.vscode/**'
   pull_request:
     branches: [main]
     paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - 'specs/**'
       - '.gitignore'
       - 'LICENSE'
       - '.vscode/**'
@@ -51,6 +50,24 @@ jobs:
             frontend:
               - 'frontend/**'
 
+  # 仓库级卫生（builtin fixers / check-* / agent-instructions-sync /
+  # doc-check 文档门控 / ruff / actionlint），秒级，无语言工具链依赖
+  # （ruff 未安装时优雅跳过）—— 不做路径过滤。
+  root:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # prek 版本与本地一致（prek --version）；升级时两处同步。
+      - run: pip install prek==0.4.10
+      - name: Install actionlint
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash | bash -s -- 1.7.12
+          mv actionlint /usr/local/bin/
+      - name: prek (root project, all groups)
+        # hdsh 组是 hdsh adopt 托管的门禁（prek.toml 的 managed block）；--group 过滤必须包含它，否则静默丢失。
+        run: prek run --all-files --group format --group lint --group check --group hdsh --skip backend/ --skip frontend/
+
   lint-backend:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
@@ -65,13 +82,9 @@ jobs:
       - uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
         with:
           workspaces: backend
-      - name: cargo fmt --check
-        working-directory: backend
-        run: cargo fmt --check
-      # NOTE: -D warnings 暂未启用（pedantic 配置开启后有 ~70 存量 warning，待清后加回）。
-      - name: cargo clippy
-        working-directory: backend
-        run: cargo clippy --all-targets --all-features
+      - run: pip install prek==0.4.10
+      - name: "prek (backend: format + lint)"
+        run: prek run --all-files --group format --group lint backend/
 
   lint-frontend:
     needs: changes
@@ -82,19 +95,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
         with:
-          version: 11
-          run_install: false
+          # 版本真源是 frontend/package.json 的 packageManager 字段。
+          package_json_file: frontend/package.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '22'
+          node-version-file: frontend/.nvmrc
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
       - name: Install dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile
-      - name: ESLint
-        working-directory: frontend
-        run: pnpm lint
-      - name: Prettier check
-        working-directory: frontend
-        run: pnpm format:check
+      - run: pip install prek==0.4.10
+      - name: "prek (frontend: format + lint)"
+        run: prek run --all-files --group format --group lint frontend/

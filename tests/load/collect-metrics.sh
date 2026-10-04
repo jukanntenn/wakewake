@@ -1,9 +1,9 @@
 #!/bin/bash
 # RSS/CPU/PG 外部采集（load.md §7.3）。
 # 每 5s 采一次，CSV 输出。pgrep 定位 server PID（非 PID 1——s6-overlay 容器 PID 1 是 s6-svscan）。
-CONTAINER=e2e-app-1
-PG_CONTAINER=e2e-postgres-1
-OUT=metrics-samples.csv
+CONTAINER=${LOAD_APP_CONTAINER:-e2e-app-1}
+PG_CONTAINER=${LOAD_PG_CONTAINER:-e2e-postgres-1}
+OUT=${LOAD_METRICS_OUT:-metrics-samples.csv}
 
 cd "$(dirname "$0")"
 echo "timestamp,app_rss_kb,app_cpu_percent,pg_rss_kb,pg_active_conns,host_avail_mb" > "$OUT"

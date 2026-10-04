@@ -1,215 +1,339 @@
 'use client'
 
-// Admin 风控概览页（/admin）。
-// 全局聚合 stats 卡片 + 最近审计日志。管理员快速识别异常（卡住的 sync / 离线 agent）。
+// Admin 概览页（ui-ux-risk-control §9.2）。
+// 三层信息架构：概览层（健康仪表盘）+ 管理层（治理/运维入口）+ 系统层（维护）。
+// 健康时展示聚合 stats；异常时替换为告警列表 + 预设过滤跳转。
+// 风控区块（admin-risk-controls WRFC）：注册速率 / 发信消耗 / 失败登录聚合
+// 一眼扫见，top 失败 IP 直连封禁（看见 → 处置一条流）。
 
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
-import { Loader2, Shield, Users, Cpu, HardDrive, Activity, AlertTriangle } from 'lucide-react'
-import { useAdminStats, useAuditLog } from '@/hooks/useAdmin'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { toast } from 'sonner'
+import {
+  ChevronRight,
+  Activity,
+  Users,
+  Cpu,
+  HardDrive,
+  Zap,
+  Wrench,
+  ShieldAlert,
+  ShieldBan,
+  Mail,
+} from 'lucide-react'
+import { ApiError } from '@/lib/api'
+import { useAdminStats, useRiskOverview, useAddIpBan } from '@/hooks/useAdmin'
+import { StatusIndicator } from '@/components/ui/status-indicator'
+import { LoadingState } from '@/components/ui/loading-state'
+import { Button } from '@/components/ui/button'
 
-function StatCard({
-  label,
-  value,
-  hint,
-  alert,
-}: {
-  label: string
-  value: number | string
-  hint?: string
-  alert?: boolean
-}) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-ink-muted text-sm font-medium tracking-normal">
-          {label}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div
-          className={`text-3xl font-semibold ${alert ? 'text-amber-600 dark:text-amber-400' : 'text-ink'}`}
-        >
-          {value}
-        </div>
-        {hint ? <p className="text-ink-subtle mt-1 text-xs">{hint}</p> : null}
-      </CardContent>
-    </Card>
-  )
-}
-
-export default function AdminPage() {
+export default function AdminOverviewPage() {
   const t = useTranslations('admin')
+  const tHealth = useTranslations('health')
+  const tErr = useTranslations('error')
   const { data: stats, isLoading } = useAdminStats()
-  const { data: audit } = useAuditLog({ page_size: 10 })
+  const { data: risk } = useRiskOverview()
+  const banMut = useAddIpBan()
+
+  const onBan = async (ip: string) => {
+    try {
+      // 默认 24h TTL：处置快、误伤可自愈；确属长期恶意再在封禁页升级为永久。
+      await banMut.mutateAsync({ target: ip, ttl_hours: 24 })
+      toast.success(t('ipBans.added'))
+    } catch (err) {
+      toast.error(err instanceof ApiError ? tErr(err.code as never) : tErr('INTERNAL_ERROR'))
+    }
+  }
+
+  if (isLoading || !stats) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-ink text-2xl font-semibold tracking-tight">{t('title')}</h1>
+        <LoadingState variant="rows" count={3} />
+      </div>
+    )
+  }
+
+  const hasIssues = stats.devices_sync_error > 0
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Shield className="text-ink-muted h-6 w-6" />
-        <h1 className="text-ink text-2xl font-semibold tracking-tight">{t('title')}</h1>
+      <h1 className="text-ink text-2xl font-semibold tracking-tight">{t('title')}</h1>
+
+      {/* 概览层：健康仪表盘 */}
+      <div className="border-hairline bg-surface-1 rounded-lg border p-5">
+        {hasIssues ? (
+          <div className="space-y-2">
+            <div className="text-warning flex items-center gap-1.5 text-sm font-medium">
+              <StatusIndicator color="warning" />
+              {tHealth('devicesNeedAttention', { count: stats.devices_sync_error })}
+            </div>
+            {stats.devices_sync_error > 0 && (
+              <Link
+                href="/admin/devices?cloud_status=error"
+                className="text-ink-muted hover:bg-surface-2 flex items-center justify-between rounded-md px-2 py-1.5 text-sm"
+              >
+                <span>• {stats.devices_sync_error} device sync errors</span>
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center gap-1.5 text-sm font-medium">
+              <StatusIndicator color="success" />
+              <span className="text-ink">{tHealth('healthy')}</span>
+            </div>
+            <div className="text-ink-muted flex flex-wrap gap-x-6 gap-y-1 text-sm">
+              <span>
+                {stats.users} {t('statUsers')} ({t('statActiveUsers', { n: stats.active_users })})
+              </span>
+              <span>{t('statOnlineAgents', { n: stats.online_agents, total: stats.agents })}</span>
+            </div>
+            <div className="text-ink-muted flex flex-wrap gap-x-6 gap-y-1 text-sm">
+              <span>
+                {stats.devices} {t('statDevices')} · {stats.devices_sync_error} {t('statSyncError')}
+              </span>
+              <span>{t('statIntegrations', { n: stats.integrations })}</span>
+            </div>
+          </div>
+        )}
       </div>
 
-      {isLoading || !stats ? (
-        <div className="text-ink-subtle flex h-40 items-center justify-center text-sm">
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          {t('loading')}
-        </div>
-      ) : (
-        <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              label={t('statUsers')}
-              value={stats.users}
-              hint={t('statActiveUsers', { n: stats.active_users })}
-            />
-            <StatCard
-              label={t('statAgents')}
-              value={stats.agents}
-              hint={t('statOnlineAgents', { n: stats.online_agents })}
-            />
-            <StatCard
-              label={t('statDevices')}
-              value={stats.devices}
-              hint={t('statIntegrations', { n: stats.integrations })}
-            />
-            <StatCard label={t('statWakes')} value={stats.wakes} />
-            <StatCard
-              label={t('statSyncing')}
-              value={stats.devices_syncing}
-              hint={t('statSyncingHint')}
-              alert={stats.devices_syncing > 0}
-            />
-            <StatCard
-              label={t('statSyncError')}
-              value={stats.devices_sync_error}
-              hint={t('statSyncErrorHint')}
-              alert={stats.devices_sync_error > 0}
-            />
-          </div>
-
-          {(stats.devices_sync_error > 0 || stats.devices_syncing > 0) && (
-            <Card className="border-amber-300 dark:border-amber-700">
-              <CardContent className="flex items-start gap-3 p-4">
-                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
-                <div className="text-sm">
-                  <p className="text-ink font-medium">{t('attentionTitle')}</p>
-                  <p className="text-ink-muted mt-1">{t('attentionDesc')}</p>
-                  <div className="mt-2 flex gap-3">
-                    <Link href="/admin/devices" className="text-primary hover:underline">
-                      {t('devices')} →
-                    </Link>
-                    <Link href="/admin/agents" className="text-primary hover:underline">
-                      {t('agents')} →
-                    </Link>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Link href="/admin/users" className="hover:opacity-80">
-              <Card>
-                <CardContent className="flex items-center gap-4 p-6">
-                  <Users className="text-ink-muted h-8 w-8" />
-                  <div>
-                    <p className="text-ink font-medium">{t('users')}</p>
-                    <p className="text-ink-muted text-sm">{t('manageUsers')}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-            <Link href="/admin/devices" className="hover:opacity-80">
-              <Card>
-                <CardContent className="flex items-center gap-4 p-6">
-                  <HardDrive className="text-ink-muted h-8 w-8" />
-                  <div>
-                    <p className="text-ink font-medium">{t('devices')}</p>
-                    <p className="text-ink-muted text-sm">{t('manageDevices')}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-            <Link href="/admin/agents" className="hover:opacity-80">
-              <Card>
-                <CardContent className="flex items-center gap-4 p-6">
-                  <Cpu className="text-ink-muted h-8 w-8" />
-                  <div>
-                    <p className="text-ink font-medium">{t('agents')}</p>
-                    <p className="text-ink-muted text-sm">{t('manageAgents')}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-            <Link href="/admin/audit-log" className="hover:opacity-80">
-              <Card>
-                <CardContent className="flex items-center gap-4 p-6">
-                  <Activity className="text-ink-muted h-8 w-8" />
-                  <div>
-                    <p className="text-ink font-medium">{t('auditLog')}</p>
-                    <p className="text-ink-muted text-sm">{t('manageAuditLog')}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-ink text-lg">{t('recentActions')}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {audit && audit.items.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-hairline text-ink-muted border-b text-left">
-                        <th className="py-2 pr-4 font-medium">{t('colTime')}</th>
-                        <th className="py-2 pr-4 font-medium">{t('colActor')}</th>
-                        <th className="py-2 pr-4 font-medium">{t('colAction')}</th>
-                        <th className="py-2 pr-4 font-medium">{t('colTarget')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {audit.items.map((e) => (
-                        <tr key={e.id} className="border-hairline border-b">
-                          <td className="text-ink-subtle py-2 pr-4">
-                            {new Date(e.created_at).toLocaleString()}
-                          </td>
-                          <td className="text-ink py-2 pr-4">{e.actor_email}</td>
-                          <td className="text-ink-muted py-2 pr-4">
-                            <code className="bg-surface-2 rounded px-1.5 py-0.5 text-xs">
-                              {e.action}
-                            </code>
-                          </td>
-                          <td className="text-ink-subtle py-2 pr-4">
-                            {e.target_user_id
-                              ? `user#${e.target_user_id}`
-                              : e.target_agent_id
-                                ? `agent#${e.target_agent_id}`
-                                : e.target_device_did
-                                  ? `device ${e.target_device_did.slice(0, 8)}`
-                                  : '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-ink-subtle py-6 text-center text-sm">{t('emptyAudit')}</p>
-              )}
-              <div className="mt-3 text-right">
-                <Link href="/admin/audit-log" className="text-primary text-sm hover:underline">
-                  {t('viewAllAudit')} →
-                </Link>
+      {/* 风控区块：滥用信号一览 + top 失败 IP 一键封禁 */}
+      <section className="space-y-2">
+        <h2 className="text-ink-muted flex items-center gap-1.5 text-xs font-medium tracking-wider uppercase">
+          <ShieldAlert className="h-3.5 w-3.5" />
+          {t('risk')}
+        </h2>
+        <div className="border-hairline bg-surface-1 space-y-4 rounded-lg border p-5">
+          {risk ? (
+            <>
+              <div className="text-ink-muted grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-4">
+                <span>
+                  {t('riskRegistrations24h')}:{' '}
+                  <span className="text-ink font-medium">{risk.registrations_24h}</span>
+                </span>
+                <span>
+                  {t('riskRegistrations7d')}:{' '}
+                  <span className="text-ink font-medium">{risk.registrations_7d}</span>
+                </span>
+                <span>
+                  {t('riskUnverified')}:{' '}
+                  <span className="text-ink font-medium">{risk.unverified_count}</span>
+                  {risk.oldest_unverified_age_hours !== null && (
+                    <span className="text-ink-subtle">
+                      {' '}
+                      ({t('riskOldest', { n: risk.oldest_unverified_age_hours })})
+                    </span>
+                  )}
+                </span>
+                <span>
+                  {t('riskFailedLogins')}:{' '}
+                  <span className="text-ink font-medium">{risk.failed_logins_24h}</span>
+                </span>
+                <span>
+                  {t('riskEmailsToday')}:{' '}
+                  <span className="text-ink font-medium">
+                    {risk.mailer.sent.register + risk.mailer.sent.resend + risk.mailer.sent.reset}
+                  </span>
+                  {risk.mailer.blocked.register +
+                    risk.mailer.blocked.resend +
+                    risk.mailer.blocked.reset >
+                    0 && (
+                    <span className="text-warning">
+                      {' '}
+                      (
+                      {risk.mailer.blocked.register +
+                        risk.mailer.blocked.resend +
+                        risk.mailer.blocked.reset}{' '}
+                      {t('riskBlocked')})
+                    </span>
+                  )}
+                  {!risk.mailer.enabled && (
+                    <span className="text-destructive"> · {t('mailer.off')}</span>
+                  )}
+                </span>
+                <span>
+                  {t('riskPow')}:{' '}
+                  <span className="text-ink font-medium">{risk.pow_difficulty}</span>
+                </span>
+                <span>
+                  {t('riskIpBans')}:{' '}
+                  <span className="text-ink font-medium">{risk.ip_ban_count}</span>
+                </span>
+                <span>
+                  {t('riskRateLimited')}:{' '}
+                  <span className="text-ink font-medium">{risk.rate_limited_since_start}</span>
+                </span>
               </div>
-            </CardContent>
-          </Card>
-        </>
-      )}
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <p className="text-ink-muted text-xs font-medium">{t('riskTopIps')}</p>
+                  {risk.top_failed_ips.length === 0 ? (
+                    <p className="text-ink-subtle text-xs">{t('riskNoData')}</p>
+                  ) : (
+                    risk.top_failed_ips.map((r) => (
+                      <div key={r.ip} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="text-ink font-mono">{r.ip}</span>
+                        <span className="text-ink-muted text-xs">
+                          {r.failures} · {r.distinct_emails} {t('riskTargets')}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onBan(r.ip)}
+                          disabled={banMut.isPending}
+                        >
+                          {t('riskBan')}
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-ink-muted text-xs font-medium">{t('riskTopEmails')}</p>
+                  {risk.top_failed_emails.length === 0 ? (
+                    <p className="text-ink-subtle text-xs">{t('riskNoData')}</p>
+                  ) : (
+                    risk.top_failed_emails.map((r) => (
+                      <div
+                        key={r.email}
+                        className="flex items-center justify-between gap-2 text-sm"
+                      >
+                        <span className="text-ink max-w-56 truncate">{r.email}</span>
+                        <span className="text-ink-muted text-xs">
+                          {r.failures} · {r.distinct_ips} IP
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <Link
+                href="/admin/ip-bans"
+                className="text-ink-muted hover:text-ink flex items-center gap-1 text-sm"
+              >
+                {t('riskViewAll')}
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+            </>
+          ) : (
+            <LoadingState variant="rows" count={2} />
+          )}
+        </div>
+      </section>
+
+      {/* 治理层 */}
+      <section className="space-y-2">
+        <h2 className="text-ink-muted text-xs font-medium tracking-wider uppercase">
+          {t('userManagement')}
+        </h2>
+        <div className="border-hairline bg-surface-1 divide-y divide-[var(--color-hairline)] overflow-hidden rounded-lg border">
+          <AdminEntry
+            href="/admin/users"
+            icon={<Users className="h-4 w-4" />}
+            title={t('users')}
+            desc={t('userManagementDesc')}
+          />
+          <AdminEntry
+            href="/admin/activity"
+            icon={<Activity className="h-4 w-4" />}
+            title={t('activity')}
+            desc={t('activityDesc')}
+          />
+        </div>
+      </section>
+
+      {/* 运维层 */}
+      <section className="space-y-2">
+        <h2 className="text-ink-muted text-xs font-medium tracking-wider uppercase">
+          {t('operationsTitle')}
+        </h2>
+        <div className="border-hairline bg-surface-1 divide-y divide-[var(--color-hairline)] overflow-hidden rounded-lg border">
+          <AdminEntry
+            href="/admin/devices"
+            icon={<HardDrive className="h-4 w-4" />}
+            title={t('devices')}
+            desc={t('devicesDesc')}
+          />
+          <AdminEntry
+            href="/admin/agents"
+            icon={<Cpu className="h-4 w-4" />}
+            title={t('agents')}
+            desc={t('agentsDesc')}
+          />
+          <AdminEntry
+            href="/admin/integrations"
+            icon={<Zap className="h-4 w-4" />}
+            title={t('integrations')}
+            desc={t('integrationsDesc')}
+          />
+          <AdminEntry
+            href="/admin/wakes"
+            icon={<Activity className="h-4 w-4" />}
+            title={t('wakes')}
+            desc={t('wakesDesc')}
+          />
+        </div>
+      </section>
+
+      {/* 系统层 */}
+      <section className="space-y-2">
+        <h2 className="text-ink-muted text-xs font-medium tracking-wider uppercase">
+          {t('systemTitle')}
+        </h2>
+        <div className="border-hairline bg-surface-1 divide-y divide-[var(--color-hairline)] overflow-hidden rounded-lg border">
+          <AdminEntry
+            href="/admin/maintenance"
+            icon={<Wrench className="h-4 w-4" />}
+            title={t('maintenance.title')}
+            desc={t('maintenanceDesc')}
+          />
+          <AdminEntry
+            href="/admin/mailer"
+            icon={<Mail className="h-4 w-4" />}
+            title={t('mailer.title')}
+            desc={t('mailer.desc')}
+          />
+          <AdminEntry
+            href="/admin/ip-bans"
+            icon={<ShieldBan className="h-4 w-4" />}
+            title={t('ipBans.title')}
+            desc={t('ipBans.desc')}
+          />
+        </div>
+      </section>
     </div>
+  )
+}
+
+function AdminEntry({
+  href,
+  icon,
+  title,
+  desc,
+}: {
+  href: string
+  icon: React.ReactNode
+  title: string
+  desc: string
+}) {
+  return (
+    <Link
+      href={href}
+      className="hover:bg-surface-2 flex items-center justify-between px-4 py-3 transition-colors"
+    >
+      <div className="flex items-center gap-3">
+        <span className="text-ink-muted">{icon}</span>
+        <div>
+          <p className="text-ink text-sm font-medium">{title}</p>
+          <p className="text-ink-muted text-xs">{desc}</p>
+        </div>
+      </div>
+      <ChevronRight className="text-ink-subtle h-4 w-4" />
+    </Link>
   )
 }

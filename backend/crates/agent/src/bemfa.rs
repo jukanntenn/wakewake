@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::watch;
 
+use crate::config::BemfaSettings;
 use crate::state::SharedState;
 use crate::wol;
 
@@ -25,9 +26,7 @@ use crate::wol;
 // 常量
 // ============================================================================
 
-/// 巴法云 MQTT broker（E2E 用 `WAKEWAKE_BEMFA__BROKER` 覆盖指向 mosquitto）。
-pub const BEMFA_BROKER: &str = "bemfa.com";
-/// TLS 加密端口（mqtt.md：9503 支持 TLS 1.2）。
+/// TLS 加密端口（mqtt.md：9503 支持 TLS 1.2；`[bemfa] port` 的默认值）。
 pub const BEMFA_PORT: u16 = 9503;
 
 /// 设备类型码：006 = 开关（§13.6）。消息只需 on/off，精确匹配 WoL 触发语义。
@@ -44,7 +43,7 @@ const K4_LEN: usize = 4;
 const DID_LEN: usize = 32;
 
 /// 巴法 topic 管理 API。
-/// E2E 用 `WAKEWAKE_BEMFA__API_BASE` 覆盖指向 mock。
+/// `api_base` 覆盖时（E2E/测试指向 mock）按 基址+路径 重组。
 const CREATE_TOPIC_URL_V1: &str = "https://pro.bemfa.com/v1/createTopic";
 const CREATE_TOPIC_URL_V2: &str = "https://pro.bemfa.com/vs/web/v2/createTopic";
 const DELETE_TOPIC_URL: &str = "https://pro.bemfa.com/v1/deleteTopic";
@@ -124,30 +123,14 @@ pub fn is_owned_topic(aid_simple: &str, topic: &str) -> bool {
 }
 
 // ============================================================================
-// env 解析（E2E mock 缝隙）
+// 端点解析（api_base 覆盖缝隙，E2E mock 用）
 // ============================================================================
 
-fn api_base() -> Option<String> {
-    std::env::var("WAKEWAKE_BEMFA__API_BASE")
-        .ok()
-        .filter(|s| !s.trim().is_empty())
-}
-
-fn api_url(default: &str, path: &str) -> String {
-    match api_base() {
+fn api_url(cfg: &BemfaSettings, default: &str, path: &str) -> String {
+    match cfg.api_base.as_deref().filter(|s| !s.trim().is_empty()) {
         Some(base) => format!("{base}{path}"),
         None => default.to_string(),
     }
-}
-
-fn broker_addr() -> (String, u16) {
-    let broker =
-        std::env::var("WAKEWAKE_BEMFA__BROKER").unwrap_or_else(|_| BEMFA_BROKER.to_string());
-    let port: u16 = std::env::var("WAKEWAKE_BEMFA__PORT")
-        .ok()
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(BEMFA_PORT);
-    (broker, port)
 }
 
 // ============================================================================
@@ -227,20 +210,21 @@ pub struct CreateTopicParams<'a> {
 
 /// 按 v2 凭证是否存在选 createTopic URL。
 #[must_use]
-pub fn create_topic_url(v2: Option<&V2Credentials>) -> String {
+pub fn create_topic_url(cfg: &BemfaSettings, v2: Option<&V2Credentials>) -> String {
     if v2.is_some() {
-        api_url(CREATE_TOPIC_URL_V2, "/vs/web/v2/createTopic")
+        api_url(cfg, CREATE_TOPIC_URL_V2, "/vs/web/v2/createTopic")
     } else {
-        api_url(CREATE_TOPIC_URL_V1, "/v1/createTopic")
+        api_url(cfg, CREATE_TOPIC_URL_V1, "/v1/createTopic")
     }
 }
 
 /// 创建 topic（v1/v2 自动路由，幂等：40006 视作成功）。
 pub async fn create_topic(
     client: &reqwest::Client,
+    cfg: &BemfaSettings,
     params: &CreateTopicParams<'_>,
 ) -> Result<(), String> {
-    create_topic_at(client, &create_topic_url(params.v2), params).await
+    create_topic_at(client, &create_topic_url(cfg, params.v2), params).await
 }
 
 /// `create_topic` 的可测变体（url 可注入）。
@@ -279,10 +263,15 @@ pub async fn create_topic_at(
 }
 
 /// 删除 topic（v1，deleteTopic 无 v2 版本）。
-pub async fn delete_topic(client: &reqwest::Client, uid: &str, topic: &str) -> Result<(), String> {
+pub async fn delete_topic(
+    client: &reqwest::Client,
+    cfg: &BemfaSettings,
+    uid: &str,
+    topic: &str,
+) -> Result<(), String> {
     delete_topic_at(
         client,
-        &api_url(DELETE_TOPIC_URL, "/v1/deleteTopic"),
+        &api_url(cfg, DELETE_TOPIC_URL, "/v1/deleteTopic"),
         uid,
         topic,
     )
@@ -321,13 +310,14 @@ pub async fn delete_topic_at(
 /// 修改 topic 的巴法控制台展示名（device 改名时同步）。
 pub async fn modify_name(
     client: &reqwest::Client,
+    cfg: &BemfaSettings,
     uid: &str,
     topic: &str,
     name: &str,
 ) -> Result<(), String> {
     modify_name_at(
         client,
-        &api_url(MODIFY_NAME_URL, "/va/modifyName"),
+        &api_url(cfg, MODIFY_NAME_URL, "/va/modifyName"),
         uid,
         topic,
         name,
@@ -371,9 +361,15 @@ pub async fn modify_name_at(
 /// **openID = 原始 uid**（非 base64，对齐 ha-xiaodu 生产 `api_client.py:241` + 巴法文档示例）。
 pub async fn list_all_topics_detail(
     client: &reqwest::Client,
+    cfg: &BemfaSettings,
     uid: &str,
 ) -> Result<Vec<TopicItem>, String> {
-    list_all_topics_detail_at(client, &api_url(ALL_TOPIC_URL, "/vb/api/v2/allTopic"), uid).await
+    list_all_topics_detail_at(
+        client,
+        &api_url(cfg, ALL_TOPIC_URL, "/vb/api/v2/allTopic"),
+        uid,
+    )
+    .await
 }
 
 /// `list_all_topics_detail` 的可测变体。
@@ -438,6 +434,8 @@ pub struct MqttLoopOptions {
     pub mqtt_connected: Arc<std::sync::atomic::AtomicBool>,
     /// topic 集合 watch 接收端（设备增删时增量 subscribe/unsubscribe）。
     pub topics_rx: watch::Receiver<Vec<String>>,
+    /// Bemfa 端点（broker/port；E2E 指向 mosquitto mock）。
+    pub bemfa: BemfaSettings,
 }
 
 /// 启动 Bemfa MQTT 订阅循环（§10.5）。
@@ -459,7 +457,7 @@ pub async fn run_mqtt_loop<F>(
 ) where
     F: Fn(String) + Send + Sync + 'static,
 {
-    let (broker, port) = broker_addr();
+    let (broker, port) = (opts.bemfa.broker.clone(), opts.bemfa.port);
     let mut mqttoptions = MqttOptions::new(opts.uid.clone(), broker, port);
     mqttoptions.set_keep_alive(Duration::from_secs(30));
     // 9503 TLS：用系统默认 CA（巴法公开证书）。非 9503（如 mosquitto 1883）走明文。

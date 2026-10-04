@@ -16,23 +16,46 @@ services:
     volumes:
       - {{ config_file }}:/app/config.toml:ro
       - {{ app_path }}/data:/app/data
+{% if caddyfile_template is defined %}
       # s6 caddy run 脚本硬编码读 /app/Caddyfile（docker/s6/s6-rc.d/caddy/run），
-      # 挂载点必须与之一致，否则 Caddy 起不来。
+      # 挂载点必须与之一致，否则 Caddy 起不来。未定义模板的环境（staging）不挂载，
+      # 直接用镜像内置 plain HTTP Caddyfile。
       - {{ caddyfile }}:/app/Caddyfile:ro
+{% endif %}
+{% if origin_cert is defined %}
+      # CF Origin Cert 只读挂载：宿主 {{ app_path }}/certs/（运维放置，操作见
+      # devops/cloudflare.md §4）→ 容器内 /app/certs，供 Caddyfile.prod 的 tls 读取。
+      # origin_cert/origin_key（prod env.yml）是容器内路径，解开注释即触发本挂载。
+      - {{ app_path }}/certs:/app/certs:ro
+{% endif %}
       - postgres-socket:/var/run/postgresql
+{% if tls_profile == 'https' %}
       # Caddy 内部 CA 存储持久化（s6 caddy run 设 HOME=/root，故 CA 在
-      # /root/.local/share/caddy）。否则容器重建 → CA 重新生成 → 已信任的
-      # agent/浏览器全部失效。tls internal 场景必须持久化。
+      # /root/.local/share/caddy）。否则容器重建 -> CA 重新生成 -> 已信任的
+      # agent/浏览器全部失效。仅 tls internal（dev）需要；HTTP 环境无内部 CA。
       - caddy-data:/root/.local/share/caddy
+{% endif %}
     environment:
-      - WAKEWAKE_DATABASE__DSN=postgres:///{{ postgres_db }}?host=/var/run/postgresql&user={{ postgres_user }}&password={{ db_password }}&sslmode=disable
+      # 应用配置唯一载体是挂载的 config.toml（DSN/密钥均渲染在内，password 已 urlencode）。
+      # 这里只留容器级环境；WAKEWAKE_* env 会覆盖 TOML，勿双写同一值。
       - TZ={{ tz | default("UTC") }}
     depends_on:
       postgres:
         condition: service_healthy
+    # SSE 长连接按连接数吃 FD：默认 soft nofile（常见 1024）约 1000 连接即触顶。
+    # 显式抬到 1M（与 tests/load 压测 override 同口径），与镜像内 s6 后端共享。
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
     healthcheck:
-      # Caddy 终结 TLS（tls internal 自签），healthcheck 用 https + -k 跳过证书校验。
+      # tls_profile=https: Caddy 终结 TLS（tls internal 自签），用 https + -k 跳过证书校验。
+      # tls_profile=http: 外部反代终结 TLS，容器内 Caddy 是 plain HTTP。
+{% if tls_profile == 'https' %}
       test: ["CMD", "curl", "-fk", "https://127.0.0.1:{{ caddy_port }}/api/v1/health"]
+{% else %}
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:{{ caddy_port }}/api/v1/health"]
+{% endif %}
       interval: 10s
       timeout: 5s
       retries: 3
@@ -83,4 +106,6 @@ services:
 volumes:
   pgdata:
   postgres-socket:
+{% if tls_profile == 'https' %}
   caddy-data:
+{% endif %}

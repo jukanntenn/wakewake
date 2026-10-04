@@ -1,0 +1,80 @@
+# prek 前端项目配置（workspace 模式由根 prek.toml 自动发现；
+# hooks 以 CWD=frontend/ 运行，files 匹配仅见 frontend/ 内文件）。
+#
+# 组别与分层见根 prek.toml 头部说明。CI 调用形态：
+#   prek run --all-files --group format --group lint frontend/   # lint.yml
+#   prek run --all-files frontend:test                           # test.yml
+#   prek run --all-files --hook-stage manual frontend:build      # build.yml
+#
+# format-check 定义在 format 之前：CI 的按组调用按定义序执行，先在干净树上
+# --check 抓未格式化，再跑改写型 format——顺序反了会让检查看到已被修复的树。
+
+default_install_hook_types = ["pre-commit", "pre-push"]
+
+exclude = """^(node_modules/|\\.next/|out/|playwright-report/|test-results/)"""
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "format-check"
+name = "prettier --check"
+language = "system"
+entry = "pnpm exec prettier --check ."
+files = "\\.(ts|tsx|js|jsx|mjs|cjs|json|css|md|html|ya?ml)$"
+pass_filenames = false
+stages = ["pre-push"]
+groups = ["lint"]
+
+[[repos.hooks]]
+id = "format"
+name = "prettier --write"
+language = "system"
+entry = "pnpm exec prettier --write ."
+files = "\\.(ts|tsx|js|jsx|mjs|cjs|json|css|md|html|ya?ml)$"
+pass_filenames = false
+stages = ["pre-commit"]
+groups = ["format"]
+
+[[repos.hooks]]
+id = "lint"
+name = "eslint"
+language = "system"
+entry = "pnpm lint"
+files = "\\.(ts|tsx|js|jsx|mjs|cjs)$|^eslint\\.config\\.[cm]?js$"
+pass_filenames = false
+stages = ["pre-push"]
+groups = ["lint"]
+
+# tsc 是类型层静态分析 → lint 组。next build 的类型检查由此在本地 pre-push 覆盖，
+# build hook 只兜底 SSG/导出类错误。
+[[repos.hooks]]
+id = "typecheck"
+name = "tsc --noEmit"
+language = "system"
+entry = "pnpm typecheck"
+files = "\\.(ts|tsx)$|^tsconfig.*\\.json$|^package\\.json$"
+pass_filenames = false
+stages = ["pre-push"]
+groups = ["lint"]
+
+[[repos.hooks]]
+id = "test"
+name = "vitest run"
+language = "system"
+entry = "pnpm test:run"
+files = "\\.(ts|tsx)$|^package\\.json$|^pnpm-lock\\.yaml$"
+pass_filenames = false
+stages = ["pre-push"]
+groups = ["check"]
+
+[[repos.hooks]]
+id = "build"
+name = "next build (static export)"
+language = "system"
+entry = "pnpm build"
+files = "\\.(ts|tsx|js|jsx|mjs|cjs|css)$|^tsconfig.*\\.json$|^package\\.json$|^pnpm-lock\\.yaml$"
+pass_filenames = false
+# manual：本地按需（prek run frontend:build），CI build 门禁调用。
+stages = ["manual"]
+groups = ["check"]

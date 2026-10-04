@@ -15,9 +15,15 @@ struct UserRow {
     is_active: bool,
     /// 审计列（admin disable 时写入），AdminUser 响应暴露（api-design.md §admin）。
     disabled_at: Option<OffsetDateTime>,
+    /// 禁用原因（ui-ux-risk-control §8.2）。
+    disabled_reason: Option<String>,
+    /// 禁用操作者（ui-ux-risk-control §8.2）。
+    disabled_by: Option<i64>,
     is_superuser: bool,
     email_verified: bool,
     verification_sent_at: Option<OffsetDateTime>,
+    /// 上次发密码重置邮件时间（per-email 节流，§七层4 / A-24）。
+    password_reset_sent_at: Option<OffsetDateTime>,
     last_login: Option<OffsetDateTime>,
     /// 用户偏好 locale（backend/i18n.md §5）。
     preferred_locale: Option<String>,
@@ -33,9 +39,12 @@ impl From<UserRow> for User {
             password: r.password,
             is_active: r.is_active,
             disabled_at: r.disabled_at,
+            disabled_reason: r.disabled_reason,
+            disabled_by: r.disabled_by,
             is_superuser: r.is_superuser,
             email_verified: r.email_verified,
             verification_sent_at: r.verification_sent_at,
+            password_reset_sent_at: r.password_reset_sent_at,
             last_login: r.last_login,
             preferred_locale: r.preferred_locale,
             created_at: r.created_at,
@@ -44,9 +53,9 @@ impl From<UserRow> for User {
     }
 }
 
-const COLUMNS: &str = "id, email, password, is_active, disabled_at, is_superuser,
-                       email_verified, verification_sent_at, last_login, preferred_locale,
-                       created_at, updated_at";
+const COLUMNS: &str = "id, email, password, is_active, disabled_at, disabled_reason, disabled_by,
+                       is_superuser, email_verified, verification_sent_at, password_reset_sent_at,
+                       last_login, preferred_locale, created_at, updated_at";
 
 /// 按 email 查（登录）。
 pub async fn find_by_email(pool: &PgPool, email: &str) -> Result<Option<User>, RepoError> {
@@ -108,6 +117,17 @@ pub async fn touch_verification_sent(pool: &PgPool, id: i64) -> Result<(), RepoE
     Ok(())
 }
 
+/// 记录密码重置邮件发送时间（per-email 15min 节流依据，§七层4 / A-24）。
+pub async fn touch_password_reset_sent(pool: &PgPool, id: i64) -> Result<(), RepoError> {
+    sqlx::query(
+        "UPDATE users SET password_reset_sent_at = now(), updated_at = now() WHERE id = $1",
+    )
+    .bind(id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 /// 更新密码（改密）。返回是否命中。
 pub async fn update_password(
     pool: &PgPool,
@@ -147,13 +167,14 @@ pub async fn update_preferred_locale(
 
 /// 禁用/启用用户（admin，api-design.md §admin）。
 ///
-/// `active=false` → `is_active=false, disabled_at=now()`；
-/// `active=true` → `is_active=true, disabled_at=null`。
+/// `active=false` → `is_active=false, disabled_at=now(), disabled_reason=?, disabled_by=?`；
+/// `active=true` → `is_active=true, disabled_at=null, disabled_reason=null, disabled_by=null`（清空，§0.7）。
 /// 返回更新后的行（含 `disabled_at），未命中返回` None。
 pub async fn set_active(pool: &PgPool, id: i64, active: bool) -> Result<Option<User>, RepoError> {
     let sql = if active {
         format!(
-            "UPDATE users SET is_active = true, disabled_at = null, updated_at = now()
+            "UPDATE users SET is_active = true, disabled_at = null,
+                             disabled_reason = null, disabled_by = null, updated_at = now()
              WHERE id = $1 RETURNING {COLUMNS}"
         )
     } else {
@@ -164,6 +185,27 @@ pub async fn set_active(pool: &PgPool, id: i64, active: bool) -> Result<Option<U
     };
     let row = sqlx::query_as::<_, UserRow>(sqlx::AssertSqlSafe(sql.as_str()))
         .bind(id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row.map(User::from))
+}
+
+/// 禁用用户并记录原因 + 操作者（ui-ux-risk-control §8.2）。
+pub async fn disable_with_reason(
+    pool: &PgPool,
+    id: i64,
+    reason: Option<&str>,
+    disabled_by: i64,
+) -> Result<Option<User>, RepoError> {
+    let sql = format!(
+        "UPDATE users SET is_active = false, disabled_at = now(),
+                         disabled_reason = $2, disabled_by = $3, updated_at = now()
+         WHERE id = $1 RETURNING {COLUMNS}"
+    );
+    let row = sqlx::query_as::<_, UserRow>(sqlx::AssertSqlSafe(sql.as_str()))
+        .bind(id)
+        .bind(reason)
+        .bind(disabled_by)
         .fetch_optional(pool)
         .await?;
     Ok(row.map(User::from))
@@ -219,40 +261,95 @@ pub async fn insert_verified(
     Ok(User::from(row))
 }
 
-/// 管理员列用户（分页 + `is_active` 过滤，api-design.md §admin）。
+/// 管理员列用户（分页 + `is_active` 过滤 + email 前缀搜索 `q`，api-design.md §admin / §11.C.4）。
+/// 可选过滤用 `($N::T IS NULL OR ...)` 惯用法（与 admin_repo agents/devices 一致），始终绑定。
 pub async fn list_for_admin(
     pool: &PgPool,
     is_active: Option<bool>,
+    q: Option<&str>,
     page: i64,
     page_size: i64,
 ) -> Result<(Vec<User>, i64), RepoError> {
     let offset = (page - 1).max(0) * page_size;
-    let items: Vec<User> = if let Some(active) = is_active {
-        let sql = format!(
-            "SELECT {COLUMNS} FROM users WHERE is_active = $1
-             ORDER BY id DESC LIMIT $2 OFFSET $3"
-        );
-        let rows = sqlx::query_as::<_, UserRow>(sqlx::AssertSqlSafe(sql.as_str()))
-            .bind(active)
-            .bind(page_size)
-            .bind(offset)
-            .fetch_all(pool)
-            .await?;
-        rows.into_iter().map(User::from).collect()
-    } else {
-        let sql = format!(
-            "SELECT {COLUMNS} FROM users
-             ORDER BY id DESC LIMIT $1 OFFSET $2"
-        );
-        let rows = sqlx::query_as::<_, UserRow>(sqlx::AssertSqlSafe(sql.as_str()))
-            .bind(page_size)
-            .bind(offset)
-            .fetch_all(pool)
-            .await?;
-        rows.into_iter().map(User::from).collect()
-    };
-    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
-        .fetch_one(pool)
+    let sql = format!(
+        "SELECT {COLUMNS} FROM users
+         WHERE ($1::bool IS NULL OR is_active = $1)
+           AND ($2::text IS NULL OR email ILIKE $2 || '%')
+         ORDER BY id DESC LIMIT $3 OFFSET $4"
+    );
+    let rows = sqlx::query_as::<_, UserRow>(sqlx::AssertSqlSafe(sql.as_str()))
+        .bind(is_active)
+        .bind(q)
+        .bind(page_size)
+        .bind(offset)
+        .fetch_all(pool)
         .await?;
+    let items: Vec<User> = rows.into_iter().map(User::from).collect();
+
+    let total: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM users
+         WHERE ($1::bool IS NULL OR is_active = $1)
+           AND ($2::text IS NULL OR email ILIKE $2 || '%')",
+    )
+    .bind(is_active)
+    .bind(q)
+    .fetch_one(pool)
+    .await?;
     Ok((items, total))
+}
+
+/// 批量删除超期未验证账号（admin-risk-controls WRFC）。
+///
+/// 守卫（不之而删 = 事故）：`email_verified = false AND is_superuser = false`。
+/// 锚点 `created_at`（固定窗口）——不用 verification_sent_at：resend 端点防枚举恒 200，
+/// 任何人都能对任意邮箱刷新该时间戳给抢占账号「续命」。
+/// 级联由 FK 清 agents/refresh_tokens 等；未验证用户登录被阻断，结构上无
+/// devices/integrations（agent_id RESTRICT 不可达）。批 1000 行循环，防洪水后
+/// 首清的单条大事务。返回本次总删除数。
+pub async fn purge_unverified(pool: &PgPool, retention_days: i32) -> Result<u64, RepoError> {
+    const BATCH: i64 = 1000;
+    let mut total: u64 = 0;
+    loop {
+        let result = sqlx::query(
+            "DELETE FROM users WHERE id IN (
+                 SELECT id FROM users
+                 WHERE email_verified = false
+                   AND is_superuser = false
+                   AND created_at < now() - make_interval(days => $1)
+                 LIMIT $2
+             )",
+        )
+        .bind(retention_days)
+        .bind(BATCH)
+        .execute(pool)
+        .await?;
+        let n = result.rows_affected();
+        total += n;
+        if n < u64::try_from(BATCH).unwrap_or(u64::MAX) {
+            break;
+        }
+    }
+    Ok(total)
+}
+
+/// 未验证账号堆积数（risk 面板）。
+pub async fn count_unverified(pool: &PgPool) -> Result<i64, RepoError> {
+    let n: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM users WHERE email_verified = false AND is_superuser = false",
+    )
+    .fetch_one(pool)
+    .await?;
+    Ok(n)
+}
+
+/// 最老未验证账号的账龄（小时；None = 无未验证账号）——判断注册轰炸存量。
+pub async fn oldest_unverified_age_hours(pool: &PgPool) -> Result<Option<i64>, RepoError> {
+    // EXTRACT 返回 NUMERIC，sqlx 不隐式转 f64 → SQL 内显式 ::float8。
+    let hours: Option<f64> = sqlx::query_scalar(
+        "SELECT (EXTRACT(EPOCH FROM (now() - MIN(created_at))) / 3600.0)::float8
+         FROM users WHERE email_verified = false AND is_superuser = false",
+    )
+    .fetch_one(pool)
+    .await?;
+    Ok(hours.map(|h| h as i64))
 }

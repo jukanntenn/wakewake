@@ -18,22 +18,37 @@ export class ApiError extends Error {
   code: string
   status: number
   errors?: FieldError[]
-  constructor(code: string, message: string, status: number, errors?: FieldError[]) {
+  /** 429 时服务端 Retry-After 头(秒);其余状态无值。 */
+  retryAfterSeconds?: number
+  constructor(
+    code: string,
+    message: string,
+    status: number,
+    errors?: FieldError[],
+    retryAfterSeconds?: number,
+  ) {
     super(message)
     this.name = 'ApiError'
     this.code = code
     this.status = status
     this.errors = errors
+    this.retryAfterSeconds = retryAfterSeconds
   }
 }
 
 // ---- 类型（对齐后端响应信封：单资源直接返回，列表 {items,page,page_size,total}）----
+
+export interface UserLimits {
+  max_devices: number
+}
 
 export interface User {
   id: number
   email: string
   is_superuser: boolean
   email_verified?: boolean
+  // domain 常量投影（agent-onboarding.md）：旧持久化会话缺失时跳过前置配额判断，服务端兜底。
+  limits?: UserLimits
 }
 
 // 管理后台用户（GET /admin/users 返回，比 User 多 is_active/disabled_at/last_login/created_at）。
@@ -42,6 +57,8 @@ export interface AdminUser {
   email: string
   is_active: boolean
   disabled_at: string | null
+  disabled_reason: string | null
+  disabled_by: number | null
   is_superuser: boolean
   email_verified: boolean
   last_login: string | null
@@ -114,6 +131,86 @@ export interface AuditLogEntry {
   created_at: string
 }
 
+// Admin 跨用户 integration（ui-ux-risk-control §9.8）。
+export interface AdminIntegration {
+  id: number
+  provider: string
+  user_id: number
+  user_email: string
+  status: Integration['status']
+  mqtt_connected: boolean
+  last_error: string | null
+  last_report_at: string | null
+  created_at: string
+}
+
+// Activity 统一时间线项（ui-ux-risk-control §0.3）。
+export interface ActivityItem {
+  kind: 'login' | 'audit'
+  created_at: string
+  actor_id: number | null
+  actor_label: string
+  action: string
+  detail: {
+    ip: string | null
+    user_agent: string | null
+    failure_code: string | null
+    target: string | null
+    reason: string | null
+  }
+}
+
+// 维护模式状态（ui-ux-risk-control §8.4/§9.10）。
+export interface MaintenanceStatus {
+  enabled: boolean
+  mode: 'registration_disabled' | 'readonly' | 'full'
+  message: string
+}
+
+// 邮件发信运行态（GET/POST /admin/mailer，admin-risk-controls WRFC）。
+// sent/blocked 为当日 UTC 分路计数；limits 0 = 不限。
+export interface MailerControlStatus {
+  enabled: boolean
+  limits: { register: number; resend: number; reset: number }
+  day: string
+  sent: { register: number; resend: number; reset: number }
+  blocked: { register: number; resend: number; reset: number }
+}
+
+// PoW 难度旋钮（GET/POST /admin/pow）。
+export interface PowStatus {
+  difficulty: number
+  max_difficulty: number
+}
+
+// 应用层 IP 封禁条目（GET/POST /admin/ip-bans）。
+export interface IpBanEntry {
+  id: string
+  target: string
+  kind: 'ip' | 'cidr'
+  reason: string
+  created_by: number
+  created_at: string
+  expires_at: string | null
+  expired: boolean
+}
+
+// 风控聚合面板（GET /admin/risk）。
+export interface RiskOverview {
+  registrations_24h: number
+  registrations_7d: number
+  unverified_count: number
+  oldest_unverified_age_hours: number | null
+  failed_logins_24h: number
+  top_failed_ips: { ip: string; failures: number; distinct_emails: number }[]
+  top_failed_emails: { email: string; failures: number; distinct_ips: number }[]
+  mailer: MailerControlStatus
+  pow_difficulty: number
+  ip_ban_count: number
+  rate_limited_since_start: number
+  rate_limited_uptime_secs: number
+}
+
 export interface AuthResponse {
   access_token: string
   refresh_token: string
@@ -128,6 +225,10 @@ export interface Device {
   description: string | null
   /** device-sync-v3 §8.3：设备所属 agent 是否在线（hub 连接表）。 */
   agent_online: boolean
+  /** §3.7 详情面板 CONNECTION 区：所属 agent 名称（agent 行缺失时为 null）。 */
+  agent_name: string | null
+  /** §3.7 详情面板 CONNECTION 区：所属 agent 最近在线时间（Rfc3339）。 */
+  agent_last_seen: string | null
   /** §8.3 投影同步状态（syncing | synced | agent_offline）。 */
   projection_status: 'syncing' | 'synced' | 'agent_offline'
   /** §8.3 云端 topic 对账状态（not_observed | syncing | synced | error | no_integration）。 */
@@ -306,11 +407,21 @@ export async function request<T>(endpoint: string, options: RequestOptions = {})
     const errBody = await response.json().catch(() => null)
     const code = errBody?.code ?? 'INTERNAL_ERROR'
     const message = errBody?.message ?? 'Request failed'
-    throw new ApiError(code, message, response.status, errBody?.errors)
+    // Retry-After:Delta-seconds(RFC 9110 §10.2.3;governor 429 一直发 delta-seconds 形态)。
+    const retryAfterRaw = Number(response.headers.get('Retry-After'))
+    const retryAfterSeconds =
+      response.status === 429 && Number.isFinite(retryAfterRaw)
+        ? Math.max(0, Math.ceil(retryAfterRaw))
+        : undefined
+    throw new ApiError(code, message, response.status, errBody?.errors, retryAfterSeconds)
   }
 
   if (response.status === 204) return undefined as T
-  return response.json()
+  // 部分 mutating 端点（集成 enable/disable、admin resync/disconnect 等）以 200 + 空 body
+  // 回应。空 body 不能当 JSON 解析（会抛 SyntaxError 而误报失败），统一按 void 处理。
+  const text = await response.text()
+  if (text.length === 0) return undefined as T
+  return JSON.parse(text) as T
 }
 
 // ---- API 函数（对齐 api-design.md §1.4 端点全表）----
@@ -328,10 +439,10 @@ function buildQuery(params?: Record<string, unknown>): string {
 
 export const api = {
   auth: {
-    register: (data: { email: string; password: string }) =>
-      request<User>('/auth/register', { method: 'POST', body: data }),
+    register: (data: { email: string; password: string; challenge: string; nonce: string }) =>
+      request<User>('/auth/register', { method: 'POST', body: data, skipAuthRefresh: true }),
     login: (data: { email: string; password: string }) =>
-      request<AuthResponse>('/auth/login', { method: 'POST', body: data }),
+      request<AuthResponse>('/auth/login', { method: 'POST', body: data, skipAuthRefresh: true }),
     refresh: (refreshToken: string) =>
       request<Pick<AuthResponse, 'access_token' | 'refresh_token' | 'expires_in'>>(
         '/auth/refresh',
@@ -348,6 +459,10 @@ export const api = {
         method: 'POST',
         body: { email },
       }),
+    powChallenge: () =>
+      request<{ id: string; challenge: string; difficulty: number }>('/pow/challenge'),
+    requestPasswordReset: (data: { email: string; challenge: string; nonce: string }) =>
+      request<void>('/auth/password-reset/request', { method: 'POST', body: data }),
   },
   user: {
     me: () => request<User>('/me'),
@@ -397,10 +512,13 @@ export const api = {
   },
   admin: {
     stats: () => request<AdminStats>('/admin/stats'),
-    listUsers: (params?: { is_active?: boolean; page?: number; page_size?: number }) =>
+    listUsers: (params?: { is_active?: boolean; q?: string; page?: number; page_size?: number }) =>
       request<ListEnvelope<AdminUser>>(`/admin/users${buildQuery(params)}`),
-    disableUser: (id: number) =>
-      request<AdminUser>(`/admin/users/${id}/disable`, { method: 'POST' }),
+    disableUser: (id: number, reason?: string) =>
+      request<AdminUser & { disabled_reason?: string | null }>(`/admin/users/${id}/disable`, {
+        method: 'POST',
+        body: reason ? { reason } : {},
+      }),
     enableUser: (id: number) => request<AdminUser>(`/admin/users/${id}/enable`, { method: 'POST' }),
     resetUserPassword: (id: number, newPassword: string) =>
       request<void>(`/admin/users/${id}/reset-password`, {
@@ -409,21 +527,58 @@ export const api = {
       }),
     verifyUserEmail: (id: number) =>
       request<void>(`/admin/users/${id}/verify-email`, { method: 'POST' }),
-    listAgents: (params?: { user_id?: number; page?: number; page_size?: number }) =>
+    listAgents: (params?: { user_id?: number; q?: string; page?: number; page_size?: number }) =>
       request<ListEnvelope<AdminAgent>>(`/admin/agents${buildQuery(params)}`),
     listDevices: (params?: {
       user_id?: number
       cloud_status?: 'not_observed' | 'syncing' | 'synced' | 'error' | 'no_integration'
+      q?: string
       page?: number
       page_size?: number
     }) => request<ListEnvelope<AdminDevice>>(`/admin/devices${buildQuery(params)}`),
-    listWakes: (params?: { user_id?: number; before?: string; page_size?: number }) => {
-      // wakes 用游标分页，响应是 { items, page_size, total }（无 page）。
-      const qs = buildQuery(params)
-      return request<Pick<ListEnvelope<AdminWake>, 'items' | 'page_size' | 'total'>>(
-        `/admin/wakes${qs}`,
-      )
-    },
+    listWakes: (params?: {
+      user_id?: number
+      q?: string
+      wake_type?: string
+      result?: string
+      since?: string
+      until?: string
+      page?: number
+      page_size?: number
+    }) => request<ListEnvelope<AdminWake>>(`/admin/wakes${buildQuery(params)}`),
+    listIntegrations: (params?: {
+      user_id?: number
+      status?: string
+      q?: string
+      page?: number
+      page_size?: number
+    }) => request<ListEnvelope<AdminIntegration>>(`/admin/integrations${buildQuery(params)}`),
+    listActivity: (params?: {
+      kind?: 'login' | 'audit'
+      result?: 'success' | 'failed'
+      q?: string
+      since?: string
+      until?: string
+      page?: number
+      page_size?: number
+    }) => request<ListEnvelope<ActivityItem>>(`/admin/activity${buildQuery(params)}`),
+    getMaintenance: () => request<MaintenanceStatus>('/admin/maintenance'),
+    setMaintenance: (data: { enabled: boolean; mode: string; message?: string }) =>
+      request<MaintenanceStatus>('/admin/maintenance', { method: 'POST', body: data }),
+    // 风控运行时控制（admin-risk-controls WRFC）
+    getMailer: () => request<MailerControlStatus>('/admin/mailer'),
+    setMailer: (data: {
+      enabled?: boolean
+      limits?: { register: number; resend: number; reset: number }
+    }) => request<MailerControlStatus>('/admin/mailer', { method: 'POST', body: data }),
+    getPow: () => request<PowStatus>('/admin/pow'),
+    setPow: (difficulty: number) =>
+      request<PowStatus>('/admin/pow', { method: 'POST', body: { difficulty } }),
+    listIpBans: () => request<IpBanEntry[]>('/admin/ip-bans'),
+    addIpBan: (data: { target: string; reason?: string; ttl_hours?: number | null }) =>
+      request<IpBanEntry>('/admin/ip-bans', { method: 'POST', body: data }),
+    removeIpBan: (id: string) => request<void>(`/admin/ip-bans/${id}`, { method: 'DELETE' }),
+    risk: () => request<RiskOverview>('/admin/risk'),
     resyncDevice: (did: string) =>
       request<void>(`/admin/devices/${did}/resync`, { method: 'POST' }),
     resyncIntegration: (id: number) =>
@@ -432,5 +587,9 @@ export const api = {
       request<void>(`/admin/agents/${id}/disconnect`, { method: 'POST' }),
     auditLog: (params?: { action?: string; page?: number; page_size?: number }) =>
       request<ListEnvelope<AuditLogEntry>>(`/admin/audit-log${buildQuery(params)}`),
+  },
+  // 公开健康端点（无认证，ui-ux-risk-control §2.4 维护横幅用）。
+  health: {
+    maintenance: () => request<MaintenanceStatus>('/health/maintenance', { skipAuthRefresh: true }),
   },
 }

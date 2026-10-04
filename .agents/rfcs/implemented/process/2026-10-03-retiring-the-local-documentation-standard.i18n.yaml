@@ -1,0 +1,7 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob
+# hash of each side as of the last confirmed-consistent state. Both
+# languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   hdsh pairing record .agents/rfcs/implemented/process/2026-10-03-retiring-the-local-documentation-standard.md
+2026-10-03-retiring-the-local-documentation-standard.md: 723dd8397ec222e7b362130d70af0064a6f844b7
+2026-10-03-retiring-the-local-documentation-standard.zh.md: 513713c6a7bc498f2b6bba26f9c103b5942f33e9

@@ -8,5 +8,7 @@
 pub mod admin_guard;
 pub mod agent_auth;
 pub mod auth;
+pub mod ip_ban;
 pub mod locale;
+pub mod maintenance;
 pub mod rate_limit;

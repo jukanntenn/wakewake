@@ -18,7 +18,7 @@ use tokio::sync::{Mutex, Notify, watch};
 use wakewake_protocol::{IntegrationData, Observation, RepairError, SyncIntegration, SyncRequest};
 
 use crate::bemfa::{self, V2Credentials};
-use crate::config::WolSettings;
+use crate::config::{BemfaSettings, WolSettings};
 use crate::reporter;
 use crate::state::SharedState;
 
@@ -106,6 +106,7 @@ pub struct ReconcilerDeps {
     pub state: SharedState,
     pub private_key: RsaPrivateKey,
     pub wol_settings: WolSettings,
+    pub bemfa_settings: BemfaSettings,
     pub http_client: reqwest::Client,
     pub server_url: String,
     pub pairing_code: String,
@@ -252,6 +253,7 @@ impl BemfaCoordinator {
                 initial_topics,
                 mqtt_connected,
                 topics_rx,
+                bemfa: deps.bemfa_settings.clone(),
             };
             let notify = self.notify.clone();
             let deps_clone = DepsClone {
@@ -282,7 +284,13 @@ impl BemfaCoordinator {
         }
 
         // 4. allTopic 现读（§10.7 ①，I3：失败整轮放弃）
-        let cloud_topics = match bemfa::list_all_topics_detail(&deps.http_client, &uid).await {
+        let cloud_topics = match bemfa::list_all_topics_detail(
+            &deps.http_client,
+            &deps.bemfa_settings,
+            &uid,
+        )
+        .await
+        {
             Ok(t) => t,
             Err(e) => {
                 tracing::warn!(error = %e, "bemfa: allTopic failed, aborting round (I3)");
@@ -361,7 +369,9 @@ impl BemfaCoordinator {
                 name: Some(name.as_str()),
                 v2: v2.as_ref(),
             };
-            if let Err(e) = bemfa::create_topic(&deps.http_client, &params).await {
+            if let Err(e) =
+                bemfa::create_topic(&deps.http_client, &deps.bemfa_settings, &params).await
+            {
                 tracing::warn!(topic = %topic, error = %e, "createTopic failed");
                 // 提取 did 加入 repair_errors（用 topic 反解）
                 if let Some(did) = bemfa::parse_did_from_topic(&aid_simple, topic) {
@@ -370,7 +380,9 @@ impl BemfaCoordinator {
             }
         }
         for (topic, name) in &to_modify {
-            if let Err(e) = bemfa::modify_name(&deps.http_client, &uid, topic, name).await {
+            if let Err(e) =
+                bemfa::modify_name(&deps.http_client, &deps.bemfa_settings, &uid, topic, name).await
+            {
                 tracing::warn!(topic = %topic, error = %e, "modifyName failed");
                 if let Some(did) = bemfa::parse_did_from_topic(&aid_simple, topic) {
                     repair_errors.push(RepairError {
@@ -390,7 +402,13 @@ impl BemfaCoordinator {
                 if bemfa::is_owned_topic(&aid_simple, &item.topic)
                     && !owned_topic_set.contains(&item.topic)
                 {
-                    if let Err(e) = bemfa::delete_topic(&deps.http_client, &uid, &item.topic).await
+                    if let Err(e) = bemfa::delete_topic(
+                        &deps.http_client,
+                        &deps.bemfa_settings,
+                        &uid,
+                        &item.topic,
+                    )
+                    .await
                     {
                         tracing::warn!(topic = %item.topic, error = %e, "orphan delete failed");
                     }

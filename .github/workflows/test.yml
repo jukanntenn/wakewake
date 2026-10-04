@@ -1,4 +1,6 @@
 # Test workflow —— 后端用 GitHub service container 提供真实 PG（spec：DB 不 mock）。
+# 命令源唯一（prek）：backend:test hook 即 scripts/backend_tests.py——CI 设置
+# TEST_DATABASE_URL 后跑全量 workspace 测试，与本地 pre-push 同一条命令。
 name: Test
 
 on:
@@ -56,7 +58,7 @@ jobs:
     timeout-minutes: 30
 
     # 真实 PG 测试库（spec testing/strategy.md §2：DB 不 mock）。
-    # 测试代码读 TEST_DATABASE_URL / DATABASE_URL，默认连这个 service。
+    # scripts/backend_tests.py 读 TEST_DATABASE_URL（未设时才探测本地 PG）。
     services:
       postgres:
         image: postgres:17-alpine
@@ -73,7 +75,7 @@ jobs:
           --health-retries 5
 
     env:
-      DATABASE_URL: postgres://wakewake:devpass@localhost:5432/wakewake_dev
+      TEST_DATABASE_URL: postgres://wakewake:devpass@localhost:5432/wakewake_dev
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -83,9 +85,9 @@ jobs:
       - uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
         with:
           workspaces: backend
-      - name: cargo test --workspace
-        working-directory: backend
-        run: cargo test --workspace
+      - run: pip install prek==0.4.10
+      - name: "prek (backend: test)"
+        run: prek run --all-files --hook-stage pre-push backend:test
 
   test-frontend:
     needs: changes
@@ -96,16 +98,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
         with:
-          version: 11
-          run_install: false
+          package_json_file: frontend/package.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '22'
+          node-version-file: frontend/.nvmrc
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
       - name: Install dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile
-      - name: Vitest
-        working-directory: frontend
-        run: pnpm test:run
+      - run: pip install prek==0.4.10
+      - name: "prek (frontend: test)"
+        run: prek run --all-files --hook-stage pre-push frontend:test

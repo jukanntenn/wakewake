@@ -8,12 +8,16 @@ import { api } from '@/lib/api'
 
 export const adminUsersQueryKey = ['admin', 'users'] as const
 
-export function useAdminUsers(filter?: { is_active?: boolean }) {
+export function useAdminUsers(filter?: {
+  is_active?: boolean
+  q?: string
+  page?: number
+  page_size?: number
+}) {
   return useQuery({
     queryKey: [...adminUsersQueryKey, filter ?? {}],
     queryFn: async () => {
-      const resp = await api.admin.listUsers(filter)
-      return resp.items
+      return api.admin.listUsers(filter)
     },
   })
 }
@@ -21,7 +25,8 @@ export function useAdminUsers(filter?: { is_active?: boolean }) {
 export function useDisableUser() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => api.admin.disableUser(id),
+    mutationFn: ({ id, reason }: { id: number; reason?: string }) =>
+      api.admin.disableUser(id, reason),
     onSuccess: () => qc.invalidateQueries({ queryKey: adminUsersQueryKey }),
   })
 }

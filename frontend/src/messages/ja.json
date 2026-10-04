@@ -1,7 +1,26 @@
 {
   "common": {
     "logout": "ログアウト",
-    "loading": "..."
+    "loading": "...",
+    "appName": "WakeWake",
+    "error": "An error occurred",
+    "save": "Save",
+    "saving": "Saving...",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "close": "Close",
+    "confirm": "Confirm",
+    "processing": "Processing...",
+    "copied": "Copied to clipboard",
+    "yes": "Yes",
+    "no": "No",
+    "retry": "再試行",
+    "view": "表示",
+    "back": "戻る",
+    "menu": "メニュー"
   },
   "auth": {
     "login": "ログイン",
@@ -17,7 +36,8 @@
       "AUTH_REQUIRED": "...",
       "TOKEN_EXPIRED": "...",
       "EMAIL_NOT_VERIFIED": "サインイン前にメールを確認してください",
-      "INVALID_TOKEN": "このリンクは無効または期限切れです"
+      "INVALID_TOKEN": "このリンクは無効または期限切れです",
+      "IP_BLOCKED": "お使いの IP アドレスはブロックされています"
     },
     "signingUp": "アカウント作成中...",
     "sending": "送信中...",
@@ -36,7 +56,8 @@
     "resendVerification": "メールを再送信",
     "resending": "送信中...",
     "resendSent": "アカウントが存在し未確認の場合、新しいリンクが送信されました。",
-    "resendCooldown": "再送信まで少し待ってください。",
+    "resendCountdown": "再送信({time})",
+    "resendRateLimited": "リクエストが多すぎます。カウントダウン後に再試行してください。",
     "verificationSent": "サインイン前にメールでアカウントを確認してください。",
     "verifyEmailTitle": "メールを確認しています",
     "verifying": "確認中...",
@@ -45,18 +66,31 @@
     "verifyFailedHint": "このリンクは無効または期限切れです。",
     "backToLogin": "ログインに戻る",
     "wrongEmail": "メールアドレスが違いますか？",
-    "useDifferentEmail": "別のメールアドレスを使う"
-  },
-  "dashboard": {
-    "title": "ダッシュボード",
-    "overview": "デバイスを管理し、リモートで起動します。"
+    "useDifferentEmail": "別のメールアドレスを使う",
+    "logout": "Logout",
+    "email": "Email",
+    "confirmPassword": "Confirm Password",
+    "name": "Name",
+    "newPassword": "New Password",
+    "currentPassword": "Current Password",
+    "resetEmailHint": "Enter your email to receive a reset link.",
+    "resetLinkSent": "If the email exists, a reset link has been sent.",
+    "sendResetLink": "Send Reset Link",
+    "passwordReset": "Password reset successfully.",
+    "creatingAccount": "Creating account...",
+    "sendingResetLink": "Sending reset link...",
+    "passwordHint": "8+ characters",
+    "passwordsDontMatch": "Passwords don't match",
+    "registrationClosed": "登録は一時的に閉鎖中です。後でもう一度お試しください。"
   },
   "navigation": {
     "devices": "デバイス",
     "agent": "エージェント",
     "integrations": "連携",
     "history": "履歴",
-    "admin": "Admin"
+    "admin": "Admin",
+    "settings": "設定",
+    "menu": "メニュー"
   },
   "devices": {
     "title": "デバイス",
@@ -75,11 +109,100 @@
     "rotateFailed": "コードのローテートに失敗しました",
     "copiedNewCode": "新しいコードをクリップボードにコピーしました",
     "codeCopiedManualHint": "自動コピーできませんでした。新しいコードが上に表示されています — 手動で選択してコピーしてください。",
-    "maskedCodeHint": "ペアリングコードはマスクされています。「コードをローテート」をクリックして接続用の完全なコードを取得してください。"
+    "maskedCodeHint": "ペアリングコードはマスクされています。「コードをローテート」をクリックして接続用の完全なコードを取得してください。",
+    "rotate": "Rotate Code",
+    "rotateSuccess": "Pairing code rotated",
+    "status": {
+      "pending": "Waiting for agent connection",
+      "online": "Online",
+      "offline": "Offline"
+    },
+    "lastSeen": "Last seen",
+    "publicKey": "Public Key",
+    "never": "Never",
+    "confirmRotate": "Click again to confirm",
+    "publicKeyNotAvailable": "Not available until agent connects",
+    "advanced": "詳細",
+    "model": {
+      "server": "wakewake サーバー",
+      "agent": "LAN エージェント",
+      "device": "対象デバイス",
+      "linked": "接続済み",
+      "missing": "未接続",
+      "broken": "切断"
+    },
+    "guide": {
+      "whereTitle": "ホームネットワークの常時起動しているマシンでエージェントを実行してください",
+      "whereDesc": "エージェントはウェイク対象のデバイスと同じルーター配下にある必要があります（ウェイク信号はルーターを越えません）。NAS、ミニPC、予備のノートPCが適しています。",
+      "commandLabel": "起動コマンド",
+      "copyCommand": "コマンドをコピー",
+      "waiting": "エージェントの接続を待っています。ページは自動的に更新されます。",
+      "tabLinux": "Linux",
+      "tabDocker": "Docker",
+      "composeTitle": "Docker Compose",
+      "composeRecommended": "推奨",
+      "runTitle": "ワンライナー"
+    },
+    "online": {
+      "title": "エージェントが接続されました",
+      "desc": "エージェントが実行中です。デバイスを追加してリモート起動を始めましょう。",
+      "cta": "デバイスへ"
+    },
+    "offline": {
+      "title": "エージェントが切断されました",
+      "desc": "エージェントは以前にペアリング済みです。実行マシンの電源とネットワークを確認してください。復旧後は自動的に再接続され、再設定は不要です。",
+      "repairHint": "新しいマシンで再ペアリングするには、ペアリングコードを更新して新しいコマンドを使用してください。"
+    },
+    "advancedConfigTitle": "設定ファイルで起動",
+    "advancedConfigDesc": "以下を ~/.wakewake/config.toml として保存すれば、コマンドライン引数なしで wakewake-agent を実行できます。",
+    "service": {
+      "title": "起動時に自動実行（バイナリ直接インストール）",
+      "desc": "フォアグラウンドでの初回動作確認後、systemd サービスとしてインストールすると、再起動や SSH 切断後も動作し続けます。Docker 利用時は不要です（--restart unless-stopped）。"
+    }
   },
   "integrations": {
     "title": "連携",
-    "comingSoon": "近日公開。"
+    "comingSoon": "近日公開。",
+    "add": "Add Integration",
+    "bemfaDesc": "Enable voice control of devices via Bemfa cloud (Xiao Ai, Tmall Genie).",
+    "bemfaUidHint": "Bemfa console → Console → Private key (32-hex or 45-char)",
+    "connect": "Connect Bemfa",
+    "connected": "Connected",
+    "notConnected": "Not connected",
+    "enable": "Enable",
+    "disable": "Disable",
+    "edit": "Configure",
+    "cancel": "Cancel",
+    "save": "Save",
+    "deleteRemoved": "Removed",
+    "configHint": "Sensitive fields (UID / secretID / secretKey) are end-to-end encrypted with the agent's public key; the server never sees them.",
+    "editConfig": "Edit configuration",
+    "placeholderSecret": "Set, leave blank to keep unchanged",
+    "stateConnected": "Connected",
+    "stateConnecting": "Connecting…",
+    "stateConnectingHint": "Usually completes in seconds. If it stays here, check the UID or whether the agent is online.",
+    "stateAgentOffline": "Agent offline",
+    "stateAgentOfflineHint": "The wake agent is offline. The integration will sync automatically once it comes back.",
+    "stateDisconnected": "MQTT not connected",
+    "stateDisconnectedHint": "Bemfa MQTT connection failed. Check that the UID is correct.",
+    "stateError": "Sync error",
+    "stateDisabled": "Paused",
+    "stateDisabledHint": "Integration is paused. Bemfa device topics are retained but voice wake is disabled.",
+    "devicesSynced": "{count} devices synced",
+    "lastError": "Last error: {error}",
+    "v2Optional": "v2 API credentials (optional, recommended)",
+    "v2Toggle": "Use v2 API (requires real-name verification)",
+    "v2Hint": "Fill secretID/secretKey to use the recommended v2 API. Leave empty for v1 (UID only).",
+    "mijiaGuide": "How to enable voice control with Xiao Ai",
+    "mijiaStep1": "Ensure the Bemfa integration above is connected",
+    "mijiaStep2": "Open Mi Home app → Profile → Third-party devices → Add → select \"Bemfa\"",
+    "mijiaStep3": "Enter your Bemfa account (the one matching the UID above)",
+    "mijiaStep4": "Say \"Xiao Ai, turn on {device}\" to wake your computer",
+    "mijiaWarning": "Without Mi Home binding, Bemfa topics are still created, but voice control won't work.",
+    "deleteDialogTitle": "Remove integration",
+    "deleteDialogDesc": "Disconnect Bemfa? Device topics are retained on the cloud (reusable), but voice wake will be unavailable.",
+    "toggleSuccess": "{action} succeeded",
+    "toggleFailed": "{action} failed"
   },
   "wakes": {
     "title": "履歴",
@@ -87,12 +210,28 @@
     "refresh": "更新",
     "statusSuccess": "成功",
     "statusExpired": "期限切れ",
-    "statusFailed": "失敗"
+    "statusFailed": "失敗",
+    "device": "Device",
+    "type": "Type",
+    "typeManual": "Manual",
+    "typeVoice": "Voice",
+    "statusCol": "Status",
+    "time": "Time",
+    "loading": "Loading...",
+    "empty": "No wake history yet.",
+    "loadMore": "Load More"
   },
   "settings": {
     "title": "...",
     "comingSoon": "近日公開。",
-    "confirmPassword": "新しいパスワードの確認"
+    "confirmPassword": "新しいパスワードの確認",
+    "changePassword": "Change Password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "passwordChanged": "Password changed. Please sign in again.",
+    "saving": "Saving...",
+    "language": "Language",
+    "passwordsDontMatch": "Passwords don't match"
   },
   "admin": {
     "title": "Admin",
@@ -184,7 +323,148 @@
     "colAction": "Action",
     "colTarget": "Target",
     "colDetail": "Detail",
-    "pagination": "Page {page} / {total}"
+    "pagination": "Page {page} / {total}",
+    "activity": "Activity",
+    "integrations": "Integrations",
+    "wakes": "Wakes",
+    "maintenance": {
+      "title": "Maintenance",
+      "statusNormal": "Normal — no maintenance active",
+      "statusActive": "Maintenance active",
+      "enable": "Enable maintenance mode",
+      "disable": "Disable maintenance",
+      "affectsAll": "This affects all users. Choose a severity:",
+      "mode_registration": "Pause registration",
+      "mode_registrationDesc": "New signups blocked. Existing users unaffected.",
+      "mode_readonly": "Read-only",
+      "mode_readonlyDesc": "All write operations blocked. Users can still view.",
+      "mode_full": "Full lockdown",
+      "mode_fullDesc": "Only admins can sign in. All others turned away.",
+      "messageLabel": "Message to users (optional):",
+      "messagePlaceholder": "Scheduled maintenance in progress"
+    },
+    "activityDesc": "Login events and audit trail",
+    "devicesDesc": "Cross-user device monitoring",
+    "integrationsDesc": "Cross-user integration monitoring",
+    "wakesDesc": "Cross-user wake audit history",
+    "maintenanceDesc": "Emergency controls and maintenance mode",
+    "backToAdmin": "Admin",
+    "searchUsers": "Type the beginning of an email...",
+    "searchDevices": "Device name or user email...",
+    "searchActivity": "Email, IP, or action...",
+    "filterStatus": "Status",
+    "filterRole": "Role",
+    "filterCloud": "Cloud",
+    "filterType": "Type",
+    "filterResult": "Result",
+    "filterDate": "Date",
+    "filterClear": "Clear filters",
+    "lastLogin": "Last login",
+    "never": "Never",
+    "thisIsYou": "This is you — actions disabled",
+    "disableDialogTitle": "Disable user",
+    "disableDialogDesc": "Disable \"{email}\"? They will be immediately logged out and their agent disconnected.",
+    "disableDialogReason": "Reason (optional):",
+    "disableDialogReasonPlaceholder": "e.g. Abuse — bulk registration",
+    "resetDialogTitle": "Reset password",
+    "resetDialogDesc": "Set a new password for \"{email}\". Their old password will stop working and they'll be logged out everywhere.",
+    "resetDialogPasswordLabel": "New password (min 8 characters):",
+    "disconnectFailedHint": "Agent is not online",
+    "statusActive": "Active",
+    "auditAction": {
+      "integration": {
+        "create": "統合を作成",
+        "update": "統合を更新",
+        "delete": "統合を削除",
+        "resync": "統合を再同期"
+      },
+      "agent": {
+        "rotate_code": "ペアリングコードを更新",
+        "disconnect": "エージェントを切断"
+      },
+      "user": {
+        "change_password": "パスワードを変更",
+        "disable": "ユーザーを無効化",
+        "enable": "ユーザーを有効化",
+        "reset_password": "パスワードをリセット",
+        "verify_email": "メールを認証"
+      },
+      "device": {
+        "resync": "デバイスを再同期"
+      },
+      "maintenance": {
+        "enabled": "メンテナンスを有効化",
+        "disabled": "メンテナンスを無効化"
+      }
+    },
+    "risk": "リスク",
+    "riskDesc": "不正利用のシグナル：登録数・送信数・ログイン失敗・ブロック",
+    "riskRegistrations24h": "登録（24時間）",
+    "riskRegistrations7d": "登録（7日間）",
+    "riskUnverified": "未確認アカウント",
+    "riskOldest": "最長 {n}時間",
+    "riskFailedLogins": "ログイン失敗（24時間）",
+    "riskEmailsToday": "本日の送信数",
+    "riskBlocked": "ブロック",
+    "riskRateLimited": "429（再起動以来）",
+    "riskPow": "PoW 難易度",
+    "riskIpBans": "有効な IP ブロック",
+    "riskTopIps": "ログイン失敗上位 IP（24時間）",
+    "riskTopEmails": "標的メール上位（24時間）",
+    "riskNoData": "過去24時間の失敗はありません",
+    "riskTargets": "標的",
+    "riskBan": "ブロック",
+    "riskViewAll": "ブロック管理",
+    "mailer": {
+      "title": "メールと登録のコントロール",
+      "desc": "実行時キルスイッチ、経路別日次予算、PoW 難易度 — 即時反映、再起動後も維持。",
+      "switchTitle": "送信メール",
+      "switchDesc": "オフ = 確認・再送・リセットメールを送信しない（登録は可能、アカウントは未確認のまま、パスワードリセットは 503）。",
+      "on": "オン",
+      "off": "オフ",
+      "turnOff": "送信停止",
+      "turnOn": "送信再開",
+      "limitsTitle": "日次予算",
+      "limitsDesc": "経路別の UTC 日次上限。0 = 無制限。使い切るとその経路はメール無効化と同じ挙動に。",
+      "limitRegister": "登録確認メール",
+      "limitResend": "確認メール再送",
+      "limitReset": "パスワードリセット",
+      "save": "予算を保存",
+      "saved": "予算を更新しました",
+      "sentToday": "本日の送信",
+      "blockedToday": "本日のブロック",
+      "mailerUpdated": "メールスイッチを更新しました",
+      "powTitle": "登録 PoW 難易度",
+      "powDesc": "ボット攻撃時に引き上げ（6–7 ≈ コスト 256〜4096 倍）。新規チャレンジのみ適用、0 で PoW 完全無効。",
+      "powSave": "難易度を更新",
+      "powSaved": "PoW 難易度を更新しました"
+    },
+    "ipBans": {
+      "title": "IP ブロック",
+      "desc": "レート制限と同じクライアント IP ソースに対するアプリ層ブロック。完全一致 IP または CIDR、期限切れは自動失効。",
+      "target": "IP または CIDR",
+      "targetPlaceholder": "例: 203.0.113.5 または 198.51.100.0/24",
+      "reason": "理由（任意）",
+      "ttl": "期間",
+      "ttl1h": "1時間",
+      "ttl24h": "24時間",
+      "ttl7d": "7日間",
+      "ttlPermanent": "無期限",
+      "add": "ブロックする",
+      "added": "ブロックしました",
+      "removed": "ブロックを解除しました",
+      "remove": "解除",
+      "empty": "ブロックなし",
+      "expires": "有効期限",
+      "permanent": "無期限",
+      "expiredTag": "期限切れ",
+      "colTarget": "対象",
+      "colReason": "理由",
+      "colCreated": "作成日時",
+      "colExpires": "有効期限",
+      "colActions": "操作",
+      "selfBan": "自分の IP はブロックできません"
+    }
   },
   "theme": {
     "light": "...",
@@ -208,7 +488,9 @@
     "VALIDATION_FAILED": "...",
     "INTERNAL_ERROR": "...",
     "EMAIL_NOT_VERIFIED": "サインイン前にメールを確認してください",
-    "INVALID_TOKEN": "このリンクは無効または期限切れです"
+    "INVALID_TOKEN": "このリンクは無効または期限切れです",
+    "SERVICE_UNAVAILABLE": "This service is temporarily unavailable",
+    "IP_BLOCKED": "お使いの IP アドレスはブロックされています"
   },
   "validation": {
     "required": "...",
@@ -224,15 +506,234 @@
     "name": "...",
     "email": "...",
     "password": "...",
-    "mac_encrypted": "...",
-    "config.uid": "...",
-    "config.topic_prefix": "..."
+    "mac_encrypted": "..."
   },
   "device": {
     "synced": "同期済み",
     "syncing": "同期中",
     "syncError": "同期エラー",
     "agentOnline": "エージェント オンライン",
-    "agentOffline": "エージェント オフライン"
+    "agentOffline": "エージェント オフライン",
+    "name": "Device Name",
+    "namePlaceholder": "My Computer",
+    "macAddress": "MAC Address",
+    "macAddressPlaceholder": "AA:BB:CC:DD:EE:FF",
+    "description": "Description",
+    "descriptionPlaceholder": "Office Desktop",
+    "wake": "Wake",
+    "waking": "Waking...",
+    "wakeSuccess": "Wake signal sent",
+    "wakeError": "Failed to send wake signal",
+    "create": "Add Device",
+    "edit": "Edit Device",
+    "save": "Save",
+    "saving": "Saving...",
+    "cancel": "Cancel",
+    "loading": "Loading devices...",
+    "delete": "Delete",
+    "deleteSuccess": "Device deleted",
+    "deleteFailed": "Failed to delete device",
+    "noDevices": "No devices found. Add one to get started.",
+    "encryptionHint": "MAC will be encrypted with your agent's public key. Server never sees plaintext.",
+    "invalidMac": "Invalid MAC address format (e.g. AA:BB:CC:DD:EE:FF)",
+    "connectorNotReady": "Agent is not connected yet. Pair it first.",
+    "macLockedOnEdit": "MAC cannot be changed after creation unless re-encrypting with a new key.",
+    "cloudNotObserved": "Waiting for cloud sync",
+    "cloudSyncing": "Syncing to cloud",
+    "cloudSynced": "Bemfa synced, voice wake available",
+    "cloudError": "Cloud sync failed: {error}",
+    "cloudNone": "Bemfa not enabled",
+    "driftDeleted": "Cloud topic was deleted, auto-recovered",
+    "driftRenamed": "Cloud name was modified, auto-recovered",
+    "wakeTimeout": "Wake timed out — agent did not respond in time",
+    "wakeFailed": "Wake failed: {message}",
+    "deleteDialogTitle": "Delete device",
+    "deleteDialogDesc": "Permanently remove \"{name}\"? Cloud topic will be cleaned up automatically. This cannot be undone.",
+    "quotaExceeded": "Device limit reached. You can have at most {max} devices. Remove an existing device first.",
+    "addDevice": "+ Add device",
+    "wakeUnavailable": "Wake unavailable",
+    "details": "デバイスの詳細",
+    "detailIdentity": "アイデンティティ",
+    "detailConnection": "接続",
+    "detailCloudSync": "クラウド同期",
+    "colMac": "MACアドレス",
+    "colDescription": "説明",
+    "colCreated": "作成日",
+    "colAgent": "エージェント",
+    "colLastSeen": "最終オンライン",
+    "colStatus": "ステータス",
+    "colLastSync": "最終同期",
+    "colLastDrift": "最終ドリフト",
+    "masked": "（マスク済み）",
+    "noDescription": "—",
+    "never": "—",
+    "noDrift": "—（なし）",
+    "viewAgent": "エージェントを表示",
+    "connectorNotReadyLink": "エージェントページへ →",
+    "gate": {
+      "agentPendingTitle": "先にエージェントを接続してください",
+      "agentPendingDesc": "デバイスの MAC アドレスはエージェントの公開鍵で暗号化されるため、デバイスの追加にはエージェントのペアリングが必要です。",
+      "quotaTitle": "デバイス数が上限に達しました",
+      "quotaDesc": "各アカウントが追加できるデバイスは最大 {max} 台です。使っていないデバイスを削除すると追加できます。",
+      "insecureTitle": "安全な接続が必要です",
+      "insecureDesc": "MAC の暗号化にはブラウザの Web Crypto API を使用するため、HTTPS または localhost でのアクセスが必要です。",
+      "cta": "エージェントを接続",
+      "dismiss": "閉じる"
+    },
+    "notice": {
+      "pendingTitle": "エージェントが未ペアリングです",
+      "pendingDesc": "デバイスがウェイクコマンドを受信するには、ペアリング済みのエージェントが必要です。",
+      "offlineTitle": "エージェントがオフラインです",
+      "offlineDesc": "デバイスは引き続き追加できます。エージェントの再接続後に自動同期されます。"
+    }
+  },
+  "status": {
+    "healthy": "システム正常",
+    "issues": "{count} 件の対応が必要な問題",
+    "serviceDegraded": "サービス低下"
+  },
+  "health": {
+    "healthy": "システム正常",
+    "issues": "{count} 件の対応が必要な問題",
+    "serviceDegraded": "サービス低下",
+    "devicesReady": "{count} 台のデバイスが準備完了",
+    "deviceNeedsAttention": "{count} 台のデバイスに注意が必要",
+    "devicesNeedAttention": "{count} 台のデバイスに注意が必要",
+    "agentOnline": "Agent オンライン",
+    "agentOffline": "Agent オフライン",
+    "agentsOffline": "{count} 個の Agent がオフライン",
+    "cloudSyncOk": "クラウド同期 OK",
+    "cloudSyncError": "クラウド同期エラー",
+    "suspiciousLogin": "不審なログイン: {ip} から {count} 回失敗",
+    "integrationError": "{count} 件の統合エラー",
+    "moreIssues": "+ 他 {count} 件の問題"
+  },
+  "maintenance": {
+    "banner": "計画メンテナンス中 — 一部機能が制限される場合があります"
+  },
+  "empty": {
+    "devices": "デバイスがありません",
+    "devicesDesc": "最初のデバイスを追加してリモート起動を開始",
+    "addDevice": "デバイス追加",
+    "wakes": "起動履歴がありません",
+    "wakesDesc": "デバイスを起動するとここに表示されます",
+    "wakesCta": "デバイスへ →",
+    "integrations": "統合が未接続",
+    "integrationsDesc": "Bemfa に接続して音声制御を有効化",
+    "users": "ユーザーが見つかりません",
+    "activity": "アクティビティがありません",
+    "activityDesc": "ログインイベントと管理操作がここに表示されます",
+    "agents": "Agent が見つかりません",
+    "adminDevices": "デバイスが見つかりません",
+    "adminIntegrations": "統合が見つかりません",
+    "adminWakes": "起動履歴が見つかりません",
+    "searchNoResults": "\"{query}\" の結果がありません",
+    "onboarding": {
+      "step1": "エージェントを接続",
+      "step2": "デバイスを追加",
+      "step3": "リモート起動",
+      "desc": "エージェントはホームネットワークで動作し、ウェイクコマンドをデバイスへ届ける常駐プログラムです。"
+    }
+  },
+  "landing": {
+    "nav": {
+      "howItWorks": "仕組み",
+      "security": "セキュリティ",
+      "deploy": "デプロイ",
+      "signIn": "ログイン",
+      "menu": "メニュー"
+    },
+    "hero": {
+      "title": "どこからでも、家のネットワークを起こす。",
+      "subtitle": "外出先から、暗号文がクラウドを越え、家のマシンが灯をともす。",
+      "facts": "ポート開放なし · 内網を晒さない · サーバーは暗号文しか見ない",
+      "ctaPrimary": "はじめる",
+      "ctaGithub": "GitHub",
+      "diagramAlt": "トポロジー:ブラウザが RSA で暗号化した MAC を TLS 経由で 2 GB VPS 上の WakeWake サーバーへ送り、家の agent がアウトバウンドの SSE 接続を保持し、UDP マジックパケットを LAN に broadcast してデバイスを起こす",
+      "noteBrowser": "MAC 平文はブラウザの外に出ない",
+      "noteServer": "サーバーは暗号文しか見ない",
+      "noteAgent": "アウトバウンドのみ · 受信ポートなし",
+      "noteDevice": "点灯 = 起動完了"
+    },
+    "hops": {
+      "kicker": "仕組み",
+      "title": "一回の wake は、ちょうど 3 ホップ",
+      "hop1": {
+        "title": "ブラウザで暗号化",
+        "body": "ブラウザが agent の公開鍵で MAC を暗号化する。受信から保存まで、サーバーは暗号文しか見ない。"
+      },
+      "hop2": {
+        "title": "agent は外へ、しかも外へだけ",
+        "body": "agent はアウトバウンドの SSE 接続を保持し、コマンドはその接続を通って家に届く。家を指す受信ポートは一切ない——ルーター設定はゼロ。"
+      },
+      "hop3": {
+        "title": "マジックパケットが灯をともす",
+        "body": "agent が MAC を復号し、LAN にマジックパケットを broadcast する。スキャンも転送もプロキシも一切しない。"
+      }
+    },
+    "trust": {
+      "kicker": "信頼",
+      "title": "一番厳しい質問から",
+      "q1": "データベースが丸ごと盗まれたら?",
+      "a1": "役に立つものは何もない。MAC はブラウザ側で暗号化され、DB にあるのは RSA-OAEP の暗号文だけ。秘密鍵は agent のローカルディスクにしか存在しない。",
+      "q2": "家でポート開放やグローバル IP は必要?",
+      "a2": "どちらも不要。agent は外へダイアルするだけなので、家を指す受信の穴は存在しない。ルーターはそのまま。",
+      "q3": "サーバーが完全に乗っ取られた場合、最悪は?",
+      "a3": "せいぜい既存の暗号文を再送して、登録済みデバイスの電源を入れること。MAC を読むことも、新しいデバイスを偽造することも、LAN に入ることもできない。",
+      "q4": "LAN 内の他のデバイスへの影響は?",
+      "a4": "ない。agent は broadcast のマジックパケットだけを送る——スキャン・転送・プロキシは一切なし。"
+    },
+    "deploy": {
+      "kicker": "デプロイ",
+      "title": "3 つのコマンドで、自分の VPS に",
+      "body": "マルチアーキの単一イメージを Caddy が前段で受け持つ。マイグレーションと初回 admin は起動時に自動実行——忘れようがない。",
+      "terminalLabel": "compose · 2 GB VPS で十分",
+      "chip1": "単一イメージ · amd64 + arm64",
+      "chip2": "起動時に自動マイグレーション",
+      "chip3": "冪等な bootstrap admin"
+    },
+    "why": {
+      "kicker": "WakeWake を選ぶ理由",
+      "title": "プラットフォーム不要、ハードウェア更新不要、ポート開放不要",
+      "item1": {
+        "title": "インバウンドポートなし",
+        "body": "agent はアウトバウンド接続のみ。ルーターの設定は不要で、LAN は外部から見えません。"
+      },
+      "item2": {
+        "title": "エンドツーエンド暗号化",
+        "body": "MAC アドレスはブラウザで暗号化され、鍵は自宅で生成されます。サーバーは暗号文しか扱いません。"
+      },
+      "item3": {
+        "title": "小さなサーバーで動作",
+        "body": "2 GB の VPS で十分。コンテナ 1 つだけ。"
+      },
+      "item4": {
+        "title": "1 つのイメージでどこでも",
+        "body": "マルチアーキテクチャの単一イメージ。x86 でも ARM でも。"
+      },
+      "item5": {
+        "title": "完全なウェイク履歴",
+        "body": "誰が・いつ・どのデバイスを起こしたか、すべて記録されます。"
+      },
+      "item6": {
+        "title": "グループとメモ",
+        "body": "デバイスをグループとメモで整理できます。"
+      },
+      "item7": {
+        "title": "音声コントロール",
+        "body": "Bemfa 連携で音声コマンドからデバイスを起動できます。"
+      },
+      "item8": {
+        "title": "オープンソース・セルフホスト",
+        "body": "AGPL-3.0 ライセンス。データはあなたの手の中に。"
+      }
+    },
+    "closing": {
+      "line": "3 つのコマンドで動き出す。"
+    },
+    "footer": {
+      "docs": "アーキテクチャ",
+      "selfHosted": "self-hosted"
+    }
   }
 }

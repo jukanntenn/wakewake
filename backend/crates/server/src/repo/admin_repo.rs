@@ -4,6 +4,7 @@
 //! 返回的行结构带 user_email（JOIN users），供 admin 表格展示归属。
 //! admin_actions 审计表：每个 admin 写操作记一行（actor/action/target/detail）。
 
+use serde::Serialize;
 use sqlx::PgPool;
 use sqlx::types::Json;
 use time::OffsetDateTime;
@@ -31,51 +32,46 @@ pub struct AdminAgentRow {
 const AGENT_COLUMNS: &str = "a.id, a.user_id, u.email AS user_email, a.aid, a.name,
                              (a.public_key IS NOT NULL) AS has_public_key, a.last_seen, a.created_at";
 
-/// 列全部 agent（跨用户，offset 分页 + 可选 user_id 过滤）。
+/// 列全部 agent（跨用户，offset 分页 + 可选 user_id / email 前缀搜索，§9.7/§11.C.4）。
 pub async fn list_all_agents(
     pool: &PgPool,
     user_id: Option<i64>,
+    q: Option<&str>,
     page: i64,
     page_size: i64,
 ) -> Result<Vec<AdminAgentRow>, RepoError> {
     let offset = (page - 1).max(0) * page_size;
-    let rows = if let Some(uid) = user_id {
-        let sql = format!(
-            "SELECT {AGENT_COLUMNS} FROM agents a JOIN users u ON a.user_id = u.id
-             WHERE a.user_id = $1 ORDER BY a.id DESC LIMIT $2 OFFSET $3"
-        );
-        sqlx::query_as::<_, AdminAgentRow>(sqlx::AssertSqlSafe(sql.as_str()))
-            .bind(uid)
-            .bind(page_size)
-            .bind(offset)
-            .fetch_all(pool)
-            .await?
-    } else {
-        let sql = format!(
-            "SELECT {AGENT_COLUMNS} FROM agents a JOIN users u ON a.user_id = u.id
-             ORDER BY a.id DESC LIMIT $1 OFFSET $2"
-        );
-        sqlx::query_as::<_, AdminAgentRow>(sqlx::AssertSqlSafe(sql.as_str()))
-            .bind(page_size)
-            .bind(offset)
-            .fetch_all(pool)
-            .await?
-    };
+    let sql = format!(
+        "SELECT {AGENT_COLUMNS} FROM agents a JOIN users u ON a.user_id = u.id
+         WHERE ($1::bigint IS NULL OR a.user_id = $1)
+           AND ($2::text IS NULL OR u.email ILIKE $2 || '%')
+         ORDER BY a.id DESC LIMIT $3 OFFSET $4"
+    );
+    let rows = sqlx::query_as::<_, AdminAgentRow>(sqlx::AssertSqlSafe(sql.as_str()))
+        .bind(user_id)
+        .bind(q)
+        .bind(page_size)
+        .bind(offset)
+        .fetch_all(pool)
+        .await?;
     Ok(rows)
 }
 
-/// 计 agent 总数（分页信封 total，可选 user_id 过滤）。
-pub async fn count_all_agents(pool: &PgPool, user_id: Option<i64>) -> Result<i64, RepoError> {
-    let count: (i64,) = if let Some(uid) = user_id {
-        sqlx::query_as("SELECT count(*) FROM agents WHERE user_id = $1")
-            .bind(uid)
-            .fetch_one(pool)
-            .await?
-    } else {
-        sqlx::query_as("SELECT count(*) FROM agents")
-            .fetch_one(pool)
-            .await?
-    };
+/// 计 agent 总数（可选 user_id / email 过滤）。
+pub async fn count_all_agents(
+    pool: &PgPool,
+    user_id: Option<i64>,
+    q: Option<&str>,
+) -> Result<i64, RepoError> {
+    let count: (i64,) = sqlx::query_as(
+        "SELECT count(*) FROM agents a JOIN users u ON a.user_id = u.id
+         WHERE ($1::bigint IS NULL OR a.user_id = $1)
+           AND ($2::text IS NULL OR u.email ILIKE $2 || '%')",
+    )
+    .bind(user_id)
+    .bind(q)
+    .fetch_one(pool)
+    .await?;
     Ok(count.0)
 }
 
@@ -119,22 +115,24 @@ const DEVICE_COLUMNS: &str = "d.id, d.did, d.user_id, u.email AS user_email, d.a
                               d.mac_display, d.description, d.last_error, d.last_drift_at,
                               d.created_at, d.updated_at";
 
-/// 列全部 device（跨用户，offset 分页 + 可选 user_id / cloud_status 过滤）。
+/// 列全部 device（跨用户，offset 分页 + 可选 user_id / cloud_status / email 搜索，§9.6）。
 ///
 /// device-sync-v3：过滤维度从旧 sync_status 改为派生 cloud_status（SQL CASE）。
 pub async fn list_all_devices(
     pool: &PgPool,
     user_id: Option<i64>,
     cloud_status: Option<&str>,
+    q: Option<&str>,
     page: i64,
     page_size: i64,
 ) -> Result<Vec<AdminDeviceRow>, RepoError> {
     let offset = (page - 1).max(0) * page_size;
-    // 动态 WHERE：user_id 可选；cloud_status 过滤用派生表达式（HAVING 风格，包在子查询里）。
+    // 动态 WHERE：user_id 可选；email/device name 前缀搜索；cloud_status 过滤用派生表达式。
     let sql = format!(
         "SELECT * FROM (SELECT {DEVICE_COLUMNS}, {CLOUD_STATUS_EXPR} AS cloud_status \
            FROM devices d JOIN users u ON d.user_id = u.id \
-          WHERE ($1::bigint IS NULL OR d.user_id = $1)) sub \
+          WHERE ($1::bigint IS NULL OR d.user_id = $1) \
+            AND ($5::text IS NULL OR u.email ILIKE $5 || '%' OR d.name ILIKE $5 || '%')) sub \
           WHERE ($2::text IS NULL OR sub.cloud_status = $2) \
           ORDER BY sub.id DESC LIMIT $3 OFFSET $4"
     );
@@ -143,25 +141,29 @@ pub async fn list_all_devices(
         .bind(cloud_status)
         .bind(page_size)
         .bind(offset)
+        .bind(q)
         .fetch_all(pool)
         .await?;
     Ok(rows)
 }
 
-/// 计 device 总数（可选 user_id / cloud_status 过滤）。
+/// 计 device 总数（可选 user_id / cloud_status / email 过滤）。
 pub async fn count_all_devices(
     pool: &PgPool,
     user_id: Option<i64>,
     cloud_status: Option<&str>,
+    q: Option<&str>,
 ) -> Result<i64, RepoError> {
     let sql = format!(
-        "SELECT count(*) FROM (SELECT {CLOUD_STATUS_EXPR} AS cs FROM devices d \
-          WHERE ($1::bigint IS NULL OR d.user_id = $1)) sub \
+        "SELECT count(*) FROM (SELECT {CLOUD_STATUS_EXPR} AS cs FROM devices d JOIN users u ON d.user_id = u.id \
+          WHERE ($1::bigint IS NULL OR d.user_id = $1) \
+            AND ($3::text IS NULL OR u.email ILIKE $3 || '%' OR d.name ILIKE $3 || '%')) sub \
           WHERE ($2::text IS NULL OR sub.cs = $2)"
     );
     let count: (i64,) = sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str()))
         .bind(user_id)
         .bind(cloud_status)
+        .bind(q)
         .fetch_one(pool)
         .await?;
     Ok(count.0)
@@ -426,4 +428,361 @@ pub async fn count_actions(pool: &PgPool, action: Option<&str>) -> Result<i64, R
     .fetch_one(pool)
     .await?;
     Ok(count.0)
+}
+
+// ============================================================================
+// Activity 统一时间线（login_events UNION admin_actions，ui-ux-risk-control §0.3）
+// ============================================================================
+
+/// Activity 统一行（login 或 audit 来源，§0.3 统一 schema）。
+#[derive(sqlx::FromRow, Debug, Clone)]
+pub struct ActivityRow {
+    pub kind: String,
+    pub created_at: OffsetDateTime,
+    pub actor_id: Option<i64>,
+    pub actor_label: String,
+    pub action: String,
+    pub detail_ip: Option<String>,
+    pub detail_ua: Option<String>,
+    pub detail_failure_code: Option<String>,
+    pub detail_target: Option<String>,
+    pub detail_reason: Option<String>,
+}
+
+/// Activity 统一时间线查询（UNION ALL，offset 分页 + 多维过滤，§0.3/§11.C.5）。
+///
+/// 过滤维度：kind（login/audit）、result（仅 login 有效：success/failed）、
+/// q（email/IP/action 关键词前缀匹配）、since/until（时间范围）。
+/// UNION ALL 后 ORDER BY created_at DESC，pushed-down limit 优化。
+#[allow(clippy::useless_format, clippy::too_many_arguments)]
+pub async fn list_activity(
+    pool: &PgPool,
+    kind: Option<&str>,
+    result: Option<&str>,
+    q: Option<&str>,
+    since: Option<OffsetDateTime>,
+    until: Option<OffsetDateTime>,
+    page: i64,
+    page_size: i64,
+) -> Result<Vec<ActivityRow>, RepoError> {
+    let offset = (page - 1).max(0) * page_size;
+    // 登录子查询：根据 result 过滤 success/failed
+    let login_success_filter = match result {
+        Some("success") => "AND success = true",
+        Some("failed") => "AND success = false",
+        _ => "",
+    };
+    // kind 过滤：None=两者都查，login=只查登录，audit=只查审计
+    let (sel_login, sel_audit) = match kind {
+        Some("login") => (true, false),
+        Some("audit") => (false, true),
+        _ => (true, true),
+    };
+
+    let mut parts: Vec<String> = Vec::new();
+    if sel_login {
+        parts.push(format!(
+            "SELECT 'login' AS kind, created_at, user_id AS actor_id, email AS actor_label,
+                    CASE WHEN success THEN 'login_success' ELSE 'login_failed' END AS action,
+                    host(ip_address) AS detail_ip, user_agent AS detail_ua,
+                    failure_code AS detail_failure_code, NULL::text AS detail_target, NULL::text AS detail_reason
+               FROM login_events
+              WHERE created_at >= $1 AND created_at <= $2
+                {login_success_filter}
+                AND ($5::text IS NULL OR email ILIKE $5 || '%' OR host(ip_address) ILIKE $5 || '%')"
+        ));
+    }
+    if sel_audit {
+        parts.push(format!(
+            "SELECT 'audit' AS kind, a.created_at, a.actor_id, u.email AS actor_label,
+                    a.action,
+                    NULL::text AS detail_ip, NULL::text AS detail_ua,
+                    NULL::text AS detail_failure_code,
+                    CASE WHEN a.target_user_id IS NOT NULL THEN tu.email
+                         WHEN a.target_agent_id IS NOT NULL THEN a.target_agent_id::text
+                         WHEN a.target_device_did IS NOT NULL THEN a.target_device_did::text
+                         ELSE NULL END AS detail_target,
+                    a.detail->>'reason' AS detail_reason
+               FROM admin_actions a
+               JOIN users u ON a.actor_id = u.id
+          LEFT JOIN users tu ON a.target_user_id = tu.id
+              WHERE a.created_at >= $1 AND a.created_at <= $2
+                AND ($5::text IS NULL OR u.email ILIKE $5 || '%' OR a.action ILIKE $5 || '%')"
+        ));
+    }
+    let union_sql = parts.join(" UNION ALL ");
+    let sql =
+        format!("SELECT * FROM ({union_sql}) sub ORDER BY sub.created_at DESC LIMIT $3 OFFSET $4");
+
+    let rows = sqlx::query_as::<_, ActivityRow>(sqlx::AssertSqlSafe(sql.as_str()))
+        .bind(since.unwrap_or(OffsetDateTime::UNIX_EPOCH))
+        .bind(until.unwrap_or(OffsetDateTime::now_utc() + time::Duration::days(1)))
+        .bind(page_size)
+        .bind(offset)
+        .bind(q)
+        .fetch_all(pool)
+        .await?;
+    Ok(rows)
+}
+
+/// Activity 总数（与 list_activity 同过滤条件）。
+#[allow(clippy::useless_format, clippy::too_many_arguments)]
+pub async fn count_activity(
+    pool: &PgPool,
+    kind: Option<&str>,
+    result: Option<&str>,
+    q: Option<&str>,
+    since: Option<OffsetDateTime>,
+    until: Option<OffsetDateTime>,
+) -> Result<i64, RepoError> {
+    let login_success_filter = match result {
+        Some("success") => "AND success = true",
+        Some("failed") => "AND success = false",
+        _ => "",
+    };
+    let (sel_login, sel_audit) = match kind {
+        Some("login") => (true, false),
+        Some("audit") => (false, true),
+        _ => (true, true),
+    };
+    let mut parts: Vec<String> = Vec::new();
+    if sel_login {
+        parts.push(format!(
+            "SELECT 1 FROM login_events
+              WHERE created_at >= $1 AND created_at <= $2
+                {login_success_filter}
+                AND ($3::text IS NULL OR email ILIKE $3 || '%' OR host(ip_address) ILIKE $3 || '%')"
+        ));
+    }
+    if sel_audit {
+        parts.push(format!(
+            "SELECT 1 FROM admin_actions a JOIN users u ON a.actor_id = u.id
+              WHERE a.created_at >= $1 AND a.created_at <= $2
+                AND ($3::text IS NULL OR u.email ILIKE $3 || '%' OR a.action ILIKE $3 || '%')"
+        ));
+    }
+    let union_sql = parts.join(" UNION ALL ");
+    let sql = format!("SELECT count(*) FROM ({union_sql}) sub");
+    let count: (i64,) = sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str()))
+        .bind(since.unwrap_or(OffsetDateTime::UNIX_EPOCH))
+        .bind(until.unwrap_or(OffsetDateTime::now_utc() + time::Duration::days(1)))
+        .bind(q)
+        .fetch_one(pool)
+        .await?;
+    Ok(count.0)
+}
+
+// ============================================================================
+// Integration 跨用户视图（ui-ux-risk-control §9.8）
+// ============================================================================
+
+#[derive(sqlx::FromRow, Debug, Clone)]
+pub struct AdminIntegrationRow {
+    pub id: i64,
+    pub user_id: i64,
+    pub user_email: String,
+    pub agent_id: i64,
+    pub provider: String,
+    pub enabled: bool,
+    pub mqtt_connected: bool,
+    pub last_error: Option<String>,
+    pub last_report_at: Option<OffsetDateTime>,
+    pub created_at: OffsetDateTime,
+}
+
+/// 列全部 integration（跨用户，offset 分页 + user_id/status/email 过滤，§9.8）。
+/// status 派生由 service 层做（§8.5 七态全序）。
+pub async fn list_all_integrations(
+    pool: &PgPool,
+    user_id: Option<i64>,
+    q: Option<&str>,
+    page: i64,
+    page_size: i64,
+) -> Result<Vec<AdminIntegrationRow>, RepoError> {
+    let offset = (page - 1).max(0) * page_size;
+    let rows = sqlx::query_as::<_, AdminIntegrationRow>(sqlx::AssertSqlSafe(
+        "SELECT i.id, i.user_id, u.email AS user_email, i.agent_id, i.provider,
+                i.enabled, i.mqtt_connected, i.last_error, i.last_report_at, i.created_at
+           FROM integrations i JOIN users u ON i.user_id = u.id
+          WHERE ($1::bigint IS NULL OR i.user_id = $1)
+            AND ($2::text IS NULL OR u.email ILIKE $2 || '%')
+          ORDER BY i.id DESC LIMIT $3 OFFSET $4",
+    ))
+    .bind(user_id)
+    .bind(q)
+    .bind(page_size)
+    .bind(offset)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
+pub async fn count_all_integrations(
+    pool: &PgPool,
+    user_id: Option<i64>,
+    q: Option<&str>,
+) -> Result<i64, RepoError> {
+    let count: (i64,) = sqlx::query_as(sqlx::AssertSqlSafe(
+        "SELECT count(*) FROM integrations i JOIN users u ON i.user_id = u.id
+          WHERE ($1::bigint IS NULL OR i.user_id = $1)
+            AND ($2::text IS NULL OR u.email ILIKE $2 || '%')",
+    ))
+    .bind(user_id)
+    .bind(q)
+    .fetch_one(pool)
+    .await?;
+    Ok(count.0)
+}
+
+// ============================================================================
+// Wakes offset 分页（ui-ux-risk-control §0.2，替代游标，§9.9）
+// ============================================================================
+
+/// 列全部 wake（跨用户，offset 分页 + type/result/email 过滤，§9.9）。
+#[allow(clippy::too_many_arguments)]
+pub async fn list_all_wakes_offset(
+    pool: &PgPool,
+    user_id: Option<i64>,
+    q: Option<&str>,
+    wake_type: Option<&str>,
+    result: Option<&str>,
+    since: Option<OffsetDateTime>,
+    until: Option<OffsetDateTime>,
+    page: i64,
+    page_size: i64,
+) -> Result<Vec<AdminWakeRow>, RepoError> {
+    let offset = (page - 1).max(0) * page_size;
+    let rows = sqlx::query_as::<_, AdminWakeRow>(sqlx::AssertSqlSafe(
+        "SELECT w.id, w.user_id, u.email AS user_email, w.device_did, w.device_name,
+                w.type, w.status, w.message, w.created_at
+           FROM wakes w JOIN users u ON w.user_id = u.id
+          WHERE ($1::bigint IS NULL OR w.user_id = $1)
+            AND ($2::text IS NULL OR u.email ILIKE $2 || '%' OR w.device_name ILIKE $2 || '%')
+            AND ($3::text IS NULL OR w.type = $3)
+            AND ($4::text IS NULL OR w.status = $4)
+            AND w.created_at >= $5 AND w.created_at <= $6
+          ORDER BY w.created_at DESC LIMIT $7 OFFSET $8",
+    ))
+    .bind(user_id)
+    .bind(q)
+    .bind(wake_type)
+    .bind(result)
+    .bind(since.unwrap_or(OffsetDateTime::UNIX_EPOCH))
+    .bind(until.unwrap_or(OffsetDateTime::now_utc() + time::Duration::days(1)))
+    .bind(page_size)
+    .bind(offset)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn count_all_wakes_offset(
+    pool: &PgPool,
+    user_id: Option<i64>,
+    q: Option<&str>,
+    wake_type: Option<&str>,
+    result: Option<&str>,
+    since: Option<OffsetDateTime>,
+    until: Option<OffsetDateTime>,
+) -> Result<i64, RepoError> {
+    let count: (i64,) = sqlx::query_as(sqlx::AssertSqlSafe(
+        "SELECT count(*) FROM wakes w JOIN users u ON w.user_id = u.id
+          WHERE ($1::bigint IS NULL OR w.user_id = $1)
+            AND ($2::text IS NULL OR u.email ILIKE $2 || '%' OR w.device_name ILIKE $2 || '%')
+            AND ($3::text IS NULL OR w.type = $3)
+            AND ($4::text IS NULL OR w.status = $4)
+            AND w.created_at >= $5 AND w.created_at <= $6",
+    ))
+    .bind(user_id)
+    .bind(q)
+    .bind(wake_type)
+    .bind(result)
+    .bind(since.unwrap_or(OffsetDateTime::UNIX_EPOCH))
+    .bind(until.unwrap_or(OffsetDateTime::now_utc() + time::Duration::days(1)))
+    .fetch_one(pool)
+    .await?;
+    Ok(count.0)
+}
+
+// ============================================================================
+// 风控聚合（GET /admin/risk，admin-risk-controls WRFC）
+// ============================================================================
+
+/// 失败登录 top IP 行（近 24h，撞库画像）。
+#[derive(Debug, sqlx::FromRow, Serialize)]
+pub struct TopFailedIpRow {
+    pub ip: String,
+    pub failures: i64,
+    pub distinct_emails: i64,
+}
+
+/// 失败登录 top 目标邮箱行（近 24h，定向爆破画像）。
+#[derive(Debug, sqlx::FromRow, Serialize)]
+pub struct TopFailedEmailRow {
+    pub email: String,
+    pub failures: i64,
+    pub distinct_ips: i64,
+}
+
+/// DB 侧风控聚合（注册速率 / 未验证堆积 / 失败登录聚合）。
+/// 发信预算、PoW 难度、封禁计数来自运行时句柄快照（零查询），由路由层拼装。
+#[derive(Debug)]
+pub struct RiskAggregates {
+    pub registrations_24h: i64,
+    pub registrations_7d: i64,
+    pub unverified_count: i64,
+    pub oldest_unverified_age_hours: Option<i64>,
+    pub failed_logins_24h: i64,
+    pub top_failed_ips: Vec<TopFailedIpRow>,
+    pub top_failed_emails: Vec<TopFailedEmailRow>,
+}
+
+pub async fn risk_aggregates(pool: &PgPool) -> Result<RiskAggregates, RepoError> {
+    let registrations_24h: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM users WHERE created_at > now() - interval '24 hours'",
+    )
+    .fetch_one(pool)
+    .await?;
+    let registrations_7d: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM users WHERE created_at > now() - interval '7 days'",
+    )
+    .fetch_one(pool)
+    .await?;
+    let unverified_count = crate::repo::user_repo::count_unverified(pool).await?;
+    let oldest_unverified_age_hours =
+        crate::repo::user_repo::oldest_unverified_age_hours(pool).await?;
+    let failed_logins_24h: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM login_events
+          WHERE success = false AND created_at > now() - interval '24 hours'",
+    )
+    .fetch_one(pool)
+    .await?;
+    let top_failed_ips = sqlx::query_as::<_, TopFailedIpRow>(sqlx::AssertSqlSafe(
+        "SELECT host(ip_address) AS ip, count(*) AS failures, count(DISTINCT email) AS distinct_emails
+           FROM login_events
+          WHERE success = false AND created_at > now() - interval '24 hours'
+            AND ip_address IS NOT NULL
+          GROUP BY ip_address ORDER BY failures DESC LIMIT 10",
+    ))
+    .fetch_all(pool)
+    .await?;
+    let top_failed_emails = sqlx::query_as::<_, TopFailedEmailRow>(sqlx::AssertSqlSafe(
+        "SELECT email, count(*) AS failures, count(DISTINCT ip_address) AS distinct_ips
+           FROM login_events
+          WHERE success = false AND created_at > now() - interval '24 hours'
+            AND ip_address IS NOT NULL
+          GROUP BY email ORDER BY failures DESC LIMIT 10",
+    ))
+    .fetch_all(pool)
+    .await?;
+    Ok(RiskAggregates {
+        registrations_24h,
+        registrations_7d,
+        unverified_count,
+        oldest_unverified_age_hours,
+        failed_logins_24h,
+        top_failed_ips,
+        top_failed_emails,
+    })
 }

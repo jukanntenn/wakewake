@@ -13,6 +13,16 @@
  */
 import ky, { type KyInstance, type BeforeRequestHook } from 'ky'
 import { execSql } from './db'
+import { createHash } from 'node:crypto'
+
+/** 本地解 PoW（SHA-256 前导零，authentication.md §六；注册/重置共用）。 */
+export function solvePow(challenge: string, difficulty: number): string {
+  const target = '0'.repeat(difficulty)
+  for (let nonce = 0; ; nonce++) {
+    const hash = createHash('sha256').update(challenge + nonce).digest('hex')
+    if (hash.startsWith(target)) return nonce.toString()
+  }
+}
 
 const BASE_URL = process.env.BASE_URL ?? 'https://localhost:8443'
 
@@ -174,8 +184,11 @@ export async function registerUser(
   client: KyInstance,
   input: { email: string; password: string },
 ): Promise<AuthResponse> {
+  // 注册需 PoW（ui-ux-risk-control §8.6）：取 challenge 本地求解后随表单提交。
+  const challenge = await getPowChallenge(client)
+  const nonce = solvePow(challenge.challenge, challenge.difficulty)
   const user = await client
-    .post('auth/register', { json: input })
+    .post('auth/register', { json: { ...input, challenge: challenge.id, nonce } })
     .json<{ id: number; email: string }>()
   execSql(`UPDATE users SET email_verified = true WHERE id = ${user.id};`)
   return loginUser(client, input)
@@ -504,4 +517,98 @@ export async function listWakes(
   params?: { device_id?: string; type?: string; before?: string; page_size?: number },
 ): Promise<PaginatedList<Wake>> {
   return client.get('wakes', { searchParams: params ?? {} }).json()
+}
+
+// ---- 风控运行时控制（admin-risk-controls WRFC）----
+
+export interface MailerControlStatus {
+  enabled: boolean
+  limits: { register: number; resend: number; reset: number }
+  day: string
+  sent: { register: number; resend: number; reset: number }
+  blocked: { register: number; resend: number; reset: number }
+}
+
+export async function getMailer(client: KyInstance): Promise<MailerControlStatus> {
+  return client.get('admin/mailer').json()
+}
+
+export async function setMailer(
+  client: KyInstance,
+  data: { enabled?: boolean; limits?: { register: number; resend: number; reset: number } },
+): Promise<MailerControlStatus> {
+  return client.post('admin/mailer', { json: data }).json()
+}
+
+export async function getPow(client: KyInstance): Promise<{ difficulty: number; max_difficulty: number }> {
+  return client.get('admin/pow').json()
+}
+
+export async function setPow(
+  client: KyInstance,
+  difficulty: number,
+): Promise<{ difficulty: number; max_difficulty: number }> {
+  return client.post('admin/pow', { json: { difficulty } }).json()
+}
+
+export interface IpBanEntry {
+  id: string
+  target: string
+  kind: 'ip' | 'cidr'
+  reason: string
+  created_by: number
+  created_at: string
+  expires_at: string | null
+  expired: boolean
+}
+
+export async function listIpBans(client: KyInstance): Promise<IpBanEntry[]> {
+  return client.get('admin/ip-bans').json()
+}
+
+export async function addIpBan(
+  client: KyInstance,
+  data: { target: string; reason?: string; ttl_hours?: number | null },
+): Promise<IpBanEntry> {
+  return client.post('admin/ip-bans', { json: data }).json()
+}
+
+export async function removeIpBan(client: KyInstance, id: string): Promise<void> {
+  await client.delete(`admin/ip-bans/${id}`)
+}
+
+export interface RiskOverview {
+  registrations_24h: number
+  registrations_7d: number
+  unverified_count: number
+  oldest_unverified_age_hours: number | null
+  failed_logins_24h: number
+  top_failed_ips: { ip: string; failures: number; distinct_emails: number }[]
+  top_failed_emails: { email: string; failures: number; distinct_ips: number }[]
+  mailer: MailerControlStatus
+  pow_difficulty: number
+  ip_ban_count: number
+  rate_limited_since_start: number
+  rate_limited_uptime_secs: number
+}
+
+export async function getRisk(client: KyInstance): Promise<RiskOverview> {
+  return client.get('admin/risk').json()
+}
+
+export interface MaintenanceStatus {
+  enabled: boolean
+  mode: 'registration_disabled' | 'readonly' | 'full'
+  message: string
+}
+
+export async function getMaintenance(client: KyInstance): Promise<MaintenanceStatus> {
+  return client.get('admin/maintenance').json()
+}
+
+export async function setMaintenance(
+  client: KyInstance,
+  data: { enabled: boolean; mode: string; message?: string },
+): Promise<MaintenanceStatus> {
+  return client.post('admin/maintenance', { json: data }).json()
 }

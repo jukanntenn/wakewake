@@ -26,6 +26,7 @@ import { useDevices } from '@/hooks/useDevices'
 import { useDefaultAgent } from '@/hooks/useAgents'
 import { encryptWithPublicKey } from '@/lib/crypto'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import type { Integration } from '@/lib/api'
 
 const BEMFA = 'bemfa'
@@ -164,15 +165,15 @@ export default function IntegrationsPage() {
     }
   }
 
-  const onDelete = async () => {
-    if (!existing) return
-    if (!confirm(t('deleteConfirm'))) return
+  const [deleteOpen, setDeleteOpen] = useState(false)
+
+  const onDeleteConfirm = async () => {
     try {
       await deleteMut.mutateAsync(BEMFA)
       toast.success(t('deleteRemoved'))
       setEditing(false)
     } catch {
-      toast.error('Failed')
+      throw new Error(t('deleteRemoved' as never) ? 'Failed' : 'Failed')
     }
   }
 
@@ -210,8 +211,9 @@ export default function IntegrationsPage() {
                 {t('edit')}
               </button>
               <button
-                onClick={onDelete}
+                onClick={() => setDeleteOpen(true)}
                 className="text-ink-muted hover:bg-surface-2 hover:text-destructive rounded-sm p-1.5"
+                aria-label={t('deleteRemoved' as never) ?? 'Delete'}
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -342,6 +344,19 @@ export default function IntegrationsPage() {
           </div>
         </div>
       )}
+
+      {/* L3 删除集成 ConfirmDialog（§5.4） */}
+      <ConfirmDialog
+        open={deleteOpen}
+        onConfirm={onDeleteConfirm}
+        onClose={() => setDeleteOpen(false)}
+        variant="danger"
+        title={t('deleteDialogTitle' as never) ?? 'Remove integration'}
+        description={
+          t('deleteDialogDesc' as never) ?? 'Disconnect Bemfa? Voice wake will be unavailable.'
+        }
+        confirmText={t('deleteRemoved')}
+      />
     </div>
   )
 }

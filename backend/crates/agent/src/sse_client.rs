@@ -2,7 +2,9 @@
 //!
 //! 指数退避 base=5s factor=2 max=300s jitter=±50%（防同步重连脉冲）。
 //! 401 → 立即终止（pairing code 失效）。
-//! 所有非主动断开都走退避（修复旧 agent 优雅 EOF 重置退避的 bug）。
+//! 流曾交付过数据后断开 → `Connected`（main 循环 reset 退避后按 base+jitter 重试，
+//! 修复旧 agent 退避单调增长、单次网络抖动后重连间隔越滚越大的 bug）；
+//! 未建流成功（连接失败/非 200/未收到任何数据即断）→ `Disconnected`（退避增长）。
 
 use std::time::Duration;
 
@@ -78,9 +80,9 @@ pub enum DisconnectReason {
 pub enum Outcome {
     /// pairing code 失效 → 终止退出。
     Unauthorized,
-    /// 网络断开 / 主动断开 → 退避重连。
+    /// 未建流成功（连接失败 / 非 200 / 未收到任何数据即断）→ 退避增长后重试。
     Disconnected,
-    /// 连接成功（稳态后断开也归为 Disconnected）。
+    /// 流曾交付过数据（健康连接）后断开 → main 循环 reset 退避，按 base+jitter 重试。
     Connected,
 }
 
@@ -140,7 +142,9 @@ pub fn parse_sse_event(chunk: &str) -> Option<SseEvent> {
 
 /// 连接 SSE 端点并运行命令处理循环。
 /// 返回 Outcome（Unauthorized → 退出，Disconnected → 退避重连）。
+/// client 由调用方构建（tls.ca_cert / danger feature 统一在 build_http_client 生效）。
 pub async fn connect_and_run<F>(
+    client: &reqwest::Client,
     server_url: &str,
     pairing_code: &str,
     public_key_pem: Option<&str>,
@@ -150,7 +154,6 @@ where
     F: FnMut(SseEvent),
 {
     let url = format!("{server_url}/api/v1/agents/self/events");
-    let client = crate::http_client::build_http_client();
 
     let mut req = client
         .get(&url)
@@ -190,11 +193,23 @@ where
     let mut stream = response.bytes_stream();
     let mut buffer = String::new();
     const READ_TIMEOUT: std::time::Duration = std::time::Duration::from_mins(1);
+    // 流是否交付过数据：曾收到字节 = 健康连接，后续断开归 Connected（reset 退避）。
+    let mut received_any = false;
+
+    // 流断开时的结局：健康连接断开 → Connected；从未收到数据 → Disconnected。
+    fn outcome_on_drop(received_any: bool) -> Outcome {
+        if received_any {
+            Outcome::Connected
+        } else {
+            Outcome::Disconnected
+        }
+    }
 
     loop {
         match tokio::time::timeout(READ_TIMEOUT, stream.next()).await {
             Ok(Some(chunk_result)) => match chunk_result {
                 Ok(chunk) => {
+                    received_any = true;
                     buffer.push_str(&String::from_utf8_lossy(&chunk[..]));
                     // SSE 事件以空行分隔（\n\n）
                     while let Some(idx) = buffer.find("\n\n") {
@@ -207,20 +222,20 @@ where
                 },
                 Err(e) => {
                     tracing::warn!(error = %e, "SSE stream error, will retry");
-                    return Outcome::Disconnected;
+                    return outcome_on_drop(received_any);
                 },
             },
             Ok(None) => {
-                // 优雅 EOF（stream 结束）→ Disconnected（走退避，修复旧 agent EOF 重置退避 bug）
-                tracing::warn!("SSE stream ended (EOF), will retry with backoff");
-                return Outcome::Disconnected;
+                // 优雅 EOF（stream 结束）→ 按是否曾收到数据归类
+                tracing::warn!("SSE stream ended (EOF), will retry");
+                return outcome_on_drop(received_any);
             },
             Err(_) => {
                 // §8.6.1：60s 读超时 → 判半开 TCP，强制断开重连
                 tracing::warn!(
                     "SSE read timeout (60s no data), forcing reconnect (half-open TCP guard)"
                 );
-                return Outcome::Disconnected;
+                return outcome_on_drop(received_any);
             },
         }
     }

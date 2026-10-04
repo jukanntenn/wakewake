@@ -21,14 +21,19 @@ PATTERN = re.compile(
 
 def main() -> int:
     if len(sys.argv) < 2:
-        print("error: commit-msg hook expects the message file path as $1", file=sys.stderr)
+        print(
+            "error: commit-msg hook expects the message file path as $1",
+            file=sys.stderr,
+        )
         return 1
 
     msg_file = Path(sys.argv[1])
     try:
         content = msg_file.read_text(encoding="utf-8", errors="replace")
     except OSError as e:
-        print(f"error: cannot read commit message file {msg_file}: {e}", file=sys.stderr)
+        print(
+            f"error: cannot read commit message file {msg_file}: {e}", file=sys.stderr
+        )
         return 1
 
     # First non-comment, non-blank line is the subject.
@@ -41,7 +46,9 @@ def main() -> int:
         break
 
     if not PATTERN.match(subject):
-        print("ERROR: commit message must follow Conventional Commits.", file=sys.stderr)
+        print(
+            "ERROR: commit message must follow Conventional Commits.", file=sys.stderr
+        )
         print("  Expected: <type>(<scope>)?!?: <summary>", file=sys.stderr)
         print(
             "  Types: feat|fix|chore|docs|refactor|test|build|style|ci|perf|revert",

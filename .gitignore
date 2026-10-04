@@ -58,10 +58,17 @@ data/
 backend/tmp/
 backend/wakewake.toml
 
+# 本地验收配置（docker/config.local.toml、backend/crates/agent/config.local.toml）
+*.local.toml
+# 本地验收 agent home（RSA 私钥 key.pem，绝不入库）
+.wakewake/
+
 __pycache__/
 
 devops/frontend.pid
 devops/frontend.log
+devops/backend.pid
+devops/backend.log
 
 # Playwright CLI cache
 .playwright-cli/

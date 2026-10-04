@@ -63,7 +63,7 @@ fn mask_code(code: &str) -> String {
     format!("{prefix}****...****{suffix}")
 }
 
-/// 轮换 pairing code（旧码立即失效）。
+/// 轮换 pairing code（旧码立即失效）+ 审计（ui-ux-risk-control §8.5）。
 pub async fn rotate_pairing_code(pool: &PgPool, user_id: i64) -> AppResult<Agent> {
     let agent = get_default(pool, user_id).await?;
     let new_code = generate_pairing_code();
@@ -74,6 +74,22 @@ pub async fn rotate_pairing_code(pool: &PgPool, user_id: i64) -> AppResult<Agent
         .await
         .map_err(AppError::from_repo)?
         .ok_or(AppError::code(ErrorCode::AgentNotFound))?;
+
+    // 审计：用户自己轮换配对码（actor=用户自己，§8.5）。
+    if let Err(e) = crate::repo::admin_repo::insert_action(
+        pool,
+        user_id,
+        "agent.rotate_code",
+        None,
+        Some(agent.id),
+        None,
+        &serde_json::json!({}),
+    )
+    .await
+    {
+        tracing::warn!(error = ?e, "audit agent.rotate_code failed");
+    }
+
     Ok(updated)
 }
 

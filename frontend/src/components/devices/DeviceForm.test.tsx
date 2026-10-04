@@ -16,15 +16,17 @@ vi.mock('@/hooks/useDevices', () => ({
   usePatchDevice: () => ({ mutateAsync: mockPatchDevice, isPending: false }),
 }))
 
+// 可变 agent mock：默认已配对，个别用例改为未配对（needsAgent 兜底分支）。
+const agentState = vi.hoisted(() => ({
+  agent: {
+    aid: 'test-aid',
+    public_key: 'PEM_PUBLIC_KEY' as string | null,
+    status: 'online' as const,
+    pairing_code: 'abcd****',
+  },
+}))
 vi.mock('@/hooks/useAgents', () => ({
-  useDefaultAgent: () => ({
-    data: {
-      aid: 'test-aid',
-      public_key: 'PEM_PUBLIC_KEY',
-      status: 'online',
-      pairing_code: 'abcd****',
-    },
-  }),
+  useDefaultAgent: () => ({ data: agentState.agent }),
 }))
 
 // Mock crypto（避免 jsdom 无 Web Crypto）
@@ -33,6 +35,7 @@ vi.mock('@/lib/crypto', () => ({
   maskMACAddress: vi.fn().mockReturnValue('AA:**:**:**:**:FF'),
   isValidMAC: vi.fn().mockReturnValue(true),
   formatMAC: vi.fn().mockImplementation((mac: string) => mac.toUpperCase()),
+  MAC_REGEX: /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/,
 }))
 
 // Helper：取第一个匹配（避免 StrictMode 双渲染导致 multiple）
@@ -78,6 +81,8 @@ describe('DeviceForm', () => {
       mac_display: 'AA:**:**:**:**:FF',
       description: 'old desc',
       agent_online: true,
+      agent_name: null,
+      agent_last_seen: null,
       projection_status: 'synced' as const,
       cloud_status: 'synced' as const,
       cloud_observed_name: 'Existing Device',
@@ -100,6 +105,8 @@ describe('DeviceForm', () => {
       mac_display: 'AA:**:**:**:**:FF',
       description: null,
       agent_online: true,
+      agent_name: null,
+      agent_last_seen: null,
       projection_status: 'synced' as const,
       cloud_status: 'synced' as const,
       cloud_observed_name: 'Test',
@@ -113,5 +120,34 @@ describe('DeviceForm', () => {
     render(<DeviceForm device={device} onDone={vi.fn()} />)
     const macInput = first(screen.getAllByPlaceholderText('macAddressPlaceholder'))
     expect(macInput).toBeDisabled()
+  })
+
+  it('shows MAC format error on blur, not only at submit', async () => {
+    const user = userEvent.setup()
+    render(<DeviceForm onDone={vi.fn()} />)
+    const mac = first(screen.getAllByPlaceholderText('macAddressPlaceholder'))
+    await user.type(mac, 'not-a-mac')
+    await user.tab()
+    expect(screen.getByText('invalidMac')).toBeInTheDocument()
+  })
+
+  it('falls back to an inline agent-page link when the key vanishes mid-form', async () => {
+    agentState.agent = { ...agentState.agent, public_key: null }
+    try {
+      const user = userEvent.setup()
+      render(<DeviceForm onDone={vi.fn()} />)
+      await user.type(first(screen.getAllByPlaceholderText('namePlaceholder')), 'NAS')
+      await user.type(
+        first(screen.getAllByPlaceholderText('macAddressPlaceholder')),
+        'AA:BB:CC:DD:EE:FF',
+      )
+      await user.click(first(screen.getAllByRole('button', { name: 'create' })))
+      expect(mockCreateDevice).not.toHaveBeenCalled()
+      expect(screen.getByText('connectorNotReady')).toBeInTheDocument()
+      const link = screen.getByRole('link', { name: 'connectorNotReadyLink' })
+      expect(link).toHaveAttribute('href', '/agents')
+    } finally {
+      agentState.agent = { ...agentState.agent, public_key: 'PEM_PUBLIC_KEY' }
+    }
   })
 })

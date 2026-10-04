@@ -1,4 +1,4 @@
-# wakewake-agent 配置示例（configuration.md §4）。
+# wakewake-agent 配置示例（specs/backend/configuration.md §4）。
 # 主要用户文档。agent 的三种配置方式（优先级高→低）：
 #   1. CLI 参数：--server / --pairing-code / --config
 #   2. 环境变量：WAKEWAKE_SERVER_URL / WAKEWAKE_PAIRING_CODE / WAKEWAKE_HOME
@@ -68,3 +68,32 @@ pairing_code = "CHANGE_ME_a1b2c3d4e5f60718"
 # Default: pretty
 # [log]
 # format = "pretty"
+
+# ============================================================
+# Bemfa（巴法云 MQTT；E2E 用 env 指向 mock）
+# ============================================================
+# [OPTIONAL] MQTT broker 地址
+# Env: WAKEWAKE_BEMFA__BROKER
+# Default: bemfa.com
+# [OPTIONAL] MQTT TLS 端口（认证方式一：uid 作 client_id，无账密）
+# Env: WAKEWAKE_BEMFA__PORT
+# Default: 9503
+# [OPTIONAL] topic 管理 HTTP API 基址覆盖（E2E/测试指向 mock 用，日常不设）
+# 不设 = 使用真实巴法云各域名（createTopic/deleteTopic 等按版本路由）
+# Env: WAKEWAKE_BEMFA__API_BASE
+# [bemfa]
+# broker = "bemfa.com"
+# port = 9503
+# api_base = "http://bemfa-mock:8080"
+
+# ============================================================
+# TLS（内网自托管场景）
+# ============================================================
+# [OPTIONAL] 自签 root CA 证书路径（PEM）
+# 内网自托管（Caddy `tls internal`）时指向导出的 root 证书——
+# 信任自己的 CA，而非关闭校验。不设 = 系统信任库（公网部署不设此项）。
+# root 证书导出（统一镜像默认 /data 卷内）：
+#   docker exec <wakewake容器> cat /data/caddy/pki/authorities/local/root.crt > caddy-root.crt
+# Env: WAKEWAKE_TLS__CA_CERT
+# [tls]
+# ca_cert = "/etc/wakewake/caddy-root.crt"

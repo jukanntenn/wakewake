@@ -1,7 +1,26 @@
 {
   "common": {
     "logout": "로그아웃",
-    "loading": "..."
+    "loading": "...",
+    "appName": "WakeWake",
+    "error": "An error occurred",
+    "save": "Save",
+    "saving": "Saving...",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "close": "Close",
+    "confirm": "Confirm",
+    "processing": "Processing...",
+    "copied": "Copied to clipboard",
+    "yes": "Yes",
+    "no": "No",
+    "retry": "재시도",
+    "view": "보기",
+    "back": "뒤로",
+    "menu": "메뉴"
   },
   "auth": {
     "login": "로그인",
@@ -17,7 +36,8 @@
       "AUTH_REQUIRED": "...",
       "TOKEN_EXPIRED": "...",
       "EMAIL_NOT_VERIFIED": "로그인 전 이메일을 확인하세요",
-      "INVALID_TOKEN": "이 링크는 유효하지 않거나 만료되었습니다"
+      "INVALID_TOKEN": "이 링크는 유효하지 않거나 만료되었습니다",
+      "IP_BLOCKED": "해당 IP 주소는 차단되었습니다"
     },
     "signingUp": "계정 만드는 중...",
     "sending": "보내는 중...",
@@ -36,7 +56,8 @@
     "resendVerification": "이메일 다시 보내기",
     "resending": "보내는 중...",
     "resendSent": "계정이 존재하고 미확인 상태면 새 링크가 전송되었습니다.",
-    "resendCooldown": "재전송 전 잠시 기다려 주세요.",
+    "resendCountdown": "재전송({time})",
+    "resendRateLimited": "요청이 너무 많습니다. 카운트다운이 끝난 후 다시 시도하세요.",
     "verificationSent": "로그인 전 이메일로 계정을 확인하세요.",
     "verifyEmailTitle": "이메일 확인 중",
     "verifying": "확인 중...",
@@ -45,18 +66,31 @@
     "verifyFailedHint": "이 링크는 유효하지 않거나 만료되었습니다.",
     "backToLogin": "로그인으로 돌아가기",
     "wrongEmail": "이메일이 틀렸나요?",
-    "useDifferentEmail": "다른 이메일 사용"
-  },
-  "dashboard": {
-    "title": "대시보드",
-    "overview": "기기를 관리하고 원격으로 켭니다."
+    "useDifferentEmail": "다른 이메일 사용",
+    "logout": "Logout",
+    "email": "Email",
+    "confirmPassword": "Confirm Password",
+    "name": "Name",
+    "newPassword": "New Password",
+    "currentPassword": "Current Password",
+    "resetEmailHint": "Enter your email to receive a reset link.",
+    "resetLinkSent": "If the email exists, a reset link has been sent.",
+    "sendResetLink": "Send Reset Link",
+    "passwordReset": "Password reset successfully.",
+    "creatingAccount": "Creating account...",
+    "sendingResetLink": "Sending reset link...",
+    "passwordHint": "8+ characters",
+    "passwordsDontMatch": "Passwords don't match",
+    "registrationClosed": "회원가입이 일시적으로 중단되었습니다. 나중에 다시 시도해 주세요."
   },
   "navigation": {
     "devices": "기기",
     "agent": "에이전트",
     "integrations": "연동",
     "history": "기록",
-    "admin": "Admin"
+    "admin": "Admin",
+    "settings": "설정",
+    "menu": "메뉴"
   },
   "devices": {
     "title": "기기",
@@ -75,11 +109,100 @@
     "rotateFailed": "코드 교체 실패",
     "copiedNewCode": "새 코드가 클립보드에 복사되었습니다",
     "codeCopiedManualHint": "자동 복사에 실패했습니다. 새 코드가 위에 표시되어 있습니다 — 직접 선택하여 복사하세요.",
-    "maskedCodeHint": "페어링 코드가 마스킹되어 있습니다. \"코드 교체\"를 클릭하여 연결에 사용할 전체 코드를 받으세요."
+    "maskedCodeHint": "페어링 코드가 마스킹되어 있습니다. \"코드 교체\"를 클릭하여 연결에 사용할 전체 코드를 받으세요.",
+    "rotate": "Rotate Code",
+    "rotateSuccess": "Pairing code rotated",
+    "status": {
+      "pending": "Waiting for agent connection",
+      "online": "Online",
+      "offline": "Offline"
+    },
+    "lastSeen": "Last seen",
+    "publicKey": "Public Key",
+    "never": "Never",
+    "confirmRotate": "Click again to confirm",
+    "publicKeyNotAvailable": "Not available until agent connects",
+    "advanced": "고급",
+    "model": {
+      "server": "wakewake 서버",
+      "agent": "LAN 에이전트",
+      "device": "대상 기기",
+      "linked": "연결됨",
+      "missing": "미연결",
+      "broken": "연결 끊김"
+    },
+    "guide": {
+      "whereTitle": "홈 네트워크의 상시 켜둔 머신에서 에이전트를 실행하세요",
+      "whereDesc": "에이전트는 깨울 기기와 같은 공유기에 연결되어 있어야 합니다(웨이크 신호는 공유기를 넘지 못합니다). NAS, 미니 PC, 여분의 노트북이 적합합니다.",
+      "commandLabel": "실행 명령",
+      "copyCommand": "명령 복사",
+      "waiting": "에이전트 연결을 기다리는 중입니다. 페이지는 자동으로 갱신됩니다.",
+      "tabLinux": "Linux",
+      "tabDocker": "Docker",
+      "composeTitle": "Docker Compose",
+      "composeRecommended": "추천",
+      "runTitle": "한 줄 실행"
+    },
+    "online": {
+      "title": "에이전트가 연결되었습니다",
+      "desc": "에이전트가 실행 중입니다. 기기를 추가하면 원격으로 깨울 수 있습니다.",
+      "cta": "기기로 이동"
+    },
+    "offline": {
+      "title": "에이전트 연결이 끊겼습니다",
+      "desc": "에이전트는 이전에 페어링되었습니다. 실행 머신의 전원과 네트워크를 확인하세요. 복구되면 자동으로 재연결되며 재설정이 필요 없습니다.",
+      "repairHint": "새 머신에서 다시 페어링하려면 페어링 코드를 교체한 뒤 새 명령을 사용하세요."
+    },
+    "advancedConfigTitle": "설정 파일로 실행",
+    "advancedConfigDesc": "아래 내용을 ~/.wakewake/config.toml로 저장하면 명령줄 인자 없이 wakewake-agent 를 실행할 수 있습니다.",
+    "service": {
+      "title": "부팅 시 자동 실행(직접 설치)",
+      "desc": "포그라운드에서 첫 실행을 확인한 후 systemd 서비스로 설치하면 재부팅이나 SSH 연결 해제 후에도 계속 실행됩니다. Docker 설치에는 필요 없습니다(--restart unless-stopped)."
+    }
   },
   "integrations": {
     "title": "연동",
-    "comingSoon": "곧 출시됩니다."
+    "comingSoon": "곧 출시됩니다.",
+    "add": "Add Integration",
+    "bemfaDesc": "Enable voice control of devices via Bemfa cloud (Xiao Ai, Tmall Genie).",
+    "bemfaUidHint": "Bemfa console → Console → Private key (32-hex or 45-char)",
+    "connect": "Connect Bemfa",
+    "connected": "Connected",
+    "notConnected": "Not connected",
+    "enable": "Enable",
+    "disable": "Disable",
+    "edit": "Configure",
+    "cancel": "Cancel",
+    "save": "Save",
+    "deleteRemoved": "Removed",
+    "configHint": "Sensitive fields (UID / secretID / secretKey) are end-to-end encrypted with the agent's public key; the server never sees them.",
+    "editConfig": "Edit configuration",
+    "placeholderSecret": "Set, leave blank to keep unchanged",
+    "stateConnected": "Connected",
+    "stateConnecting": "Connecting…",
+    "stateConnectingHint": "Usually completes in seconds. If it stays here, check the UID or whether the agent is online.",
+    "stateAgentOffline": "Agent offline",
+    "stateAgentOfflineHint": "The wake agent is offline. The integration will sync automatically once it comes back.",
+    "stateDisconnected": "MQTT not connected",
+    "stateDisconnectedHint": "Bemfa MQTT connection failed. Check that the UID is correct.",
+    "stateError": "Sync error",
+    "stateDisabled": "Paused",
+    "stateDisabledHint": "Integration is paused. Bemfa device topics are retained but voice wake is disabled.",
+    "devicesSynced": "{count} devices synced",
+    "lastError": "Last error: {error}",
+    "v2Optional": "v2 API credentials (optional, recommended)",
+    "v2Toggle": "Use v2 API (requires real-name verification)",
+    "v2Hint": "Fill secretID/secretKey to use the recommended v2 API. Leave empty for v1 (UID only).",
+    "mijiaGuide": "How to enable voice control with Xiao Ai",
+    "mijiaStep1": "Ensure the Bemfa integration above is connected",
+    "mijiaStep2": "Open Mi Home app → Profile → Third-party devices → Add → select \"Bemfa\"",
+    "mijiaStep3": "Enter your Bemfa account (the one matching the UID above)",
+    "mijiaStep4": "Say \"Xiao Ai, turn on {device}\" to wake your computer",
+    "mijiaWarning": "Without Mi Home binding, Bemfa topics are still created, but voice control won't work.",
+    "deleteDialogTitle": "Remove integration",
+    "deleteDialogDesc": "Disconnect Bemfa? Device topics are retained on the cloud (reusable), but voice wake will be unavailable.",
+    "toggleSuccess": "{action} succeeded",
+    "toggleFailed": "{action} failed"
   },
   "wakes": {
     "title": "기록",
@@ -87,12 +210,28 @@
     "refresh": "새로고침",
     "statusSuccess": "성공",
     "statusExpired": "만료",
-    "statusFailed": "실패"
+    "statusFailed": "실패",
+    "device": "Device",
+    "type": "Type",
+    "typeManual": "Manual",
+    "typeVoice": "Voice",
+    "statusCol": "Status",
+    "time": "Time",
+    "loading": "Loading...",
+    "empty": "No wake history yet.",
+    "loadMore": "Load More"
   },
   "settings": {
     "title": "...",
     "comingSoon": "곧 출시됩니다.",
-    "confirmPassword": "새 비밀번호 확인"
+    "confirmPassword": "새 비밀번호 확인",
+    "changePassword": "Change Password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "passwordChanged": "Password changed. Please sign in again.",
+    "saving": "Saving...",
+    "language": "Language",
+    "passwordsDontMatch": "Passwords don't match"
   },
   "admin": {
     "title": "Admin",
@@ -184,7 +323,148 @@
     "colAction": "Action",
     "colTarget": "Target",
     "colDetail": "Detail",
-    "pagination": "Page {page} / {total}"
+    "pagination": "Page {page} / {total}",
+    "activity": "Activity",
+    "integrations": "Integrations",
+    "wakes": "Wakes",
+    "maintenance": {
+      "title": "Maintenance",
+      "statusNormal": "Normal — no maintenance active",
+      "statusActive": "Maintenance active",
+      "enable": "Enable maintenance mode",
+      "disable": "Disable maintenance",
+      "affectsAll": "This affects all users. Choose a severity:",
+      "mode_registration": "Pause registration",
+      "mode_registrationDesc": "New signups blocked. Existing users unaffected.",
+      "mode_readonly": "Read-only",
+      "mode_readonlyDesc": "All write operations blocked. Users can still view.",
+      "mode_full": "Full lockdown",
+      "mode_fullDesc": "Only admins can sign in. All others turned away.",
+      "messageLabel": "Message to users (optional):",
+      "messagePlaceholder": "Scheduled maintenance in progress"
+    },
+    "activityDesc": "Login events and audit trail",
+    "devicesDesc": "Cross-user device monitoring",
+    "integrationsDesc": "Cross-user integration monitoring",
+    "wakesDesc": "Cross-user wake audit history",
+    "maintenanceDesc": "Emergency controls and maintenance mode",
+    "backToAdmin": "Admin",
+    "searchUsers": "Type the beginning of an email...",
+    "searchDevices": "Device name or user email...",
+    "searchActivity": "Email, IP, or action...",
+    "filterStatus": "Status",
+    "filterRole": "Role",
+    "filterCloud": "Cloud",
+    "filterType": "Type",
+    "filterResult": "Result",
+    "filterDate": "Date",
+    "filterClear": "Clear filters",
+    "lastLogin": "Last login",
+    "never": "Never",
+    "thisIsYou": "This is you — actions disabled",
+    "disableDialogTitle": "Disable user",
+    "disableDialogDesc": "Disable \"{email}\"? They will be immediately logged out and their agent disconnected.",
+    "disableDialogReason": "Reason (optional):",
+    "disableDialogReasonPlaceholder": "e.g. Abuse — bulk registration",
+    "resetDialogTitle": "Reset password",
+    "resetDialogDesc": "Set a new password for \"{email}\". Their old password will stop working and they'll be logged out everywhere.",
+    "resetDialogPasswordLabel": "New password (min 8 characters):",
+    "disconnectFailedHint": "Agent is not online",
+    "statusActive": "Active",
+    "auditAction": {
+      "integration": {
+        "create": "통합 생성",
+        "update": "통합 업데이트",
+        "delete": "통합 삭제",
+        "resync": "통합 재동기화"
+      },
+      "agent": {
+        "rotate_code": "페어링 코드 갱신",
+        "disconnect": "에이전트 연결 해제"
+      },
+      "user": {
+        "change_password": "비밀번호 변경",
+        "disable": "사용자 비활성화",
+        "enable": "사용자 활성화",
+        "reset_password": "비밀번호 재설정",
+        "verify_email": "이메일 인증"
+      },
+      "device": {
+        "resync": "기기 재동기화"
+      },
+      "maintenance": {
+        "enabled": "유지보수 활성화",
+        "disabled": "유지보수 비활성화"
+      }
+    },
+    "risk": "리스크",
+    "riskDesc": "남용 신호 한눈에 보기: 가입, 발송량, 로그인 실패, 차단",
+    "riskRegistrations24h": "가입 (24시간)",
+    "riskRegistrations7d": "가입 (7일)",
+    "riskUnverified": "미인증 계정",
+    "riskOldest": "최장 {n}시간",
+    "riskFailedLogins": "로그인 실패 (24시간)",
+    "riskEmailsToday": "오늘 발송",
+    "riskBlocked": "차단됨",
+    "riskRateLimited": "429 (재시작 이후)",
+    "riskPow": "PoW 난이도",
+    "riskIpBans": "활성 IP 차단",
+    "riskTopIps": "로그인 실패 상위 IP (24시간)",
+    "riskTopEmails": "대상 이메일 상위 (24시간)",
+    "riskNoData": "최근 24시간 실패 없음",
+    "riskTargets": "대상",
+    "riskBan": "차단",
+    "riskViewAll": "차단 관리",
+    "mailer": {
+      "title": "이메일 및 가입 제어",
+      "desc": "런타임 킬 스위치, 경로별 일일 예산, PoW 난이도 — 즉시 적용, 재시작 후에도 유지.",
+      "switchTitle": "발신 이메일",
+      "switchDesc": "끄기 = 확인/재발송/재설정 메일 미발송 (가입은 가능, 계정은 미인증 상태, 비밀번호 재설정은 503).",
+      "on": "켜짐",
+      "off": "꺼짐",
+      "turnOff": "발송 중지",
+      "turnOn": "발송 재개",
+      "limitsTitle": "일일 예산",
+      "limitsDesc": "경로별 UTC 일일 한도. 0 = 무제한. 소진 시 해당 경로는 메일 비활성화와 동일하게 동작.",
+      "limitRegister": "가입 확인 메일",
+      "limitResend": "확인 메일 재발송",
+      "limitReset": "비밀번호 재설정",
+      "save": "예산 저장",
+      "saved": "예산이 업데이트되었습니다",
+      "sentToday": "오늘 발송",
+      "blockedToday": "오늘 차단",
+      "mailerUpdated": "이메일 스위치가 업데이트되었습니다",
+      "powTitle": "가입 PoW 난이도",
+      "powDesc": "봇 공격 시 상향 (6–7 ≈ 비용 256–4096배). 새 챌린지에만 적용, 0이면 PoW 완전 비활성화.",
+      "powSave": "난이도 업데이트",
+      "powSaved": "PoW 난이도가 업데이트되었습니다"
+    },
+    "ipBans": {
+      "title": "IP 차단",
+      "desc": "레이트 리밋과 동일한 클라이언트 IP 기준의 앱 계층 차단. 정확한 IP 또는 CIDR. 만료 시 자동 무효.",
+      "target": "IP 또는 CIDR",
+      "targetPlaceholder": "예: 203.0.113.5 또는 198.51.100.0/24",
+      "reason": "사유 (선택)",
+      "ttl": "기간",
+      "ttl1h": "1시간",
+      "ttl24h": "24시간",
+      "ttl7d": "7일",
+      "ttlPermanent": "영구",
+      "add": "차단",
+      "added": "차단되었습니다",
+      "removed": "차단이 해제되었습니다",
+      "remove": "해제",
+      "empty": "차단 없음",
+      "expires": "만료",
+      "permanent": "영구",
+      "expiredTag": "만료됨",
+      "colTarget": "대상",
+      "colReason": "사유",
+      "colCreated": "생성",
+      "colExpires": "만료",
+      "colActions": "작업",
+      "selfBan": "자신의 IP는 차단할 수 없습니다"
+    }
   },
   "theme": {
     "light": "...",
@@ -208,7 +488,9 @@
     "VALIDATION_FAILED": "...",
     "INTERNAL_ERROR": "...",
     "EMAIL_NOT_VERIFIED": "로그인 전 이메일을 확인하세요",
-    "INVALID_TOKEN": "이 링크는 유효하지 않거나 만료되었습니다"
+    "INVALID_TOKEN": "이 링크는 유효하지 않거나 만료되었습니다",
+    "SERVICE_UNAVAILABLE": "This service is temporarily unavailable",
+    "IP_BLOCKED": "해당 IP 주소는 차단되었습니다"
   },
   "validation": {
     "required": "...",
@@ -224,15 +506,234 @@
     "name": "...",
     "email": "...",
     "password": "...",
-    "mac_encrypted": "...",
-    "config.uid": "...",
-    "config.topic_prefix": "..."
+    "mac_encrypted": "..."
   },
   "device": {
     "synced": "동기화됨",
     "syncing": "동기화 중",
     "syncError": "동기화 오류",
     "agentOnline": "에이전트 온라인",
-    "agentOffline": "에이전트 오프라인"
+    "agentOffline": "에이전트 오프라인",
+    "name": "Device Name",
+    "namePlaceholder": "My Computer",
+    "macAddress": "MAC Address",
+    "macAddressPlaceholder": "AA:BB:CC:DD:EE:FF",
+    "description": "Description",
+    "descriptionPlaceholder": "Office Desktop",
+    "wake": "Wake",
+    "waking": "Waking...",
+    "wakeSuccess": "Wake signal sent",
+    "wakeError": "Failed to send wake signal",
+    "create": "Add Device",
+    "edit": "Edit Device",
+    "save": "Save",
+    "saving": "Saving...",
+    "cancel": "Cancel",
+    "loading": "Loading devices...",
+    "delete": "Delete",
+    "deleteSuccess": "Device deleted",
+    "deleteFailed": "Failed to delete device",
+    "noDevices": "No devices found. Add one to get started.",
+    "encryptionHint": "MAC will be encrypted with your agent's public key. Server never sees plaintext.",
+    "invalidMac": "Invalid MAC address format (e.g. AA:BB:CC:DD:EE:FF)",
+    "connectorNotReady": "Agent is not connected yet. Pair it first.",
+    "macLockedOnEdit": "MAC cannot be changed after creation unless re-encrypting with a new key.",
+    "cloudNotObserved": "Waiting for cloud sync",
+    "cloudSyncing": "Syncing to cloud",
+    "cloudSynced": "Bemfa synced, voice wake available",
+    "cloudError": "Cloud sync failed: {error}",
+    "cloudNone": "Bemfa not enabled",
+    "driftDeleted": "Cloud topic was deleted, auto-recovered",
+    "driftRenamed": "Cloud name was modified, auto-recovered",
+    "wakeTimeout": "Wake timed out — agent did not respond in time",
+    "wakeFailed": "Wake failed: {message}",
+    "deleteDialogTitle": "Delete device",
+    "deleteDialogDesc": "Permanently remove \"{name}\"? Cloud topic will be cleaned up automatically. This cannot be undone.",
+    "quotaExceeded": "Device limit reached. You can have at most {max} devices. Remove an existing device first.",
+    "addDevice": "+ Add device",
+    "wakeUnavailable": "Wake unavailable",
+    "details": "장치 상세",
+    "detailIdentity": "식별",
+    "detailConnection": "연결",
+    "detailCloudSync": "클라우드 동기화",
+    "colMac": "MAC 주소",
+    "colDescription": "설명",
+    "colCreated": "생성일",
+    "colAgent": "에이전트",
+    "colLastSeen": "마지막 접속",
+    "colStatus": "상태",
+    "colLastSync": "마지막 동기화",
+    "colLastDrift": "마지막 드리프트",
+    "masked": "(마스킹됨)",
+    "noDescription": "—",
+    "never": "—",
+    "noDrift": "— (없음)",
+    "viewAgent": "에이전트 보기",
+    "connectorNotReadyLink": "에이전트 페이지로 →",
+    "gate": {
+      "agentPendingTitle": "먼저 에이전트를 연결하세요",
+      "agentPendingDesc": "기기의 MAC 주소는 에이전트 공개 키로 암호화되므로, 기기를 추가하려면 에이전트 페어링이 필요합니다.",
+      "quotaTitle": "기기 수가 상한에 도달했습니다",
+      "quotaDesc": "각 계정은 최대 {max}대까지 기기를 추가할 수 있습니다. 사용하지 않는 기기를 삭제하면 다시 추가할 수 있습니다.",
+      "insecureTitle": "보안 연결이 필요합니다",
+      "insecureDesc": "MAC 암호화는 브라우저의 Web Crypto API를 사용하므로 HTTPS 또는 localhost 접근이 필요합니다.",
+      "cta": "에이전트 연결",
+      "dismiss": "확인"
+    },
+    "notice": {
+      "pendingTitle": "에이전트가 아직 페어링되지 않았습니다",
+      "pendingDesc": "기기가 웨이크 명령을 수신하려면 페어링된 에이전트가 필요합니다.",
+      "offlineTitle": "에이전트가 오프라인입니다",
+      "offlineDesc": "기기는 계속 추가할 수 있으며, 에이전트가 다시 연결되면 자동 동기화됩니다."
+    }
+  },
+  "status": {
+    "healthy": "시스템 정상",
+    "issues": "{count}개 문제 확인 필요",
+    "serviceDegraded": "서비스 저하"
+  },
+  "health": {
+    "healthy": "시스템 정상",
+    "issues": "{count}개 문제 확인 필요",
+    "serviceDegraded": "서비스 저하",
+    "devicesReady": "{count}개 기기 준비됨",
+    "deviceNeedsAttention": "{count}개 기기 주의 필요",
+    "devicesNeedAttention": "{count}개 기기 주의 필요",
+    "agentOnline": "Agent 온라인",
+    "agentOffline": "Agent 오프라인",
+    "agentsOffline": "{count}개 Agent 오프라인",
+    "cloudSyncOk": "클라우드 동기화 OK",
+    "cloudSyncError": "클라우드 동기화 오류",
+    "suspiciousLogin": "의심스러운 로그인: {ip}에서 {count}회 실패",
+    "integrationError": "{count}개 통합 오류",
+    "moreIssues": "+ {count}개 추가 문제"
+  },
+  "maintenance": {
+    "banner": "예정된 유지보수 중 — 일부 기능이 제한될 수 있습니다"
+  },
+  "empty": {
+    "devices": "기기이 없습니다",
+    "devicesDesc": "첫 기기를 추가하여 원격 켜기를 시작하세요",
+    "addDevice": "기기 추가",
+    "wakes": "켜기 기록이 없습니다",
+    "wakesDesc": "기기를 켜면 여기에 표시됩니다",
+    "wakesCta": "기기로 →",
+    "integrations": "연결된 통합 없음",
+    "integrationsDesc": "Bemfa 연결하여 음성 제어 활성화",
+    "users": "사용자를 찾을 수 없습니다",
+    "activity": "활동이 없습니다",
+    "activityDesc": "로그인 이벤트와 관리 작업이 여기에 표시됩니다",
+    "agents": "Agent를 찾을 수 없습니다",
+    "adminDevices": "기기를 찾을 수 없습니다",
+    "adminIntegrations": "통합을 찾을 수 없습니다",
+    "adminWakes": "켜기 기록을 찾을 수 없습니다",
+    "searchNoResults": "\"{query}\"에 대한 결과 없음",
+    "onboarding": {
+      "step1": "에이전트 연결",
+      "step2": "기기 추가",
+      "step3": "원격 부팅",
+      "desc": "에이전트는 홈 네트워크에서 실행되며 웨이크 명령을 기기에 전달하는 상주 프로그램입니다."
+    }
+  },
+  "landing": {
+    "nav": {
+      "howItWorks": "작동 방식",
+      "security": "보안",
+      "deploy": "배포",
+      "signIn": "로그인",
+      "menu": "메뉴"
+    },
+    "hero": {
+      "title": "어디서든, 집의 네트워크를 깨우세요.",
+      "subtitle": "밖에서 보낸 암호문 하나가 구름을 건너면, 집의 머신이 켜집니다.",
+      "facts": "포트 개방 없음 · 내부망 노출 없음 · 서버는 암호문만 봄",
+      "ctaPrimary": "시작하기",
+      "ctaGithub": "GitHub",
+      "diagramAlt": "토폴로지: 브라우저가 RSA로 암호화한 MAC을 TLS로 2 GB VPS의 WakeWake 서버에 보내고, 집의 agent는 아웃바운드 SSE 연결을 유지하며 UDP 매직 패킷을 LAN에 브로드캐스트해 기기를 깨웁니다",
+      "noteBrowser": "MAC 평문은 브라우저 밖으로 나가지 않음",
+      "noteServer": "서버는 암호문만 봄",
+      "noteAgent": "아웃바운드 전용 · 인바운드 포트 없음",
+      "noteDevice": "점등 = 기상"
+    },
+    "hops": {
+      "kicker": "작동 방식",
+      "title": "한 번의 wake, 정확히 세 홉",
+      "hop1": {
+        "title": "브라우저에서 암호화",
+        "body": "브라우저가 agent 공개 키로 MAC을 암호화합니다. 수신부터 저장까지 서버는 암호문만 봅니다."
+      },
+      "hop2": {
+        "title": "agent는 밖으로, 그리고 밖으로만",
+        "body": "agent는 아웃바운드 SSE 연결을 유지하고, 명령은 그 연결을 타고 집에 도착합니다. 집을 가리키는 인바운드 포트는 없습니다 — 라우터 설정 제로."
+      },
+      "hop3": {
+        "title": "매직 패킷이 불을 켭니다",
+        "body": "agent가 MAC을 복호화해 LAN에 매직 패킷을 브로드캐스트합니다. 스캔·포워딩·프록시는 결코 하지 않습니다."
+      }
+    },
+    "trust": {
+      "kicker": "신뢰",
+      "title": "가장 어려운 질문부터",
+      "q1": "데이터베이스 전체가 털리면?",
+      "a1": "가져갈 게 없습니다. MAC은 브라우저에서 암호화되고, DB에는 RSA-OAEP 암호문만 있습니다. 개인 키는 agent 로컬 디스크에만 존재합니다.",
+      "q2": "집에서 포트 개방이나 공인 IP가 필요한가요?",
+      "a2": "둘 다 필요 없습니다. agent는 아웃바운드로만 접속하므로 집을 가리키는 인바운드 구멍이 없습니다. 라우터는 그대로.",
+      "q3": "서버가 완전히 침해되면 최악은?",
+      "a3": "이미 등록된 기기의 전원을 켜기 위해 옛 암호문을 재생하는 것이 고작입니다. MAC을 읽거나, 새 기기를 위조하거나, LAN에 들어올 수 없습니다.",
+      "q4": "내부망의 다른 기기는 영향을 받나요?",
+      "a4": "받지 않습니다. agent는 브로드캐스트 매직 패킷만 보냅니다 — 스캔·포워딩·프록시 없음."
+    },
+    "deploy": {
+      "kicker": "배포",
+      "title": "세 개의 명령으로, 당신의 VPS에서",
+      "body": "하나의 멀티 아키텍처 이미지를 Caddy가 받칩니다. 마이그레이션과 초기 admin은 시작 시 자동 실행 — 잊을 단계가 없습니다.",
+      "terminalLabel": "compose · 2 GB VPS면 충분",
+      "chip1": "단일 이미지 · amd64 + arm64",
+      "chip2": "시작 시 자동 마이그레이션",
+      "chip3": "멱등적 bootstrap admin"
+    },
+    "why": {
+      "kicker": "WakeWake를 선택하는 이유",
+      "title": "플랫폼 없이, 하드웨어 업그레이드 없이, 포트 개방 없이",
+      "item1": {
+        "title": "인바운드 포트 제로",
+        "body": "agent는 아웃바운드 연결만 사용합니다. 공유기 설정이 필요 없고 내부망은 노출되지 않습니다."
+      },
+      "item2": {
+        "title": "종단간 암호화",
+        "body": "MAC 주소는 브라우저에서 암호화되고 키는 집에서 생성됩니다. 서버는 암호문만 봅니다."
+      },
+      "item3": {
+        "title": "작은 서버면 충분",
+        "body": "2 GB VPS면 충분합니다. 컨테이너 하나면 끝입니다."
+      },
+      "item4": {
+        "title": "하나의 이미지로 어디서나",
+        "body": "멀티 아키텍처 단일 이미지. x86이든 ARM이든."
+      },
+      "item5": {
+        "title": "완전한 웨이크 기록",
+        "body": "누가, 언제, 어떤 기기를 깨웠는지 모두 기록됩니다."
+      },
+      "item6": {
+        "title": "그룹과 메모",
+        "body": "기기를 그룹과 메모로 정리하세요."
+      },
+      "item7": {
+        "title": "음성 제어",
+        "body": "Bemfa 연동으로 음성으로 기기를 깨우세요."
+      },
+      "item8": {
+        "title": "오픈소스 & 자체 호스팅",
+        "body": "AGPL-3.0. 데이터는 당신 손에."
+      }
+    },
+    "closing": {
+      "line": "세 개의 명령으로 시작하세요."
+    },
+    "footer": {
+      "docs": "아키텍처",
+      "selfHosted": "self-hosted"
+    }
   }
 }

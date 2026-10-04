@@ -12,7 +12,14 @@ export const adminKeys = {
   agents: ['admin', 'agents'] as const,
   devices: ['admin', 'devices'] as const,
   wakes: ['admin', 'wakes'] as const,
+  integrations: ['admin', 'integrations'] as const,
+  activity: ['admin', 'activity'] as const,
+  maintenance: ['admin', 'maintenance'] as const,
   auditLog: ['admin', 'audit-log'] as const,
+  mailer: ['admin', 'mailer'] as const,
+  pow: ['admin', 'pow'] as const,
+  ipBans: ['admin', 'ip-bans'] as const,
+  risk: ['admin', 'risk'] as const,
 }
 
 // ---- 统计 ----
@@ -23,7 +30,12 @@ export function useAdminStats() {
 
 // ---- 跨用户 agent 列表 ----
 
-export function useAdminAgents(params?: { user_id?: number; page?: number; page_size?: number }) {
+export function useAdminAgents(params?: {
+  user_id?: number
+  q?: string
+  page?: number
+  page_size?: number
+}) {
   return useQuery({
     queryKey: [...adminKeys.agents, params ?? {}],
     queryFn: () => api.admin.listAgents(params),
@@ -35,6 +47,7 @@ export function useAdminAgents(params?: { user_id?: number; page?: number; page_
 export function useAdminDevices(params?: {
   user_id?: number
   cloud_status?: 'not_observed' | 'syncing' | 'synced' | 'error' | 'no_integration'
+  q?: string
   page?: number
   page_size?: number
 }) {
@@ -44,12 +57,71 @@ export function useAdminDevices(params?: {
   })
 }
 
-// ---- 跨用户 wake 审计 ----
+// ---- 跨用户 wake 审计（offset 分页，§9.9）----
 
-export function useAdminWakes(params?: { user_id?: number; before?: string; page_size?: number }) {
+export function useAdminWakes(params?: {
+  user_id?: number
+  q?: string
+  wake_type?: string
+  result?: string
+  since?: string
+  until?: string
+  page?: number
+  page_size?: number
+}) {
   return useQuery({
     queryKey: [...adminKeys.wakes, params ?? {}],
     queryFn: () => api.admin.listWakes(params),
+  })
+}
+
+// ---- 跨用户 integration 列表（§9.8）----
+
+export function useAdminIntegrations(params?: {
+  user_id?: number
+  status?: string
+  q?: string
+  page?: number
+  page_size?: number
+}) {
+  return useQuery({
+    queryKey: [...adminKeys.integrations, params ?? {}],
+    queryFn: () => api.admin.listIntegrations(params),
+  })
+}
+
+// ---- Activity 统一时间线（§9.5）----
+
+export function useAdminActivity(params?: {
+  kind?: 'login' | 'audit'
+  result?: 'success' | 'failed'
+  q?: string
+  since?: string
+  until?: string
+  page?: number
+  page_size?: number
+}) {
+  return useQuery({
+    queryKey: [...adminKeys.activity, params ?? {}],
+    queryFn: () => api.admin.listActivity(params),
+  })
+}
+
+// ---- 维护模式（§9.10）----
+
+export function useMaintenanceStatus() {
+  return useQuery({
+    queryKey: adminKeys.maintenance,
+    queryFn: () => api.admin.getMaintenance(),
+  })
+}
+
+export function useSetMaintenance() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { enabled: boolean; mode: string; message?: string }) =>
+      api.admin.setMaintenance(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'maintenance'] }),
   })
 }
 
@@ -109,5 +181,76 @@ export function useDisconnectAgent() {
   return useMutation({
     mutationFn: (id: number) => api.admin.disconnectAgent(id),
     onSuccess: invalidate,
+  })
+}
+
+// ---- 风控运行时控制（admin-risk-controls WRFC）----
+
+export function useMailerStatus() {
+  return useQuery({ queryKey: adminKeys.mailer, queryFn: () => api.admin.getMailer() })
+}
+
+export function useSetMailer() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: {
+      enabled?: boolean
+      limits?: { register: number; resend: number; reset: number }
+    }) => api.admin.setMailer(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminKeys.mailer })
+      qc.invalidateQueries({ queryKey: adminKeys.risk })
+    },
+  })
+}
+
+export function usePowStatus() {
+  return useQuery({ queryKey: adminKeys.pow, queryFn: () => api.admin.getPow() })
+}
+
+export function useSetPow() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (difficulty: number) => api.admin.setPow(difficulty),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminKeys.pow })
+      qc.invalidateQueries({ queryKey: adminKeys.risk })
+    },
+  })
+}
+
+export function useIpBans() {
+  return useQuery({ queryKey: adminKeys.ipBans, queryFn: () => api.admin.listIpBans() })
+}
+
+export function useAddIpBan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { target: string; reason?: string; ttl_hours?: number | null }) =>
+      api.admin.addIpBan(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminKeys.ipBans })
+      qc.invalidateQueries({ queryKey: adminKeys.risk })
+    },
+  })
+}
+
+export function useRemoveIpBan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.admin.removeIpBan(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminKeys.ipBans })
+      qc.invalidateQueries({ queryKey: adminKeys.risk })
+    },
+  })
+}
+
+export function useRiskOverview() {
+  return useQuery({
+    queryKey: adminKeys.risk,
+    queryFn: () => api.admin.risk(),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   })
 }

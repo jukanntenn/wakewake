@@ -7,6 +7,7 @@ use wakewake_agent::bemfa::{
     CreateTopicParams, V2Credentials, compute_k4, device_topic, is_owned_topic,
     parse_did_from_topic,
 };
+use wakewake_agent::config::BemfaSettings;
 use wiremock::matchers::{body_partial_json, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -275,7 +276,9 @@ async fn all_topic_error_message_includes_body_on_parse_failure() {
 async fn bemfa_real_contract_probe() {
     let client = reqwest::Client::new();
     let uid = "4d9ec352e0376f2110a0c601a2857225"; // .local/bemfa/api_device.md 公开示例 uid
-    let result = wakewake_agent::bemfa::list_all_topics_detail(&client, uid).await;
+    let result =
+        wakewake_agent::bemfa::list_all_topics_detail(&client, &BemfaSettings::default(), uid)
+            .await;
     assert!(result.is_ok(), "巴法 API 结构漂移！err: {result:?}");
 }
 

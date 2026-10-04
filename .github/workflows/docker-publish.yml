@@ -1,0 +1,212 @@
+# 发布 Docker 镜像到 Docker Hub。
+#
+# 惰性：仅 `git tag v*` 触发。在第一个发布 tag 之前什么都不做，符合"先手动后 CI"
+# （手动期用 docker/build.py --push --registry docker.io --image jukanntenn/wakewake 直接推）。
+#
+# Tag 约定（SemVer 2.0.0，https://semver.org —— 预发布必须连字符，v0.1.3rc1 非法）：
+#   git tag v0.1.3      -> 0.1.3 + latest（正式版滚动 latest）
+#   git tag v0.1.3-rc.1 -> 0.1.3-rc.1（预发布不产 latest）
+#   main 浮动 tag 不在此产（LAN registry 由 docker/build.py 维护，见 devops/README.md）。
+# staging/prod ansible 钉 wakewake_version 指向精确版本（v0.1.3 -> image:...:0.1.3）。
+#
+# 多平台走原生 runner（无 QEMU）：amd64 在 ubuntu-latest、arm64 在 ubuntu-24.04-arm
+# （public repo 免费）各推临时 build-<arch> tag，merge job 用 imagetools 合成
+# manifest list，cleanup job best-effort 删临时 tag。
+name: Publish Docker image
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: jukanntenn/wakewake
+  AGENT_IMAGE: jukanntenn/wakewake-agent
+
+jobs:
+  meta:
+    name: Resolve tags
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tags: ${{ steps.meta.outputs.tags }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable={{!is_prerelease}}
+
+  build:
+    name: Build & push (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    needs: meta
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Log in to Docker Hub
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push (${{ matrix.arch }})
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ${{ env.IMAGE }}:build-${{ matrix.arch }}
+          # 烙进 /api/v1/version（部署健康校验比对用）。
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+
+  merge:
+    name: Merge multi-arch manifests
+    runs-on: ubuntu-latest
+    needs: [meta, build]
+    timeout-minutes: 10
+    steps:
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Log in to Docker Hub
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Create manifest lists
+        env:
+          TAGS: ${{ needs.meta.outputs.tags }}
+        run: |
+          while IFS= read -r tag; do
+            [ -z "$tag" ] && continue
+            docker buildx imagetools create \
+              -t "$tag" \
+              "${{ env.IMAGE }}:build-amd64" \
+              "${{ env.IMAGE }}:build-arm64"
+          done <<< "$TAGS"
+
+  # best-effort：Docker Hub token 需带 delete 权限，失败不阻塞发布。
+  cleanup:
+    name: Remove temporary build tags
+    runs-on: ubuntu-latest
+    needs: merge
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: Delete build-<arch> tags
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          for arch in amd64 arm64; do
+            curl -sS -o /dev/null -X DELETE \
+              -H "Authorization: Bearer $DOCKERHUB_TOKEN" \
+              "https://hub.docker.com/v2/repositories/${{ env.IMAGE }}/tags/build-$arch/" || true
+          done
+
+  # === agent 生产镜像（docker/agent-prod.Dockerfile，specs/backend/agent-distribution.md）===
+  # 与主镜像同 tag 语义、同原生 runner 模式；临时 tag 独立仓库无冲突。
+
+  agent-build:
+    name: Build & push agent (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    needs: meta
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Log in to Docker Hub
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push agent (${{ matrix.arch }})
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: docker/agent-prod.Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ${{ env.AGENT_IMAGE }}:build-${{ matrix.arch }}
+          cache-from: type=gha,scope=agent-${{ matrix.arch }}
+          cache-to: type=gha,scope=agent-${{ matrix.arch }},mode=max
+          provenance: false
+          sbom: false
+
+  agent-merge:
+    name: Merge agent multi-arch manifests
+    runs-on: ubuntu-latest
+    needs: [meta, agent-build]
+    timeout-minutes: 10
+    steps:
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Log in to Docker Hub
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Create manifest lists
+        env:
+          TAGS: ${{ needs.meta.outputs.tags }}
+        run: |
+          # meta 输出的是主镜像完整引用（jukanntenn/wakewake:<tag>）——
+          # 剥镜像名，重挂到 agent 仓库。
+          while IFS= read -r ref; do
+            [ -z "$ref" ] && continue
+            tag="${ref##*:}"
+            docker buildx imagetools create \
+              -t "${{ env.AGENT_IMAGE }}:$tag" \
+              "${{ env.AGENT_IMAGE }}:build-amd64" \
+              "${{ env.AGENT_IMAGE }}:build-arm64"
+          done <<< "$TAGS"
+
+  agent-cleanup:
+    name: Remove agent temporary build tags
+    runs-on: ubuntu-latest
+    needs: agent-merge
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: Delete agent build-<arch> tags
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          for arch in amd64 arm64; do
+            curl -sS -o /dev/null -X DELETE \
+              -H "Authorization: Bearer $DOCKERHUB_TOKEN" \
+              "https://hub.docker.com/v2/repositories/${{ env.AGENT_IMAGE }}/tags/build-$arch/" || true
+          done

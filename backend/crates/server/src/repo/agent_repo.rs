@@ -241,6 +241,20 @@ pub async fn bump_projection_version(
     Ok(row.map_or(0, |(v,)| v))
 }
 
+/// 事务内锁定 agent 父行（V3-38B：设备配额并发创建的串行化锚点）。
+/// 1:1 模型下每个 user 恰好一个 agent，锁住 agent 行即串行化该 user 的所有设备创建，
+/// 使随后的 count_for_update 读到已提交的设备行，杜绝 0 行锁不住导致的超额。
+pub async fn lock_for_update(
+    executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>,
+    id: i64,
+) -> Result<(), RepoError> {
+    let _ = sqlx::query("SELECT id FROM agents WHERE id = $1 FOR UPDATE")
+        .bind(id)
+        .fetch_optional(executor)
+        .await?;
+    Ok(())
+}
+
 /// 按 did 查所属 agent_id 并 bump 其 projection_version（admin resync 设备用）。
 pub async fn bump_projection_version_by_device(pool: &PgPool, did: Uuid) -> Result<i64, RepoError> {
     let row: Option<(i64,)> = sqlx::query_as(

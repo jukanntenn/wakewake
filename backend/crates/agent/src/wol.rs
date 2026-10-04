@@ -92,8 +92,9 @@ pub async fn send_wol(
     packet_count: u32,
     packet_delay: Duration,
 ) -> Result<String, String> {
-    let mac_str = crypto::decrypt(private_key, mac_encrypted_base64)
-        .map_err(|e| format!("RSA decryption failed: {e}"))?;
+    // crypto::decrypt 的 CryptoError Display 已含 "RSA decryption failed: {inner}"，
+    // 此处直接 to_string 即可，避免双重前缀（UX-51）。
+    let mac_str = crypto::decrypt(private_key, mac_encrypted_base64).map_err(|e| e.to_string())?;
     let mac = parse_mac(&mac_str).map_err(|e| format!("invalid MAC format: {e}"))?;
     tracing::info!(
         event = "wol_decrypted",
@@ -222,6 +223,7 @@ mod tests {
         )
         .await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("RSA decryption failed"));
+        // 非 base64 输入在解密前就被拒（crypto::DecryptError::Base64 的文案）。
+        assert!(result.unwrap_err().contains("base64 decode failed"));
     }
 }

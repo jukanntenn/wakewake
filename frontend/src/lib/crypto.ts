@@ -108,12 +108,14 @@ export function maskMACAddress(mac: string): string {
   return `${parts[0]}:**:**:**:**:${parts[5]}`
 }
 
+// MAC 格式单一来源：isValidMAC 与表单即时校验（agent-onboarding.md）共用。
+export const MAC_REGEX = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/
+
 /**
  * Validates MAC address format
  */
 export function isValidMAC(mac: string): boolean {
-  const pattern = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/
-  return pattern.test(mac)
+  return MAC_REGEX.test(mac)
 }
 
 /**

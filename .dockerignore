@@ -40,6 +40,8 @@ wakewake.toml
 backend/target/
 backend/.sqlx/
 .local/
+.wakewake/
+**/*.local.toml
 .fa/
 .iflow/
 .kilocode/

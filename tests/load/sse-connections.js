@@ -86,10 +86,10 @@ function asciiSummary(data) {
   const m = data.metrics
   return `
 ===== S1 SSE 容量压测摘要 =====
-VU 峰值: ${data.state?.vuCountMax || 'N/A'}
-http_req_failed: ${m.http_req_failed?.values?.rate?.toFixed(4) || 'N/A'}
-checks rate: ${m.checks?.values?.rate?.toFixed(4) || 'N/A'}
-http_req_duration p95: ${m.http_req_duration?.values?.['p(95)']?.toFixed(0) || 'N/A'}ms
+VU 峰值: ${m.vus_max?.values?.max ?? 'N/A'}
+http_req_failed: ${m.http_req_failed?.values?.rate?.toFixed(4) ?? 'N/A'}
+checks rate: ${m.checks?.values?.rate?.toFixed(4) ?? 'N/A'}
+http_req_duration p50/p95: ${m.http_req_duration?.values?.['p(50)']?.toFixed?.(0) || 'N/A'}/${m.http_req_duration?.values?.['p(95)']?.toFixed?.(0) || 'N/A'}ms
 data_received: ${(m.data_received?.values?.count / 1024 / 1024)?.toFixed(2) || 'N/A'} MB
 data_sent: ${(m.data_sent?.values?.count / 1024 / 1024)?.toFixed(2) || 'N/A'} MB
 `
@@ -101,12 +101,12 @@ function markdownSummary(data) {
 
 | 指标 | 值 |
 |---|---|
-| VU 峰值 | ${data.state?.vuCountMax || 'N/A'} |
-| http_req_failed | ${m.http_req_failed?.values?.rate?.toFixed(4) || 'N/A'} |
-| checks rate | ${m.checks?.values?.rate?.toFixed(4) || 'N/A'} |
-| http_req_duration p95 | ${m.http_req_duration?.values?.['p(95)']?.toFixed(0) || 'N/A'} ms |
-| data_received | ${(m.data_received?.values?.count / 1024 / 1024)?.toFixed(2) || 'N/A'} MB |
-| data_sent | ${(m.data_sent?.values?.count / 1024 / 1024)?.toFixed(2) || 'N/A'} MB |
+| VU 峰值 | ${m.vus_max?.values?.max ?? 'N/A'} |
+| http_req_failed | ${m.http_req_failed?.values?.rate?.toFixed(4) ?? 'N/A'} |
+| checks rate | ${m.checks?.values?.rate?.toFixed(4) ?? 'N/A'} |
+| http_req_duration p50/p95 | ${m.http_req_duration?.values?.['p(50)']?.toFixed?.(0) ?? 'N/A'}/${m.http_req_duration?.values?.['p(95)']?.toFixed?.(0) ?? 'N/A'} ms |
+| data_received | ${(m.data_received?.values?.count / 1024 / 1024)?.toFixed(2) ?? 'N/A'} MB |
+| data_sent | ${(m.data_sent?.values?.count / 1024 / 1024)?.toFixed(2) ?? 'N/A'} MB |
 
 详见 regression.md（线性回归 + 红线断言）。
 `

@@ -1,18 +1,12 @@
 # WakeWake
 
-**English** | [简体中文](./README_zh.md)
+English | [简体中文](README.zh.md)
 
-A self-hosted **Wake-on-LAN (WoL)** service. Send a magic packet to any device
-on your home network from a browser, anywhere — without exposing the LAN to the
-internet.
+A self-hosted **Wake-on-LAN (WoL)** service. Send a magic packet to any device on your home network from a browser, anywhere — without exposing the LAN to the internet.
 
-WakeWake is built as a **Rust** backend (axum + sqlx + tokio) with a standalone
-**WoL agent** you run inside the LAN, plus a **Next.js 16** static frontend,
-shipped as one multi-arch Docker image behind Caddy. It is designed to hold
-**100,000 concurrent agents** on a single 2 GB VPS.
+WakeWake is built as a **Rust** backend (axum + sqlx + tokio) with a standalone **WoL agent** you run inside the LAN, plus a **Next.js 16** static frontend, shipped as one multi-arch Docker image behind Caddy. It is designed to hold **100,000 concurrent agents** on a single 2 GB VPS.
 
-> **Status:** early. No tagged release yet — currently in self-hosted
-> "dogfooding". APIs and config may change.
+> **Status:** early. No tagged release yet — currently in self-hosted "dogfooding". APIs and config may change.
 
 ---
 
@@ -48,32 +42,23 @@ shipped as one multi-arch Docker image behind Caddy. It is designed to hold
 
 Core design principles:
 
-- **The agent is stateless** — only `pairing_code`, `server_url`, and an RSA
-  keypair on disk; full state is pushed on connect.
+- **The agent is stateless** — only `pairing_code`, `server_url`, and an RSA keypair on disk; full state is pushed on connect.
 - **The agent only dials out** — no inbound holes from the server.
-- **The server never sees the MAC in plaintext** — MACs are RSA-OAEP + SHA-256
-  encrypted in the browser; only the agent holds the private key.
-- **PostgreSQL is the single source of truth**; the in-memory command channel
-  is ephemeral.
+- **The server never sees the MAC in plaintext** — MACs are RSA-OAEP + SHA-256 encrypted in the browser; only the agent holds the private key.
+- **PostgreSQL is the single source of truth**; the in-memory command channel is ephemeral.
 
-See [`specs/architecture/`](./specs/architecture/) for the full topology,
-component responsibilities, and data-flow diagrams.
+See the [`specs/`](specs/README.md) index for the design specs.
 
 ## Features
 
 - **Wake-on-LAN** from any browser, with device grouping and wake history
 - **Standalone Rust agent** — SSE client, RSA key management, magic-packet WoL
-- **End-to-end MAC encryption** (RSA-OAEP + SHA-256) via Web Crypto in the
-  browser — the server is a ciphertext relay and never holds plaintext MACs
-- **Bemfa MQTT integration** — bridge devices to the [Bemfa](https://bemfa.com)
-  IoT cloud (device-sync-v3 lifecycle with bounded eventual consistency)
-- **Auth** — JWT access + rotating refresh tokens, bcrypt, stateless
-  HMAC password-reset, Proof-of-Work anti-abuse on email endpoints
+- **End-to-end MAC encryption** (RSA-OAEP + SHA-256) via Web Crypto in the browser — the server is a ciphertext relay and never holds plaintext MACs
+- **Bemfa MQTT integration** — bridge devices to the [Bemfa](https://bemfa.com) IoT cloud (device-sync-v3 lifecycle with bounded eventual consistency)
+- **Auth** — JWT access + rotating refresh tokens, bcrypt, stateless HMAC password-reset, Proof-of-Work anti-abuse on email endpoints
 - **i18n** — 8 locales (en, zh, ja, ko, de, fr, es, pt) via next-intl
-- **Multi-arch Docker** — one image for `linux/amd64` + `linux/arm64`, s6
-  process supervisor, Caddy for TLS (ACME) and static hosting
-- **Built for scale** — Rust async tasks (~1.2 KB/connection), SSE-first,
-  designed for 100k agents on a 2 GB VPS
+- **Multi-arch Docker** — one image for `linux/amd64` + `linux/arm64`, s6 process supervisor, Caddy for TLS (ACME) and static hosting
+- **Built for scale** — Rust async tasks (~1.2 KB/connection), SSE-first, designed for 100k agents on a 2 GB VPS
 
 ## Tech stack
 
@@ -128,49 +113,54 @@ pnpm lint && pnpm format:check
 cd e2e && pnpm test
 ```
 
-> **Note on dev tooling:** `devops/dev.py` orchestrates a Dockerized backend
-> for convenience. If you prefer, run the backend directly with `cargo run`
-> and the frontend with `pnpm dev`. See [`AGENTS.md`](./AGENTS.md) for the
-> canonical command reference.
+> **Note on dev tooling:** `devops/dev.py` starts the infrastructure (postgres + mailpit in Docker) and runs the backend (`cargo watch`) and frontend (`pnpm dev`) as host processes with hot reload. See [`AGENTS.md`](AGENTS.md) for the canonical command reference.
 
 ## Deployment
 
-WakeWake ships as a single all-in-one Docker image (frontend + Rust backend +
-Caddy, managed by s6-overlay) and a sidecar PostgreSQL. Multi-arch
-(`linux/amd64`, `linux/arm64`) builds are produced by
-[`docker/build.py`](./docker/build.py).
+WakeWake ships as a single all-in-one Docker image (frontend + Rust backend + Caddy, managed by s6-overlay) and a sidecar PostgreSQL. Multi-arch (`linux/amd64`, `linux/arm64`) builds are produced by [`docker/build.py`](docker/build.py).
 
 ```bash
-# 1. Configure environment
+# 1. Configure (app config + postgres credentials)
+cp docker/config.example.toml docker/config.toml
 cp docker/.env.example docker/.env
-#   → edit JWT_SIGNING_KEY, REFRESH_SIGNING_KEY, PASSWORD_RESET__SECRET
-#     (openssl rand -base64 32) and POSTGRES_PASSWORD
+#   → edit the 3 secrets in config.toml (openssl rand -base64 32),
+#     public_url, and POSTGRES_PASSWORD in .env
 
 # 2. Bring up the stack
 docker compose -f docker/docker-compose.yml up -d
 
 # 3. Open the app
-#   https://<your-host>:8443
+#   http://<your-host>:8443
 ```
 
-Migrations run automatically on server startup (`sqlx::migrate!`); there is no
-separate migration step. A bootstrap admin is created idempotently on first
-start (see `.env.example` → `WAKEWAKE_SECURITY__BOOTSTRAP_*`).
+Migrations run automatically on server startup (`sqlx::migrate!`); there is no separate migration step. A bootstrap admin is created idempotently on first start (see `backend/config.example.toml` → `WAKEWAKE_SECURITY__BOOTSTRAP_*`).
 
 ### The agent
 
-The agent (`wakewake-agent`) runs on a machine inside your LAN. Build and run
-it locally, or use the published image — see
-[`backend/crates/agent/README.md`](./backend/crates/agent/README.md) for the
-full guide (config file, env vars, CLI args, self-signed-TLS mode).
+The agent (`wakewake-agent`) runs on an always-on machine inside your LAN (same router as the devices you wake). Copy the one-line install command from your server's **agents page** (your origin and pairing code are embedded):
 
 ```bash
-cd backend
-cargo build --release -p wakewake-agent
-./target/release/wakewake-agent \
-  --server https://your-wakewake.example.com \
-  --pairing-code <code from the agents page>
+curl -fsSL https://raw.githubusercontent.com/jukanntenn/wakewake/main/install.sh \
+  | sh -s -- --server https://your-wakewake.example.com --code <pairing-code>
 ```
+
+The script downloads a musl-static binary (x86_64 / aarch64 / armv7), verifies the sha256, installs it, writes the config, and starts it in the foreground. Once verified, make it persistent:
+
+```bash
+sudo wakewake-agent service install        # bare metal: systemd, starts on boot
+```
+
+Or use Docker (**`--network host` is mandatory** — the WoL broadcast never leaves a bridge network):
+
+```bash
+docker run -d --name wakewake-agent --network host --restart unless-stopped \
+  -e WAKEWAKE_SERVER_URL=https://your-wakewake.example.com \
+  -e WAKEWAKE_PAIRING_CODE=<pairing-code> \
+  -v wakewake-agent-data:/data \
+  jukanntenn/wakewake-agent:latest
+```
+
+See [`backend/crates/agent/README.md`](backend/crates/agent/README.md) for the full guide (config file, env vars, CLI args, self-signed TLS via `tls.ca_cert`).
 
 ## Project structure
 
@@ -185,8 +175,8 @@ backend/
 frontend/       Next.js 16 app (static export)
 e2e/            Playwright (chromium; separate workspace)
 docker/         multi-arch Dockerfiles + build.py + compose
-devops/         dev.py + docker-compose + Caddyfile + ansible/
-specs/          design specs (architecture, api, database, testing)
+devops/         dev.py + dev-compose.yml (postgres + mailpit) + ansible/
+specs/          design specs (indexed by specs/README.md)
 .github/        CI workflows (lint / test / build / nightly e2e)
 ```
 
@@ -199,10 +189,8 @@ specs/          design specs (architecture, api, database, testing)
 | Frontend unit | Vitest + Testing Library + jsdom |
 | E2E | Playwright (chromium), nightly + on push to `main` |
 
-Test pyramid: ~70% unit / ~25% integration / ~5% e2e. The database, SSE Hub,
-and internal logic are never mocked; external HTTP (Bemfa, mailer) is. See
-[`specs/testing/`](./specs/testing/) for the strategy.
+Test pyramid: ~70% unit / ~25% integration / ~5% e2e. The database, SSE Hub, and internal logic are never mocked; external HTTP (Bemfa, mailer) is. See the [`specs/`](specs/README.md) index for what is specified today.
 
 ## License
 
-[GNU AGPL-3.0](./LICENSE). © wakewake contributors.
+[GNU AGPL-3.0](LICENSE). © wakewake contributors.

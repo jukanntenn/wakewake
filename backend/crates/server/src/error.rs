@@ -77,6 +77,14 @@ pub enum ErrorCode {
     InvalidToken, // 400 INVALID_TOKEN（密码重置 token 无效/过期，api-design.md Part 4）
     #[error("service unavailable")]
     ServiceUnavailable, // 503 SERVICE_UNAVAILABLE（mailer disabled 等）
+    #[error("maintenance: registration closed")]
+    MaintenanceRegistrationClosed, // 403 MAINTENANCE_REGISTRATION_CLOSED（维护模式 registration_disabled）
+    #[error("maintenance: readonly")]
+    MaintenanceReadonly, // 403 MAINTENANCE_READONLY（维护模式 readonly）
+    #[error("maintenance: full")]
+    MaintenanceFull, // 403 MAINTENANCE_FULL（维护模式 full）
+    #[error("ip blocked")]
+    IpBlocked, // 403 IP_BLOCKED（应用层 IP 封禁命中，admin-risk-controls WRFC）
     #[error("internal error")]
     Internal, // 500 INTERNAL_ERROR
 }
@@ -104,6 +112,10 @@ impl ErrorCode {
             Self::RateLimited => "RATE_LIMITED",
             Self::InvalidToken => "INVALID_TOKEN",
             Self::ServiceUnavailable => "SERVICE_UNAVAILABLE",
+            Self::MaintenanceRegistrationClosed => "MAINTENANCE_REGISTRATION_CLOSED",
+            Self::MaintenanceReadonly => "MAINTENANCE_READONLY",
+            Self::MaintenanceFull => "MAINTENANCE_FULL",
+            Self::IpBlocked => "IP_BLOCKED",
             Self::Internal => "INTERNAL_ERROR",
         }
     }
@@ -122,7 +134,11 @@ impl ErrorCode {
             | Self::AgentNotFound
             | Self::UserNotFound => StatusCode::NOT_FOUND,
             Self::UserExists | Self::Syncing | Self::IntegrationExists => StatusCode::CONFLICT,
-            Self::EmailNotVerified => StatusCode::FORBIDDEN,
+            Self::EmailNotVerified
+            | Self::MaintenanceRegistrationClosed
+            | Self::MaintenanceReadonly
+            | Self::MaintenanceFull
+            | Self::IpBlocked => StatusCode::FORBIDDEN,
             Self::InvalidToken => StatusCode::BAD_REQUEST,
             Self::QuotaExceeded => StatusCode::UNPROCESSABLE_ENTITY,
             // 202：不阻塞命令创建，命令将 60s expired（api-design.md Part 4）。
@@ -155,6 +171,10 @@ impl ErrorCode {
             Self::RateLimited => "Too many requests",
             Self::InvalidToken => "Invalid or expired token",
             Self::ServiceUnavailable => "Service unavailable",
+            Self::MaintenanceRegistrationClosed => "Registration is temporarily disabled",
+            Self::MaintenanceReadonly => "System is in read-only mode",
+            Self::MaintenanceFull => "System is under maintenance",
+            Self::IpBlocked => "Your IP address has been blocked",
             Self::Internal => "Internal server error",
         }
     }
@@ -206,6 +226,36 @@ impl From<RepoError> for AppError {
 impl From<sqlx::Error> for AppError {
     fn from(e: sqlx::Error) -> Self {
         Self::Internal(e.into())
+    }
+}
+
+/// garde 校验失败 → VALIDATION_FAILED + 字段级错误（A-08/A-08B）。
+/// garde 0.23 的 Error 只暴露 message 字符串，按文案推断泛化 code（min_length/max_length/invalid_format）。
+impl From<garde::Report> for AppError {
+    fn from(report: garde::Report) -> Self {
+        let field_errors: Vec<FieldError> = report
+            .iter()
+            .map(|(path, err)| FieldError {
+                field: path.to_string().into(),
+                code: garde_code(err.message()),
+                params: None,
+            })
+            .collect();
+        Self::Validation { field_errors }
+    }
+}
+
+/// 把 garde 规则文案映射为前端可 i18n 的泛化 code。
+fn garde_code(msg: &str) -> &'static str {
+    let lower = msg.to_ascii_lowercase();
+    if lower.contains("shorter") || lower.contains("at least") || lower.contains("too short") {
+        "min_length"
+    } else if lower.contains("longer") || lower.contains("at most") || lower.contains("too long") {
+        "max_length"
+    } else if lower.contains("email") {
+        "invalid_format"
+    } else {
+        "invalid_format"
     }
 }
 
@@ -273,5 +323,11 @@ mod tests {
         assert_eq!(ErrorCode::AgentOffline.code(), "AGENT_OFFLINE");
         assert_eq!(ErrorCode::QuotaExceeded.code(), "QUOTA_EXCEEDED");
         assert_eq!(ErrorCode::ProviderNotFound.code(), "PROVIDER_NOT_FOUND");
+        assert_eq!(ErrorCode::IpBlocked.code(), "IP_BLOCKED");
+        assert_eq!(ErrorCode::IpBlocked.status(), StatusCode::FORBIDDEN);
+        assert_eq!(
+            ErrorCode::IpBlocked.fallback_message(),
+            "Your IP address has been blocked"
+        );
     }
 }

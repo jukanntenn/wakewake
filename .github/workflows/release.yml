@@ -1,0 +1,51 @@
+# Agent 二进制发布到 GitHub Releases（specs/backend/agent-distribution.md）。
+#
+# 惰性：仅 `git tag v*` 触发（tag 约定见 docker-publish.yml 头部注释）。
+# 三目标 musl 静态（老 NAS 固件 glibc 免疫）：
+#   x86_64-unknown-linux-musl / aarch64-unknown-linux-musl / armv7-unknown-linux-musleabihf
+# 资产命名 $bin-$target.tar.gz（不含版本号）→ install.sh 用 releases/latest/download/ 稳定直链。
+# 跨目标交叉编译由 action 自动走 cross；danger-insecure-tls 绝不进发布资产（e2e 专用）。
+name: Release agent binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: taiki-e/create-gh-release-action@v1
+
+  upload-assets:
+    name: Upload ${{ matrix.target }}
+    needs: create-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+          - armv7-unknown-linux-musleabihf
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: wakewake-agent
+          manifest-path: backend/Cargo.toml
+          target: ${{ matrix.target }}
+          archive: $bin-$target
+          checksum: sha256

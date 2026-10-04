@@ -8,7 +8,8 @@
 # ============================================================
 # Stage 0: 前端构建（Next.js static export → frontend/out/）
 # ============================================================
-FROM node:22-alpine AS frontend
+# node 版本与 frontend/.nvmrc 对齐（本地 / CI / 镜像三处同一大版本）
+FROM node:24-alpine AS frontend
 WORKDIR /web
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 # CI=true 避免 pnpm depsStatusCheck 因 no TTY 报 ERR_PNPM_ABORTED_REMOVE_MODULES_DIR
@@ -47,6 +48,11 @@ COPY backend/ .
 RUN printf '' > /app/.cargo/config.toml
 # SQLX_OFFLINE=true 读 backend/.sqlx（无编译期宏，但保留 env 防 sqlx 启动期检查）
 ENV SQLX_OFFLINE=true
+# 部署校验用：option_env!("WAKEWAKE_GIT_SHA") 编译期烙进 /api/v1/version
+# （docker/build.py 与 CI 各自传 --build-arg GIT_SHA=<sha>）。必须在 chef cook 之后
+# 声明——ARG 值变化会打掉其后所有缓存层，放前面会让每次构建重编全部依赖（~3min）。
+ARG GIT_SHA
+ENV WAKEWAKE_GIT_SHA=${GIT_SHA}
 RUN cargo build --release --bin wakewake-server
 
 # ============================================================
@@ -76,9 +82,11 @@ RUN curl -fsSL "https://github.com/caddyserver/caddy/releases/download/${CADDY_V
 COPY docker/s6/cont-init.d /etc/cont-init.d
 COPY docker/s6/user-bundles.d /etc/s6-overlay/user-bundles.d
 COPY docker/s6/s6-rc.d /etc/s6-overlay/s6-rc.d
-# 烤进默认 Caddyfile（plain HTTP）；compose 可卷挂载覆盖（验收用 Caddyfile.local，
-# e2e 用 e2e/Caddyfile，生产/远程 dev 用 ansible 渲染的 Caddyfile）。
-COPY docker/Caddyfile /etc/caddy/Caddyfile
+# 烤进路由唯一真源（snippet，各环境 Caddyfile import 它）+ 默认 Caddyfile（plain HTTP）。
+# s6 caddy run 固定读 /app/Caddyfile（docker/s6/s6-rc.d/caddy/run）；compose 卷挂载
+# 各环境变体覆盖（本地验收 Caddyfile.local、e2e/Caddyfile、ansible 渲染的 Caddyfile）。
+COPY docker/caddy/routes.caddy /app/caddy/routes.caddy
+COPY docker/Caddyfile /app/Caddyfile
 COPY --from=builder /app/target/release/wakewake-server /app/wakewake-server
 COPY --from=frontend /web/out /app/frontend/out
 RUN mkdir -p /app/data && chmod +x /etc/cont-init.d/*.sh /etc/s6-overlay/s6-rc.d/*/run

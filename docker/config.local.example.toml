@@ -1,0 +1,167 @@
+# 本地验收配置模板（docker compose -f docker/docker-compose.local.yml）。
+#   cp config.local.example.toml config.local.toml   # 后者被 .gitignore 忽略
+#
+# 完整 schema 见 backend/config.example.toml，此处全部显式列出（默认值/占位符），
+# 便于验收时对照改单项。⚠️ CHANGE_ME_* 使用前必须替换。
+#
+# 挂载到容器 /app/config.toml（server 默认读取路径，s6 run 脚本无需参数）。
+# 三层覆盖（优先级高→低）：CLI 参数 > 环境变量 > 本文件 > 内置默认值。
+# 注意：app.public_url 与 [database] dsn 实际被 compose 的 env 覆盖
+# （WAKEWAKE_APP__PUBLIC_URL / WAKEWAKE_DATABASE__DSN，见 docker-compose.local.yml），
+# 此处仅为文档默认。
+
+# ============================================================
+# App（应用对外公网地址）
+# ============================================================
+# 本地验收：Caddy 自签 HTTPS 入口（宿主 localhost:8443）。
+# Env: WAKEWAKE_APP__PUBLIC_URL
+[app]
+public_url = "https://localhost:8443"
+
+# ============================================================
+# Server
+# ============================================================
+# 监听地址（容器内 0.0.0.0，由 Caddy 反代 127.0.0.1:8080）
+# Env: WAKEWAKE_SERVER__HOST
+# Default: 0.0.0.0
+[server]
+host = "0.0.0.0"
+# 监听端口
+# 不变量 8080：改这里必须同步镜像内路由 docker/caddy/routes.caddy 的 reverse_proxy。
+# Env: WAKEWAKE_SERVER__PORT
+# Default: 8080
+port = 8080
+# 信任反代头（X-Forwarded-For / X-Real-IP）：Caddy 反代场景保持 true
+# Env: WAKEWAKE_SERVER__TRUST_PROXY
+# Default: true
+trust_proxy = true
+# 权威客户端 IP 头（cloudflare-edge RFC）：本地验收无 CF，保持未设（XFF 口径）。
+# Env: WAKEWAKE_SERVER__CLIENT_IP_HEADER
+# Default: 未设置
+# client_ip_header = "CF-Connecting-IP"
+# 全局 SSE 连接上限（超出返 503；0 = 不限制）
+# Env: WAKEWAKE_SERVER__MAX_SSE_CONNECTIONS
+# Default: 2000
+max_sse_connections = 2000
+
+# ============================================================
+# Maintenance（维护模式，ui-ux-risk-control §8.4）
+# ============================================================
+# mode: registration_disabled / readonly / full（admin 始终放行）
+# Env: WAKEWAKE_MAINTENANCE__ENABLED / __MODE / __MESSAGE
+[maintenance]
+enabled = false
+mode = "registration_disabled"
+message = "Scheduled maintenance in progress"
+
+# ============================================================
+# Database
+# ============================================================
+# 通过共享 postgres-socket 命名卷走 Unix socket 连接兄弟 postgres 容器
+# （路径须匹配 postgres 默认 unix_socket_directories=/var/run/postgresql）。
+# ⚠️ 实际连接串以 docker-compose.local.yml 的 WAKEWAKE_DATABASE__DSN env 为准，
+# 此处仅为文档默认。改 DB 名/用户/密码去改 compose 的 POSTGRES_*。
+# Env: WAKEWAKE_DATABASE__DSN
+[database]
+dsn = "postgres:///wakewake_local?host=/var/run/postgresql&user=wakewake&password=wakewake&sslmode=disable"
+
+# ============================================================
+# JWT
+# ============================================================
+# ⚠️ 占位符：仅本地验收。生成命令：openssl rand -base64 32
+# Env: WAKEWAKE_JWT__SIGNING_KEY / WAKEWAKE_JWT__REFRESH_SIGNING_KEY
+[jwt]
+signing_key = "CHANGE_ME_local_signing_secret_key_32+chars!"
+refresh_signing_key = "CHANGE_ME_local_refresh_secret_key_32chars!"
+# Access token 有效期
+# Env: WAKEWAKE_JWT__ACCESS_EXPIRE
+# Default: 15m
+access_expire = "15m"
+# Refresh token 有效期
+# Env: WAKEWAKE_JWT__REFRESH_EXPIRE
+# Default: 720h
+refresh_expire = "720h"
+
+# ============================================================
+# Password Reset
+# ============================================================
+# ⚠️ 占位符：仅本地验收。无状态 reset token HMAC 密钥
+# Env: WAKEWAKE_PASSWORD_RESET__SECRET
+[password_reset]
+secret = "CHANGE_ME_local_reset_secret_key_32+chars!"
+# reset token TTL
+# Env: WAKEWAKE_PASSWORD_RESET__EXPIRE
+# Default: 1h
+expire = "1h"
+
+# ============================================================
+# PoW（注册/登录前导零工作量证明）
+# ============================================================
+# 启动默认值；运行时可经 POST /admin/pow 调整（0..=10），持久化 data/pow.json
+# Env: WAKEWAKE_POW__DIFFICULTY
+# Default: 4
+[pow]
+difficulty = 4
+# challenge 有效期
+# Env: WAKEWAKE_POW__CHALLENGE_TTL
+# Default: 10m
+challenge_ttl = "10m"
+
+# ============================================================
+# Mailer（密码重置/邮件验证；指向 mailpit，默认启动）
+# ============================================================
+# mailpit 容器：SMTP 1025 / Web UI+API 8025（http://localhost:8025）
+# 分路日预算（admin-risk-controls RFC）：register/resend/reset 三路独立计数，
+# UTC 日翻零；0 = 不限；运行时可经 POST /admin/mailer 调整，计数持久化
+# data/mailer.json（重启不清零）。
+# Env: WAKEWAKE_MAILER__ENABLED
+[mailer]
+enabled = true
+# 服务名 mailpit = docker-compose.local.yml 服务 key（docker DNS），改名必须同步。
+smtp_host = "mailpit"
+smtp_port = 1025
+smtp_username = ""
+smtp_password = ""
+from_address = "noreply@wakewake.local"
+from_name = "WakeWake"
+# 分路日预算（0 = 不限）
+# Env: WAKEWAKE_MAILER__MAX_REGISTER_EMAILS_PER_DAY / __MAX_RESEND_EMAILS_PER_DAY / __MAX_RESET_EMAILS_PER_DAY
+# Default: 500 / 200 / 300
+max_register_emails_per_day = 500
+max_resend_emails_per_day = 200
+max_reset_emails_per_day = 300
+
+# ============================================================
+# Security（默认 admin 账户 bootstrap）
+# ============================================================
+# 启动时幂等创建（仅不存在时创建）。
+# 未验证账号保留天数（admin-risk-controls RFC）：每日清理删除超期未验证
+# 账号（连带 agents 级联）；0 = 关闭。
+# Env: WAKEWAKE_SECURITY__BOOTSTRAP_ADMIN_EMAIL / __BOOTSTRAP_ADMIN_PASSWORD / __UNVERIFIED_RETENTION_DAYS
+[security]
+bootstrap_admin_email = "admin@wakewake.local"
+bootstrap_admin_password = "wakewake123"
+unverified_retention_days = 7
+
+# ============================================================
+# Log（tracing-appender 文件轮转 + OTel）
+# ============================================================
+# 日志级别（优先级：RUST_LOG > 本项）
+# Env: WAKEWAKE_LOG__LEVEL
+# Default: info
+[log]
+level = "info"
+# 日志目录（daily rolling 写入 4 文件：app/traces/metrics/logs）
+# Env: WAKEWAKE_LOG__DIR
+# Default: data/logs（容器内 /app/data/logs）
+dir = "data/logs"
+
+# ============================================================
+# Rate Limit
+# ============================================================
+# false：保持生产默认（axum-governor 速率限制生效，验收同时验证限流行为）。
+# 仅旁路速率限制，不旁路业务配额（MAX_DEVICES_PER_USER 等硬编码 const）。
+# Env: WAKEWAKE_RATE_LIMIT__DISABLED
+# Default: false
+[rate_limit]
+disabled = false

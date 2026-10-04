@@ -1,8 +1,8 @@
 # wakewake frontend
 
-Next.js 16 + React 19 single-page app for [wakewake](../README.md) — a
-self-hosted Wake-on-LAN service. Static-exported (`output: "export"`) and
-served as flat files by Caddy; no Node.js runtime in production.
+English | [中文](README.zh.md)
+
+Next.js 16 + React 19 single-page app for [wakewake](../README.md) — a self-hosted Wake-on-LAN service. Static-exported (`output: "export"`) and served as flat files by Caddy; no Node.js runtime in production.
 
 ## Stack
 
@@ -23,5 +23,4 @@ pnpm lint         # ESLint (eslint-config-next)
 pnpm format       # Prettier write
 ```
 
-See the root [`README.md`](../README.md) and [`AGENTS.md`](../AGENTS.md) for
-the full architecture, deployment, and contribution guide.
+See the root [`README.md`](../README.md) and [`AGENTS.md`](../AGENTS.md) for the full architecture, deployment, and contribution guide.

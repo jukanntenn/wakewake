@@ -1,0 +1,24 @@
+# {{ ansible_managed }}
+# wakewake Caddyfile（test）。路由唯一真源在镜像内 /app/caddy/routes.caddy（import），
+# 本文件只声明站点地址与 TLS 层。
+#
+# HTTPS via Caddy 内部 CA（tls internal）：自签证书，自动签发+轮换。
+# 浏览器访问会弹证书警告（自签 CA 非公网信任），点"继续"即可。
+# 这让前端 crypto.subtle / navigator.clipboard 等 secure-only API 在内网可用。
+# agent 需编译带 --features danger-insecure-tls 才能信任此自签证书。
+#
+# fallback_sni：浏览器直接用 IP 访问时 TLS ClientHello 不带 SNI（RFC 6066
+# 规定 IP 不放 ServerName），Caddy 匹配不到证书会返 "internal error"。
+# fallback_sni 让无 SNI 的连接回退到该名字匹配证书（experimental，但对
+# 内网 IP 场景必需）。站点地址必须含该 host 才会预签发证书。
+
+{
+	fallback_sni {{ tls_host }}
+}
+
+import /app/caddy/routes.caddy
+
+https://{{ tls_host }}:{{ caddy_port }} {
+	tls internal
+	import wakewake_routes
+}
