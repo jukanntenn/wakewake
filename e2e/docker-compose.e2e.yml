@@ -20,6 +20,11 @@ services:
       WAKEWAKE_DATABASE__DSN: "postgres://${POSTGRES_USER:-wakewake}:${POSTGRES_PASSWORD:-test}@postgres/${POSTGRES_DB:-wakewake_test}"
       WAKEWAKE_JWT__SIGNING_KEY: e2e-test-signing-key-not-for-production-32bytes
       WAKEWAKE_JWT__REFRESH_SIGNING_KEY: e2e-test-refresh-key-not-for-production-32byt
+      # 全套已超 30min，越过默认 access TTL(15m)：storageState 是静态文件、逐用例
+      # 新 context，而 refresh 轮换单次——界外首个用例烧掉文件里的 refresh token
+      # 后，后续 context 一律 401 落登录页。主套件持长 TTL 消除轮换；"access 过期
+      # 自动 refresh"用例仍走 docker-compose.short-ttl.yml 隔离环境（10s）。
+      WAKEWAKE_JWT__ACCESS_EXPIRE: "2h"
       WAKEWAKE_PASSWORD_RESET__SECRET: e2e-test-reset-secret-not-for-production-32byte
       # 只旁路 axum-governor 速率限制，不旁路业务配额（MAX_DEVICES_PER_USER 等硬编码 const）
       WAKEWAKE_RATE_LIMIT__DISABLED: "true"
