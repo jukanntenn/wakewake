@@ -29,7 +29,7 @@ test.describe('完整配对流程（场景 3）', () => {
     await container.start(client)
 
     // 3. 浏览器看 agents 页 → pending→online（绿点）
-    await page.goto('/dashboard/agents')
+    await page.goto('/agents')
     await page.waitForLoadState('networkidle')
     agent = await getDefaultAgent(client)
     expect(agent.status).toBe('online')

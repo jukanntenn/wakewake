@@ -2,7 +2,7 @@ import { BasePage } from './BasePage'
 
 export class WakesPage extends BasePage {
   async goto(): Promise<void> {
-    await super.goto('/dashboard/wakes')
+    await super.goto('/wakes')
     await this.waitForLoad()
   }
 

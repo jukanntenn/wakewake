@@ -134,12 +134,12 @@ test.describe('认证场景（场景 1，无 agent）', () => {
     test.setTimeout(30_000)
     await loginPage.goto()
     await loginPage.login(E2E_EMAIL, E2E_PASSWORD)
-    await expect(page).toHaveURL(/\/dashboard/)
+    await expect(page).toHaveURL(/\/devices/)
     // 等 access 过期（10s + 余量）
     await sleep(15_000)
     // 触发一个 API 调用，前端 401 拦截自动 refresh
-    await page.goto('/dashboard/devices')
-    // UI 请求自动恢复（仍在 dashboard，未被踢回 login）
-    await expect(page).toHaveURL(/\/dashboard/)
+    await page.goto('/devices')
+    // UI 请求自动恢复（仍在 app 内，未被踢回 login）
+    await expect(page).toHaveURL(/\/devices/)
   })
 })

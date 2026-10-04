@@ -31,7 +31,7 @@ test.describe('唤醒全链路（场景 3）', () => {
     await pairedAgent.container.clearWolPackets()
 
     // 浏览器触发 wake（UI 建）
-    await page.goto('/dashboard/devices')
+    await page.goto('/devices')
     await page.waitForLoadState('networkidle')
     // 点设备的 wake 按钮（按钮文案可能是 wake/唤醒）
     const wakeBtn = page.locator(`text=${device.name}`).locator('..').getByRole('button', {
