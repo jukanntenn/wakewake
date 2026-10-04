@@ -18,4 +18,4 @@ Keep both gate suites running side by side — rejected: double governance of ev
 
 ## Consequences
 
-One gate set, one manifest owner: prek carries the local hygiene/sync/commit hooks plus the hdsh-managed block, and CI's root lint job includes the `hdsh` group. The pairing corpus loses the wrfcs README pair and keeps twenty-nine pairs. The specs index rule is now review-enforced (its gate is gone with the suite). Config-template comments still name decision records by the old WRFC term; those templates are ask-first files, so the wording stays until they are edited for their own reasons.
+One gate set, one manifest owner: prek carries the local hygiene/sync/commit hooks plus the hdsh-managed block, and CI's root lint job includes the `hdsh` group. The pairing corpus loses the wrfcs README pair and keeps twenty-nine pairs. The specs index rule is now review-enforced (its gate is gone with the suite). Config templates name decision records as RFC; the old WRFC term survives in backend and devops code comments, where a change that touches that code owns the rename.

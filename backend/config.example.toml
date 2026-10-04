@@ -37,7 +37,7 @@ public_url = "https://wakewake.app"
 # [server]
 # trust_proxy = true
 
-# [OPTIONAL] 权威客户端 IP 头名（如 "CF-Connecting-IP"，cloudflare-edge WRFC）
+# [OPTIONAL] 权威客户端 IP 头名（如 "CF-Connecting-IP"，cloudflare-edge RFC）
 # 设置且 trust_proxy=true 时优先于 XFF/X-Real-IP 读取；未设维持 XFF 最左口径。
 # 适用 CF 回源拓扑：XFF 是追加链（左值可伪造），CF-Connecting-IP 恒为单个真实访客 IP。
 # ⚠️ 前提：接入层仅放行可信反代（Caddyfile.prod 的 remote_ip CF CIDR 守卫），
@@ -125,7 +125,7 @@ secret = "CHANGE_ME_openssl_rand_base64_32_padding"
 # PoW
 # ============================================================
 # [OPTIONAL] 前导零个数（authentication.md §六）
-# 启动默认值；运行时可经 POST /admin/pow 调整（admin-risk-controls WRFC），
+# 启动默认值；运行时可经 POST /admin/pow 调整（admin-risk-controls RFC），
 # 持久化到 data/pow.json 跨重启保持，上限 10。
 # Env: WAKEWAKE_POW__DIFFICULTY
 # Default: 4
@@ -140,7 +140,7 @@ secret = "CHANGE_ME_openssl_rand_base64_32_padding"
 # ============================================================
 # Mailer（密码重置；enabled=false 时该端点返 503）
 # ============================================================
-# 分路日预算（admin-risk-controls WRFC）：注册验证/重发/密码重置三路独立计数，
+# 分路日预算（admin-risk-controls RFC）：注册验证/重发/密码重置三路独立计数，
 # UTC 日翻零；0 = 不限。运行时总闸与限额可经 POST /admin/mailer 调整，
 # 计数持久化到 data/mailer.json（重启不清零）。预算耗尽时该路径降级为
 # 与 mailer 关闭相同的行为（注册静默跳过 / 重发静默 / 重置请求 503）。
@@ -182,7 +182,7 @@ secret = "CHANGE_ME_openssl_rand_base64_32_padding"
 # [security]
 # bootstrap_admin_email = "admin@wakewake.local"
 # bootstrap_admin_password = "wakewake123"
-# [OPTIONAL] 未验证账号保留天数（admin-risk-controls WRFC）：
+# [OPTIONAL] 未验证账号保留天数（admin-risk-controls RFC）：
 # 每日清理任务删除超期未验证账号（连带 agents 级联），防注册轰炸灌库
 # + 释放被抢占邮箱；0 = 关闭清理。
 # Env: WAKEWAKE_SECURITY__UNVERIFIED_RETENTION_DAYS

@@ -10,7 +10,7 @@ wakewake 没有决策理由的归宿。已发布设计的“为什么”散落�
 
 ## Decision
 
-本机制的适配源自两份完整读过的参照：deepseek-harness 参考项目，以及 markpost 对它的适配（其决策史见该仓库的 `.agents/mrfcs/`，正是本记录所循先例）。是适配而非照搬——下面每一块都写明 wakewake 保留什么、改什么、拒绝什么。
+本机制的适配源自两份完整读过的参照：deepseek-harness 参考项目，以及 markpost 对它的适配（其决策史见该仓库的 `.agents/mrfcs/`，正是本记录所循先例）。是适配而非照搬——下面每一块都写明 wakewake 保留什么、改什么、拒绝什么。本记录创建的 wrfcs 树、本地文档门禁与 `writing-wrfcs` 技能已由 [hdsh 采纳](2026-10-02-adopting-the-hdsh-harness.zh.md)与[本地标准退役](2026-10-03-retiring-the-local-documentation-standard.zh.md)接替；下文的分层指令、无方向镜像与 skills 源头决策仍然有效。
 
 **wrfcs 树。** 记录存放于 `.agents/wrfcs/{proposed,implemented,rejected}/yyyy-mm-dd-topic.md`，日期为主题首次提出之日；树本身即清单——浏览或 grep 仓库即可，不维护索引文件。树根有两份职责正交的文档：[AGENTS.md](../../AGENTS.md) 只放常驻命令（动笔前查重、以新记录取代而非重写、双语对同步），[README.zh.md](../../README.zh.md) 是唯一规范契约；README 以 `README.md` + `README.zh.md` 配对，常驻命令文件按 agent 指令豁免规则保持单文件。文件格式为固定头部块、必须与目录一致的 `Status:` 行、以 `## Problem` 开篇（须脱离方案独立成立）的正文，以及按生命周期分化的续篇——implemented 用现在时的 `## Decision` / `## Alternatives considered` / `## Consequences`（方案话术标题被门控拒绝），proposed 用 `## Proposal` / `## Alternatives considered` / `## Acceptance criteria` / `## Risks`，rejected 冻结提案期内容、判决写在 `Status:` 行上。触发规则：每个非平凡变更——行为、架构、跨文件契约、工具链、测试策略、盘上或线上格式——在同一变更中新增或更新至少一份记录，动笔前先 grep 树中已有归属。本记录是第一份 wrfc，并在机制自身上演练了它：先落在 `proposed/` 评审，再由落地机制的这一批改写为现在的 implemented 形态。
 

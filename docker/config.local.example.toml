@@ -35,7 +35,7 @@ port = 8080
 # Env: WAKEWAKE_SERVER__TRUST_PROXY
 # Default: true
 trust_proxy = true
-# 权威客户端 IP 头（cloudflare-edge WRFC）：本地验收无 CF，保持未设（XFF 口径）。
+# 权威客户端 IP 头（cloudflare-edge RFC）：本地验收无 CF，保持未设（XFF 口径）。
 # Env: WAKEWAKE_SERVER__CLIENT_IP_HEADER
 # Default: 未设置
 # client_ip_header = "CF-Connecting-IP"
@@ -111,7 +111,7 @@ challenge_ttl = "10m"
 # Mailer（密码重置/邮件验证；指向 mailpit，默认启动）
 # ============================================================
 # mailpit 容器：SMTP 1025 / Web UI+API 8025（http://localhost:8025）
-# 分路日预算（admin-risk-controls WRFC）：register/resend/reset 三路独立计数，
+# 分路日预算（admin-risk-controls RFC）：register/resend/reset 三路独立计数，
 # UTC 日翻零；0 = 不限；运行时可经 POST /admin/mailer 调整，计数持久化
 # data/mailer.json（重启不清零）。
 # Env: WAKEWAKE_MAILER__ENABLED
@@ -135,7 +135,7 @@ max_reset_emails_per_day = 300
 # Security（默认 admin 账户 bootstrap）
 # ============================================================
 # 启动时幂等创建（仅不存在时创建）。
-# 未验证账号保留天数（admin-risk-controls WRFC）：每日清理删除超期未验证
+# 未验证账号保留天数（admin-risk-controls RFC）：每日清理删除超期未验证
 # 账号（连带 agents 级联）；0 = 关闭。
 # Env: WAKEWAKE_SECURITY__BOOTSTRAP_ADMIN_EMAIL / __BOOTSTRAP_ADMIN_PASSWORD / __UNVERIFIED_RETENTION_DAYS
 [security]

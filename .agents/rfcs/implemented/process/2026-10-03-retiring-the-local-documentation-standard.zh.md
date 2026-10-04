@@ -18,4 +18,4 @@ harness 完全取代本地标准。十一个本地门禁文件（`scripts/doc_sy
 
 ## 后果
 
-一套门禁、一个 manifest 属主：prek 承载本地卫生/镜像/提交 hook 加 hdsh 托管块，CI 的根 lint 作业包含 `hdsh` 组。配对语料失去 wrfcs README 对，保有二十九对。specs 索引规则改为评审把关（其门禁随套件移除）。config 模板注释仍以旧的 WRFC 字样指称决策记录；这些模板是 ask-first 文件，措辞留待它们因自身原因被编辑时再改。
+一套门禁、一个 manifest 属主：prek 承载本地卫生/镜像/提交 hook 加 hdsh 托管块，CI 的根 lint 作业包含 `hdsh` 组。配对语料失去 wrfcs README 对，保有二十九对。specs 索引规则改为评审把关（其门禁随套件移除）。config 模板以 RFC 指称决策记录；旧的 WRFC 字样只存于 backend 与 devops 代码注释，由下次触及相应代码的变更负责改名。
