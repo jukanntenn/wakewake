@@ -58,7 +58,7 @@ def main() -> int:
                 file=sys.stderr,
             )
             print(
-                "and scripts/doc_budgets.manifest.json in the same change.",
+                "and .hdsh/docs.manifest.json in the same change.",
                 file=sys.stderr,
             )
     if not skills_in_sync():

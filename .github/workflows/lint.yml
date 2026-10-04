@@ -65,7 +65,8 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash | bash -s -- 1.7.12
           mv actionlint /usr/local/bin/
       - name: prek (root project, all groups)
-        run: prek run --all-files --group format --group lint --group check --skip backend/ --skip frontend/
+        # hdsh 组是 hdsh adopt 托管的门禁（prek.toml 的 managed block）；--group 过滤必须包含它，否则静默丢失。
+        run: prek run --all-files --group format --group lint --group check --group hdsh --skip backend/ --skip frontend/
 
   lint-backend:
     needs: changes

@@ -1,0 +1,10 @@
+{
+  "excluded": [],
+  "generated": [],
+  "public_blob_root": "https://github.com/jukanntenn/wakewake/blob/main/",
+  "roots": [
+    "devops/",
+    "specs/"
+  ],
+  "governed": []
+}

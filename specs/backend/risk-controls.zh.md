@@ -2,7 +2,7 @@
 
 [English](risk-controls.md) | 中文
 
-`/admin/*` 背后的运营侧滥用控制：每个杠杆的作用、不可移动的不变量、以及各状态的位置。决策记录见 [`../../.agents/wrfcs/implemented/2026-09-04-admin-risk-controls.zh.md`](../../.agents/wrfcs/implemented/2026-09-04-admin-risk-controls.zh.md)。
+`/admin/*` 背后的运营侧滥用控制：每个杠杆的作用、不可移动的不变量、以及各状态的位置。决策记录见 [`../../.agents/rfcs/implemented/feature/2026-09-04-admin-risk-controls.zh.md`](../../.agents/rfcs/implemented/feature/2026-09-04-admin-risk-controls.zh.md)。
 
 ## 运行时句柄家族
 

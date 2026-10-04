@@ -34,7 +34,7 @@
 
 不变量（四环境一致）：单容器 s6（Caddy:`caddy_port` + backend:`backend_port`）+ 兄弟 postgres 走 Unix socket（`postgres-socket` 卷）。差异只在 TLS 层、对外端口、镜像源、配置。
 
-## 镜像 tag 规范（SemVer 2.0.0，https://semver.org）
+## 镜像 tag 规范（SemVer 2.0.0，<https://semver.org>）
 
 预发布必须连字符（`v0.1.3rc1` **非法**，`v0.1.3-rc.1` 合法）：
 

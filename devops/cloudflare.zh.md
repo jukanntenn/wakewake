@@ -33,7 +33,7 @@ prod 环境的 Cloudflare 控制台操作（访客 → Cloudflare CDN → 直连
 
 ## 6. Origin firewall
 
-- VPS 防火墙仅对 Cloudflare IP 段（IPv4 + IPv6，https://www.cloudflare.com/ips/）放行入站 TCP `8449` 与 SSH，其余默认拒绝。
+- VPS 防火墙仅对 Cloudflare IP 段（IPv4 + IPv6，<https://www.cloudflare.com/ips/>）放行入站 TCP `8449` 与 SSH，其余默认拒绝。
 - 容器 Caddy 在应用层执行同一份放行表：`Caddyfile.prod` 对来源不在 `cloudflare_cidrs`（`group_vars/prod/env.yml`）内的连接直接 `403`。VPS 防火墙是可选的第二层——它还能省掉 403 本要耗费的 TLS 握手带宽。
 
 ## 7. Edge protections (free plan)

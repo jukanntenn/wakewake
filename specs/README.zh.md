@@ -6,7 +6,7 @@
 
 - 规范描述**机制与不变量**（为什么这样设计、哪些东西不能动）；操作流程归 [`../devops/README.zh.md`](../devops/README.zh.md)，代码本身归源码注释。
 - 改动相关实现时同步对应 spec；spec 与实现漂移视为 bug。
-- 新增 spec 文件意味着同一变更中补上本表的一行（[`scripts/verify_specs_index.py`](../scripts/verify_specs_index.py) 双向强制）；决策历史归 [`.agents/wrfcs/`](../.agents/wrfcs/README.zh.md)。
+- 新增 spec 文件意味着同一变更中在本表两个索引各补一行；决策历史归 [`.agents/rfcs/`](../.agents/rfcs/README.zh.md)。
 
 ## 目录
 

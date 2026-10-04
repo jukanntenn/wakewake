@@ -2,7 +2,7 @@
 
 English | [中文](load.zh.md)
 
-> This document is the single specification for wakewake load testing: the two test rigs, the production-fidelity environment contract, the scenario matrix, the data contract of the seed tool, the red lines, and the methodology that turns measurements into a sweet-spot / capacity-extremes table. Operational runbook details live beside the scripts in `tests/load/`; decision history lives in [`.agents/wrfcs/`](../../.agents/wrfcs/README.md).
+> This document is the single specification for wakewake load testing: the two test rigs, the production-fidelity environment contract, the scenario matrix, the data contract of the seed tool, the red lines, and the methodology that turns measurements into a sweet-spot / capacity-extremes table. Operational runbook details live beside the scripts in `tests/load/`; decision history lives in [`.agents/rfcs/`](../../.agents/rfcs/README.md).
 
 ## 1. Two rigs, two questions
 

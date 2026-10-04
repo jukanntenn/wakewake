@@ -1,0 +1,7 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob
+# hash of each side as of the last confirmed-consistent state. Both
+# languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   hdsh pairing record .agents/rfcs/implemented/process/2026-08-22-agent-harness-mechanism.md
+2026-08-22-agent-harness-mechanism.md: 6c4222d92b3a960945794a12dd9bb3993313e5ee
+2026-08-22-agent-harness-mechanism.zh.md: aa315f10221e48a9542a4e01013c58ef1433cc27

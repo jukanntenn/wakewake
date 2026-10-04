@@ -6,7 +6,7 @@ Design specs committed to the repository. The rules:
 
 - Specs describe **mechanisms and invariants** (why it is designed this way, what must not move); operational procedures belong in [`../devops/README.md`](../devops/README.md), and code commentary belongs in the source.
 - When the implementation changes, the matching spec changes with it; spec/implementation drift is a bug.
-- Adding a spec file means adding its row here in the same change ([`scripts/verify_specs_index.py`](../scripts/verify_specs_index.py) enforces both directions); decision history lives in [`.agents/wrfcs/`](../.agents/wrfcs/README.md).
+- Adding a spec file means adding its row here in the same change, in both indexes; decision history lives in [`.agents/rfcs/`](../.agents/rfcs/README.md).
 
 ## Index
 

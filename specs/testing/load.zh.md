@@ -2,7 +2,7 @@
 
 [English](load.md) | 中文
 
-> 本文档是 wakewake 压测的唯一规格:两套测试装置、生产保真环境契约、场景矩阵、seed 工具的数据契约、红线,以及把测量变成"甜点区/极限"表的方法学。操作细节在 `tests/load/` 脚本旁;决策历史在 [`.agents/wrfcs/`](../../.agents/wrfcs/README.zh.md)。
+> 本文档是 wakewake 压测的唯一规格:两套测试装置、生产保真环境契约、场景矩阵、seed 工具的数据契约、红线,以及把测量变成"甜点区/极限"表的方法学。操作细节在 `tests/load/` 脚本旁;决策历史在 [`.agents/rfcs/`](../../.agents/rfcs/README.zh.md)。
 
 ## 1. Two rigs, two questions
 

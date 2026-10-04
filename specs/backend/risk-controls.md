@@ -2,7 +2,7 @@
 
 English | [中文](risk-controls.zh.md)
 
-The operator-side abuse controls behind `/admin/*`: what each lever does, the invariants that must not move, and where each piece of state lives. The decision record is [`../../.agents/wrfcs/implemented/2026-09-04-admin-risk-controls.md`](../../.agents/wrfcs/implemented/2026-09-04-admin-risk-controls.md).
+The operator-side abuse controls behind `/admin/*`: what each lever does, the invariants that must not move, and where each piece of state lives. The decision record is [`../../.agents/rfcs/implemented/feature/2026-09-04-admin-risk-controls.md`](../../.agents/rfcs/implemented/feature/2026-09-04-admin-risk-controls.md).
 
 ## The runtime-handle family
 
