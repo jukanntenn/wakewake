@@ -243,7 +243,7 @@ example 文件是**主要用户文档**，schema 变更必须同步它。现有�
 | 远程 test/staging/prod | `ansible-playbook devops/ansible/deploy.yml -l <env>` | `group_vars/<env>/env.yml` + `vault.yml`（avpm 单变量加密）→ 渲染 `config.toml.j2` + `docker-compose.yml.j2` + Caddyfile | ansible vault（入库但加密） |
 | agent（bare-metal） | `deploy-agent.yml -l test_agent` | vault 的 `agent_server_url`/`agent_pairing_code` → 渲染 `agent-config.toml.j2` + supervisord conf | ansible vault |
 
-ansible 环境变量（`group_vars/<env>/env.yml`）：`image`（test=LAN registry 浮动 `main`；staging/prod=`wakewake_version` 钉版本）、`host_port`（prod 另有 `loopback_publish`=仅回环发布）、`public_url`、`health_url`/`health_insecure`、`tls_profile`（http|https，分支 healthcheck 与 caddy-data 卷）、`caddyfile_template`（未定义 = 零挂载，用镜像内置 Caddyfile）、prod 宿主网关变量（`gateway_domain`/`gateway_site_file`/`gateway_certs_dir`/`cloudflare_cidrs`）、`postgres_gucs`、`mailer_*`。共享不变量在 `group_vars/all.yml`（8080/8443、PG 库名/用户、路径、`postgres_gucs` 默认档）。
+ansible 环境变量（`group_vars/<env>/env.yml`）：`image`（test=LAN registry 浮动 `main`；staging/prod=`wakewake_version` 钉版本）、`host_port`（prod 另有 `loopback_publish`=仅回环发布）、`public_url`、`health_url`/`health_insecure`、`tls_profile`（http|https，分支 healthcheck 与 caddy-data 卷）、`caddyfile_template`（未定义 = 零挂载，用镜像内置 Caddyfile）、prod 宿主网关变量（`gateway_domain`/`gateway_site_file`/`gateway_certs_dir`/`cloudflare_cidrs`）、`mailer_*`。共享不变量在 `group_vars/all.yml`（8080/8443、PG 库名/用户、路径）。
 
 ### Caddyfile：3 份站点变体 + 1 份路由真源 + prod 宿主网关
 

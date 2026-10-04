@@ -134,14 +134,14 @@ devops/ansible/
   ansible.cfg                      目录局部配置（cd 进去跑同样免参数）
   hosts.yml                        inventory（test / test_agent / staging / prod）
   deploy.yml                       统一部署 playbook，--limit 选环境（必填）+ 宿主引导
-                                   （Docker 安装 / swap，按需）+ 网关 site 安装 + 尾部健康校验
+                                   （Docker 安装，按需）+ 网关 site 安装 + 尾部健康校验
   deploy-agent.yml                 agent 部署（本地构建 + supervisor 常驻；test 专用）
   group_vars/
-    all.yml                        共享变量（端口、PG 库名/用户、路径、postgres_gucs 默认档）
+    all.yml                        共享变量（端口、PG 库名/用户、路径）
     test/{env.yml,vault.yml}       test：LAN registry 浮动 main + 自签 HTTPS + secrets（加密）
     staging/{env.yml,vault.yml}    staging：Docker Hub 钉版本 + 隧道前置（占位）
     prod/{env.yml,vault.yml}       prod：Docker Hub 钉版本 + 宿主 Caddy 网关前置 + secrets（加密）
-  host_vars/                       每主机事实（user / home；abj 含 swap_mb）
+  host_vars/                       每主机事实（user / home）
   templates/
     docker-compose.yml.j2          通用（healthcheck / caddy-data 按 tls_profile 分支；
                                    loopback_publish=true 时端口仅回环发布）
@@ -170,7 +170,7 @@ ansible-vault encrypt_string --vault-id wakewake-test@~/.local/bin/avpm-client \
 
 ## Launch state
 
-Prod is wired for abj (host-gateway topology; the console runbook lives in [cloudflare.md](cloudflare.md)). Repo-side items done: prod inventory (`abj`), `host_vars/abj.yml`, prod `env.yml` (domain/version/GUC downgrade/gateway vars) + vault secrets, GitHub secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` (the token needs read/write/delete, delete to clean up temporary build-<arch> tags). The console steps (DNS record, TLS mode, Origin Cert creation + placement) execute at launch per cloudflare.md. Remaining:
+Prod is wired for abj (host-gateway topology; the console runbook lives in [cloudflare.md](cloudflare.md)). Repo-side items done: prod inventory (`abj`), `host_vars/abj.yml`, prod `env.yml` (domain/version/gateway vars) + vault secrets, GitHub secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` (the token needs read/write/delete, delete to clean up temporary build-<arch> tags). The console steps (DNS record, TLS mode, Origin Cert creation + placement) execute at launch per cloudflare.md. Remaining:
 
 - staging (before it goes live): fill the `staging` group in `hosts.yml`, rename host_vars, set `public_url` / mailer in `group_vars/staging/env.yml`, encrypt the `wakewake-staging` vault per the field list at the top of vault.yml
 - prod mailer: disabled at launch — registration stays unverified (purged per `unverified_retention_days`) and password-reset email is unavailable; set SMTP + vault `mailer_smtp_password` when needed

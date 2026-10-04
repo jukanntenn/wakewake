@@ -2,6 +2,3 @@
 # prod host 事实（abj，阿里云 ECS）。
 user: "alice"
 home: "/home/{{ user }}"
-# abj 1.6G 内存与 django-dream-blog 共用且无 swap：首次部署时由 deploy.yml
-# 创建 2G /swapfile 作 OOM 兜底（已存在 swap 则跳过）。
-swap_mb: 2048

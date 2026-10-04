@@ -134,14 +134,14 @@ devops/ansible/
   ansible.cfg                      目录局部配置（cd 进去跑同样免参数）
   hosts.yml                        inventory（test / test_agent / staging / prod）
   deploy.yml                       统一部署 playbook，--limit 选环境（必填）+ 宿主引导
-                                   （Docker 安装 / swap，按需）+ 网关 site 安装 + 尾部健康校验
+                                   （Docker 安装，按需）+ 网关 site 安装 + 尾部健康校验
   deploy-agent.yml                 agent 部署（本地构建 + supervisor 常驻；test 专用）
   group_vars/
-    all.yml                        共享变量（端口、PG 库名/用户、路径、postgres_gucs 默认档）
+    all.yml                        共享变量（端口、PG 库名/用户、路径）
     test/{env.yml,vault.yml}       test：LAN registry 浮动 main + 自签 HTTPS + secrets（加密）
     staging/{env.yml,vault.yml}    staging：Docker Hub 钉版本 + 隧道前置（占位）
     prod/{env.yml,vault.yml}       prod：Docker Hub 钉版本 + 宿主 Caddy 网关前置 + secrets（加密）
-  host_vars/                       每主机事实（user / home；abj 含 swap_mb）
+  host_vars/                       每主机事实（user / home）
   templates/
     docker-compose.yml.j2          通用（healthcheck / caddy-data 按 tls_profile 分支；
                                    loopback_publish=true 时端口仅回环发布）
@@ -170,7 +170,7 @@ ansible-vault encrypt_string --vault-id wakewake-test@~/.local/bin/avpm-client \
 
 ## 上线状态
 
-prod 已在仓库侧接线完成（abj，宿主网关拓扑；控制台操作手册在 [cloudflare.zh.md](cloudflare.zh.md)）。仓库侧已完成：prod inventory（`abj`）、`host_vars/abj.yml`、prod `env.yml`（域名/版本/GUC 降档/网关变量）+ vault secrets、GitHub secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`（token 需带 read/write/delete 权限，delete 用于清理临时 build-<arch> tag）。控制台步骤（DNS 记录、TLS 模式、Origin Cert 生成与落盘）按 cloudflare.zh.md 在上线时执行。剩余事项：
+prod 已在仓库侧接线完成（abj，宿主网关拓扑；控制台操作手册在 [cloudflare.zh.md](cloudflare.zh.md)）。仓库侧已完成：prod inventory（`abj`）、`host_vars/abj.yml`、prod `env.yml`（域名/版本/网关变量）+ vault secrets、GitHub secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`（token 需带 read/write/delete 权限，delete 用于清理临时 build-<arch> tag）。控制台步骤（DNS 记录、TLS 模式、Origin Cert 生成与落盘）按 cloudflare.zh.md 在上线时执行。剩余事项：
 
 - staging（上线前）：`hosts.yml` 填 staging group、host_vars 改名、`group_vars/staging/env.yml` 填 `public_url` / 邮件、按 vault.yml 头部字段清单加密 `wakewake-staging` vault
 - prod 邮件：上线时未开通——注册保持未验证态（按 `unverified_retention_days` 清理），密码重置邮件不可用；需要时填 SMTP + vault 加密 `mailer_smtp_password`

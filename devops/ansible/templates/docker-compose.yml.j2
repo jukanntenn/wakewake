@@ -73,15 +73,20 @@ services:
       - POSTGRES_DB={{ postgres_db }}
       - POSTGRES_USER={{ postgres_user }}
       - POSTGRES_PASSWORD={{ db_password }}
-    # 调优 GUC 叠加在镜像默认 postgresql.conf 之上（清单在 group_vars/all.yml 的
-    # postgres_gucs，共用小内存主机按环境覆盖）。socket 目录保持镜像默认
+    # 5 个调优 GUC 叠加在镜像默认 postgresql.conf 之上。socket 目录保持镜像默认
     # /var/run/postgresql（entrypoint 拥有权限）；app 通过共享卷连接。
     command:
       - postgres
-{%- for guc in postgres_gucs %}
       - -c
-      - {{ guc }}
-{%- endfor %}
+      - shared_buffers=256MB
+      - -c
+      - max_connections=50
+      - -c
+      - effective_cache_size=1GB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - synchronous_commit=off
     volumes:
       - pgdata:/var/lib/postgresql/data
       - postgres-socket:/var/run/postgresql
