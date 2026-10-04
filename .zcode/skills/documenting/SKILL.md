@@ -1,13 +1,13 @@
 ---
 name: documenting
-description: Create, restructure, review, audit, or migrate harness-deepseek-harness Markdown documentation using audience-first hierarchy, bilingual line alignment, executed-operation fact-checking, and repository validation. Use for new or revised hdsh docs, docs-tree organization, documentation-quality audits and budgets, and bilingual documentation structure changes.
+description: Create, restructure, review, audit, or migrate wakewake Markdown documentation using audience-first hierarchy, bilingual line alignment, executed-operation fact-checking, and repository validation. Use for new or revised wakewake docs, docs-tree organization, documentation-quality audits and budgets, and bilingual documentation structure changes.
 ---
 
-# hdsh documentation
+# wakewake documentation
 
 ## Summary
 
-The hdsh documentation standard: make every page searchable, newcomer-readable, and exact enough for agents and maintainers. Apply repository `AGENTS.md` files and the executed hdsh gates first, then this workflow for placement, progressive detail, line-aligned bilingual pages, and corpus audits. Preserve one owner per fact: source, tests, RFCs, guides, and skills each keep their own kind of truth.
+The wakewake documentation standard: make every page searchable, newcomer-readable, and exact enough for agents and maintainers. Apply repository `AGENTS.md` files and the executed hdsh gates first, then this workflow for placement, progressive detail, line-aligned bilingual pages, and corpus audits. Preserve one owner per fact: source, tests, RFCs, guides, and skills each keep their own kind of truth.
 
 ## Workflow
 

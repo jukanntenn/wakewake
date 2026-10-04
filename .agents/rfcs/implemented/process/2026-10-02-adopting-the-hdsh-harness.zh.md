@@ -22,4 +22,5 @@ Status: implemented
 
 - 本仓库采纳 harness 的目录树约定：所有 README、`docs/**`、`.agents/rfcs/**` 进入双语配对语料。
 - 生成文件归上游所有；`hdsh adopt verify` 报告漂移与剩余的 `TODO(adopt)` 占位符，对生成文件的改动应引回上游而非分叉。
+- 采纳的 skills 在指称上游仓库处做过一次本地化：`documenting`、`editing-prose`、`finding-simplifications`、`translating-docs` 改称 wakewake，`.hdsh/adopt.manifest.json` 中对应 digest 同步重锚；两个 slot 模板技能（`archiving-rfcs`、`reviewing`）的改名位于 slot 之外的消费方自有散文。此后 `hdsh adopt apply` 会取回上游字节，持久的措辞修正仍应引回上游。
 - git 外状态——标签、Project 字段与状态、secrets 与 variables、分支保护——按 harness 的 ADOPT.md 清单另行配置。

@@ -1,16 +1,16 @@
 ---
 name: finding-simplifications
-description: 'Use when working in the harness-deepseek-harness repo to find non-obvious simplification candidates, remove redundant comments or implementation-heavy documentation, write proposed RFCs or inline TODO/FIXME/XXX notes, audit or coalesce superseded RFCs, or fold worthwhile simplification ideas from another PR; especially for dead, duplicated, speculative, over-built, added-then-removed, or hand-rolled-where-a-dependency-exists surfaces.'
+description: 'Use when working in the wakewake repo to find non-obvious simplification candidates, remove redundant comments or implementation-heavy documentation, write proposed RFCs or inline TODO/FIXME/XXX notes, audit or coalesce superseded RFCs, or fold worthwhile simplification ideas from another PR; especially for dead, duplicated, speculative, over-built, added-then-removed, or hand-rolled-where-a-dependency-exists surfaces.'
 ---
 
-# Finding HDSH Simplifications
+# Finding wakewake Simplifications
 
-This skill helps turn a broad "find things to simplify" request into evidence-backed RFCs that remove or collapse existing harness surface area. It is guidance, not a checklist: follow the code, keep judgment active, and prefer a few well-proven candidates over a pile of thin guesses.
+This skill helps turn a broad "find things to simplify" request into evidence-backed RFCs that remove or collapse existing repository surface area. It is guidance, not a checklist: follow the code, keep judgment active, and prefer a few well-proven candidates over a pile of thin guesses.
 
 ## Start With Repo Context
 
 - Read `AGENTS.md`, especially the conventions — including the tests-describe-behavior doctrine and the trust-types-at-same-process-boundaries rule — plus [docs/architecture.md](../../../docs/architecture.md) and [docs/development.md](../../../docs/development.md).
-- Skim [docs/architecture.md](../../../docs/architecture.md) before judging anything under `src/hdsh/`; simplifications that fight the domain map need extra evidence.
+- Skim [docs/architecture.md](../../../docs/architecture.md) before judging anything under `backend/` or `frontend/`; simplifications that fight the domain map need extra evidence.
 - Use the RFC tree and its [rules](../../rfcs/README.md) to understand intentional architecture: the implemented records own the settled seams.
 - Treat decisions recorded in implemented RFCs as intentional by default. Do not propose deleting a recorded seam as "low effort" unless the user explicitly overrides that constraint. Removing an unused function or option inside a protected design can still be valid if it does not collapse the protected design.
 
@@ -24,7 +24,7 @@ A strong simplification removes, folds, or demotes something real and has clear 
 - A seam has methods every implementation must support but no consumer uses.
 - A feature implements speculative product generality: a design with no product owner.
 - An invariant, rollback path, set of expected outputs, or special-case test exists only to protect an unused API.
-- Hand-rolled code reimplements what the Python standard library or a well-maintained PyPI package already provides, and the swap would delete the implementation plus its dedicated tests.
+- Hand-rolled code reimplements what the Rust or TypeScript ecosystem already provides — a standard-library module, a well-maintained crate, or an npm package — and the swap would delete the implementation plus its dedicated tests.
 - The simplified behavior may differ slightly, but the new behavior is still reasonable and easier to explain.
 
 Thin candidates are not enough for an RFC: deleting one typo, removing an intentionally documented option, or flagging "this looks complex" without call-site proof.
@@ -56,7 +56,7 @@ For every defensive copy, freeze, validator, and callback capture, name where th
 
 ## Hand-Rolled Code Versus A Dependency
 
-Introducing a dependency is a valid simplification move, not a policy exception. When surveying, ask of protocol parsers, retry/backoff loops, glob matchers, diff engines, and similar infrastructure: does the Python standard library or a well-maintained PyPI package already do this?
+Introducing a dependency is a valid simplification move, not a policy exception; in this repository it is ask-first, so the swap lands as an RFC proposal rather than a direct edit. When surveying, ask of protocol parsers, retry/backoff loops, glob matchers, diff engines, and similar infrastructure: does the Rust or TypeScript ecosystem already provide this — a standard-library module, a well-maintained crate, or an npm package?
 
 Prove a dependency-swap candidate like any other, plus:
 
@@ -69,11 +69,11 @@ Prove a dependency-swap candidate like any other, plus:
 
 For every symbol or behavior, classify consumers before writing:
 
-- Production corpus: `src/hdsh/`, `scripts/`, `.pre-commit-hooks.yaml`, `prek.toml`, and loader/config paths.
-- Non-production corpus: tests, README/docs, RFCs, fixtures, and comments.
+- Production corpus: `backend/crates/`, `frontend/`, the deploy surfaces under `docker/` and `devops/`, and shipped configuration templates.
+- Non-production corpus: tests (`backend` integration, `e2e/`), README/docs, RFCs, specs, fixtures, and comments.
 - Ambiguous corpus: documentation examples and snippets that may double as product paths. Inspect usage before classifying.
 
-Use `rg` first. Good searches include the exact symbol, command name, option spelling, config key, method name with both `.name(` and `name(`, and any diagnostic strings. Then read the call sites, public interfaces, tests, docs, and the hook and merge-driver registrations.
+Use `rg` first. Good searches include the exact symbol, command name, option spelling, config key, method name with both `.name(` and `name(`, and any diagnostic strings. Then read the call sites, public interfaces, tests, docs, and the `prek.toml` hook entries and `.gitattributes` merge-driver registration.
 
 Reject or downgrade a candidate when:
 

@@ -1,9 +1,9 @@
 ---
 name: archiving-rfcs
-description: Use when adding, auditing, pruning, archiving, restoring, or reviewing RFCs in harness-deepseek-harness; checks every new RFC for superseded active records, classifies implemented RFCs by future decision value, deletes rejected RFCs that no longer prevent a tempting mistake, and applies the frozen archived/{class} triplet and manifest seal rules.
+description: Use when adding, auditing, pruning, archiving, restoring, or reviewing RFCs in wakewake; checks every new RFC for superseded active records, classifies implemented RFCs by future decision value, deletes rejected RFCs that no longer prevent a tempting mistake, and applies the frozen archived/{class} triplet and manifest seal rules.
 ---
 
-# Archive harness-deepseek-harness RFCs
+# Archive wakewake RFCs
 
 Reduce the active decision corpus without erasing history that can still guide work. Judge every RFC semantically; word count and age are discovery aids, never archive criteria.
 
@@ -41,9 +41,9 @@ For rejected RFCs: keep one whose losing proposal remains a tempting, meaningful
 
 1. Move the complete `<rfc>.md`, `<rfc>.zh.md`, and `<rfc>.i18n.yaml` triplet from `implemented/<class>/` to `archived/<class>/`; `implemented` is deliberately absent from the archive path. Do not translate, reformat, update facts, or repair links inside the RFC.
 2. Make no body edits. Insert only `Archived: YYYY-MM-DD` immediately below `Status: implemented` in both language files, using the archival date and the same value on both sides.
-3. While the triplet still lives under `implemented/`, re-record the sidecar for the two metadata-only edits with `uv run hdsh pairing record .agents/rfcs/implemented/<class>/<rfc>.md` — the pairing corpus excludes the archived tree, so the record must happen before the move.
+3. While the triplet still lives under `implemented/`, re-record the sidecar for the two metadata-only edits with `hdsh pairing record .agents/rfcs/implemented/<class>/<rfc>.md` — the pairing corpus excludes the archived tree, so the record must happen before the move.
 4. Search for inbound links from active prose. Redirect them to current authority, retarget them to the archived path only when the historical snapshot is intentionally cited, or delete them. Never verify or repair links out of the archived RFC.
-5. Run `uv run hdsh rfc seal`. Its append-only mode first proves every existing seal still matches, then adds only the new triplet hashes. Run `uv run hdsh rfc archive` afterward.
+5. Run `hdsh rfc seal`. Its append-only mode first proves every existing seal still matches, then adds only the new triplet hashes. Run `hdsh rfc archive` afterward.
 
 After the triplet is sealed, never edit, move, translate, reformat, or delete it. Archived RFCs remain valid inbound-link targets but are historical snapshots, not authority for current behavior.
 
