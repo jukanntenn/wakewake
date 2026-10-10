@@ -230,7 +230,14 @@ fn build_router(state: Arc<AppState>, settings: Arc<Settings>) -> Router {
         .merge(public_auth)
         .merge(jwt_routes)
         .merge(admin_routes)
-        .merge(agent_routes);
+        .merge(agent_routes)
+    // 请求时长直方图（http_request_duration_seconds）。route_layer 挂载：
+    // 路由已匹配，MatchedPath 可用，path 标签是路由模板而非原始 URI（防
+    // ID 打爆序列基数）。在限流层之内——governor 的 429 不经过这里，其量
+    // 由 http_rate_limited_total 承载。
+    .route_layer(axum::middleware::from_fn(
+        wakewake_server::middleware::http_metrics::http_metrics,
+    ));
     // 全局兜底限流（disabled=true 时跳过）。health 后置 merge 豁免：
     // Docker healthcheck（10s）+ Caddy upstream 探测（10s）合计 12 req/min，
     // 不应占用限流预算，且限流故障时探活必须永远可用。
