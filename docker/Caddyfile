@@ -1,8 +1,9 @@
 # wakewake 镜像默认 Caddyfile（plain HTTP，烤进 /app/Caddyfile，s6 caddy run 固定读此路径）。
 #
-# 自部署（docker/docker-compose.yml）与 staging（ansible，tls_profile=http，零挂载）
-# 直接用本文件；本地验收与 e2e 共用 Caddyfile.local（自签），远程 test/prod 挂
-# Caddyfile.{test,prod}——每份变体只声明站点地址与 TLS 层，路由全部来自 import 的 routes.caddy。
+# 自部署（docker/docker-compose.yml）与 staging/prod（ansible，tls_profile=http，零挂载）
+# 直接用本文件；本地验收与 e2e 共用 Caddyfile.local（自签），远程 test 挂
+# Caddyfile.test——每份变体只声明站点地址与 TLS 层，路由全部来自 import 的 routes.caddy
+# （prod 的 TLS 终结在宿主 Caddy 网关 site 块 wakewake.caddy.j2）。
 
 import /app/caddy/routes.caddy
 

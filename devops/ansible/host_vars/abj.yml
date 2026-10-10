@@ -1,0 +1,4 @@
+---
+# prod host 事实（abj，阿里云 ECS）。
+user: "alice"
+home: "/home/{{ user }}"

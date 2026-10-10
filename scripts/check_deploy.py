@@ -25,14 +25,20 @@ import ssl
 import sys
 import time
 from urllib.error import HTTPError, URLError
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
+
+# Cloudflare's free-plan bot management challenges the Python-urllib default UA
+# with 403, so every prod (CF-fronted) verification would falsely fail; a stable
+# custom UA passes. Do not remove — non-CF environments never see the difference.
+USER_AGENT = "wakewake-check-deploy/1.0"
 
 
 def fetch_json(
     url: str, timeout: float, context: ssl.SSLContext | None
 ) -> dict[str, object] | None:
     try:
-        with urlopen(url, timeout=timeout, context=context) as resp:
+        req = Request(url, headers={"User-Agent": USER_AGENT})
+        with urlopen(req, timeout=timeout, context=context) as resp:
             if resp.status != 200:
                 return None
             return json.loads(resp.read())

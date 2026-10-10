@@ -40,7 +40,7 @@ public_url = "https://wakewake.app"
 # [OPTIONAL] 权威客户端 IP 头名（如 "CF-Connecting-IP"，cloudflare-edge RFC）
 # 设置且 trust_proxy=true 时优先于 XFF/X-Real-IP 读取；未设维持 XFF 最左口径。
 # 适用 CF 回源拓扑：XFF 是追加链（左值可伪造），CF-Connecting-IP 恒为单个真实访客 IP。
-# ⚠️ 前提：接入层仅放行可信反代（Caddyfile.prod 的 remote_ip CF CIDR 守卫），
+# ⚠️ 前提：接入层仅放行可信反代（宿主 Caddy 网关 site 块的 remote_ip CF CIDR 守卫），
 # 否则直连方可任意伪造该头——与守卫同进同退。
 # Env: WAKEWAKE_SERVER__CLIENT_IP_HEADER
 # Default: 未设置

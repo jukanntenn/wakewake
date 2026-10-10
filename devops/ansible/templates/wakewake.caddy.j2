@@ -1,0 +1,23 @@
+# {{ ansible_managed }}
+# wakewake 宿主网关 site 块（为 {{ env }} 渲染，宿主网关型拓扑）。
+#
+# 访客 -> Cloudflare（橙云，Full-strict）-> 宿主 Caddy :443（本文件，CF Origin
+# Cert 终结 TLS）-> 127.0.0.1:{{ host_port }}（容器 Caddy，plain HTTP）。
+# 容器端口仅回环发布，对外唯一入口就是本网关。
+#
+# remote_ip 守卫（CF 接入层，cloudflare-edge WRFC）：仅放行 Cloudflare CIDR
+# 回源，绕过 CF 直连 443（伪造 SNI/Host）一律 403——绕过 CF 即绕过全部边缘
+# 防护（限速/WAF/缓存）。CIDR 真源 cloudflare.com/ips，维护于
+# group_vars/prod/env.yml 的 cloudflare_cidrs（季度核对刷新）。
+# 守卫与后端 [server].client_ip_header（config.toml）同进同退：守卫保证仅 CF
+# 流量可达，CF-Connecting-IP 头不可伪造；CF-Connecting-IP 经本网关原样透传
+# 到后端，作为权威客户端 IP。
+
+{{ gateway_domain }} {
+	tls {{ gateway_certs_dir }}/origin.pem {{ gateway_certs_dir }}/origin.key
+
+	@not_cf not remote_ip {{ cloudflare_cidrs }}
+	respond @not_cf 403
+
+	reverse_proxy 127.0.0.1:{{ host_port }}
+}

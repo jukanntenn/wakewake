@@ -49,7 +49,7 @@ Loading-order details (server `config.rs::Settings::load`):
 | `host` | string | `0.0.0.0` | `WAKEWAKE_SERVER__HOST` | Listen address |
 | `port` | u16 | `8080` | `WAKEWAKE_SERVER__PORT` | **Invariant 8080**: the in-image `docker/caddy/routes.caddy` proxies to `127.0.0.1:8080`; never changes |
 | `trust_proxy` | bool | `true` | `WAKEWAKE_SERVER__TRUST_PROXY` | true = client IP from the leftmost XFF (reverse proxy); false = TCP peer (direct deployment) |
-| `client_ip_header` | Option\<string\> | unset | `WAKEWAKE_SERVER__CLIENT_IP_HEADER` | Authoritative client-IP header (e.g. `CF-Connecting-IP` behind Cloudflare), read before XFF/X-Real-IP when set and `trust_proxy` is true. Behind CF the XFF chain is append-mode (leftmost forgeable), so prod sets this; it requires the access layer to admit only trusted proxies (Caddyfile.prod `remote_ip` CF-CIDR guard) or the header itself is forgeable — the two ship together |
+| `client_ip_header` | Option\<string\> | unset | `WAKEWAKE_SERVER__CLIENT_IP_HEADER` | Authoritative client-IP header (e.g. `CF-Connecting-IP` behind Cloudflare), read before XFF/X-Real-IP when set and `trust_proxy` is true. Behind CF the XFF chain is append-mode (leftmost forgeable), so prod sets this; it requires the access layer to admit only trusted proxies (the host gateway site block's `remote_ip` CF-CIDR guard) or the header itself is forgeable — the two ship together |
 | `max_sse_connections` | usize | `2000` | `WAKEWAKE_SERVER__MAX_SSE_CONNECTIONS` | Global SSE connection cap (0 = unlimited); connections beyond it get 503 SERVICE_UNAVAILABLE and agents reconnect with backoff. Abuse backstop, not a per-user quota (connection cardinality = paired agents; same-agent reconnects replace, never stack) |
 
 ### `[database]` (required)
@@ -243,18 +243,18 @@ Principle: **each environment = one command + at most one file to edit**. The op
 | Remote test/staging/prod | `ansible-playbook devops/ansible/deploy.yml -l <env>` | `group_vars/<env>/env.yml` + `vault.yml` (avpm single-variable encryption) → renders `config.toml.j2` + `docker-compose.yml.j2` + Caddyfile | ansible vault (committed but encrypted) |
 | agent (bare-metal) | `deploy-agent.yml -l test_agent` | vault's `agent_server_url`/`agent_pairing_code` → renders `agent-config.toml.j2` + supervisord conf | ansible vault |
 
-ansible environment variables (`group_vars/<env>/env.yml`): `image` (test = LAN registry floating `main`; staging/prod = `wakewake_version` pinned), `host_port`, `public_url`, `health_url`/`health_insecure`, `tls_profile` (http|https; branches the healthcheck and the caddy-data volume), `caddyfile_template` (undefined = zero mounts, the image-builtin Caddyfile), `mailer_*`. Shared invariants live in `group_vars/all.yml` (8080/8443, PG database/user, paths).
+ansible environment variables (`group_vars/<env>/env.yml`): `image` (test = LAN registry floating `main`; staging/prod = `wakewake_version` pinned), `host_port` (+ `loopback_publish` = loopback-only publish, prod), `public_url`, `health_url`/`health_insecure`, `tls_profile` (http|https; branches the healthcheck and the caddy-data volume), `caddyfile_template` (undefined = zero mounts, the image-builtin Caddyfile), the prod host-gateway vars (`gateway_domain`/`gateway_site_file`/`gateway_certs_dir`/`cloudflare_cidrs`), `mailer_*`. Shared invariants live in `group_vars/all.yml` (8080/8443, PG database/user, paths).
 
-### Caddyfile: 4 site variants + 1 routing source of truth
+### Caddyfile: 3 site variants + 1 routing source of truth + the prod host gateway
 
 The single routing source of truth is `docker/caddy/routes.caddy` (baked into the image at `/app/caddy/routes.caddy`): API/SSE proxying + static frontend + security headers + access logs. **To change routing, change this one file.** Each environment's Caddyfile does exactly two things: import the routes and declare the site address and TLS layer:
 
 | Variant | TLS shape | Environments |
 |---|---|---|
-| `docker/Caddyfile` (image-builtin `/app/Caddyfile`) | hostless `:8443` plain HTTP | self-deploy + staging (zero mounts) |
+| `docker/Caddyfile` (image-builtin `/app/Caddyfile`) | hostless `:8443` plain HTTP | self-deploy + staging + prod (zero mounts) |
 | `docker/Caddyfile.local` | `tls internal` self-signed (SAN localhost, app) | local acceptance + e2e (shared) |
 | `devops/ansible/templates/Caddyfile.test` | `tls internal` + `fallback_sni` (direct IP) | test |
-| `devops/ansible/templates/Caddyfile.prod` | CF Origin Cert (placeholder) | prod |
+| `devops/ansible/templates/wakewake.caddy.j2` | CF Origin Cert + CF CIDR guard — a **host** systemd Caddy site block, not a container Caddyfile; reverse-proxies to the loopback-only `host_port` | prod (host gateway on `:443`) |
 
 ## 9. Invariants list (hold across every environment)
 

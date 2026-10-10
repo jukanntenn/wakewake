@@ -3,5 +3,5 @@
 # languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   hdsh pairing record devops/cloudflare.md
-cloudflare.md: 3d26e22b43a5cfa6138d6f71dfd7c6176e794a57
-cloudflare.zh.md: 5b8d70d22e893ee85e2fff5aacfc4fdf391db5bf
+cloudflare.md: e5f82124988ed945afc4c28fff29977bcd367925
+cloudflare.zh.md: e36dfc24ab0cd558c67689f82a885991933958cb

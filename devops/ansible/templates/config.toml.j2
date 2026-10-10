@@ -11,8 +11,9 @@ public_url = "{{ public_url }}"
 host = "127.0.0.1"
 port = {{ backend_port }}
 {% if server_client_ip_header is defined %}
-# CF 回源拓扑（cloudflare-edge WRFC）：权威客户端 IP 头。Caddyfile.prod 的
-# remote_ip 守卫保证仅 CF 流量可达，此头不可伪造；与守卫同进同退。
+# CF 回源拓扑（cloudflare-edge WRFC）：权威客户端 IP 头。宿主网关 site 块
+# （wakewake.caddy.j2）的 remote_ip 守卫保证仅 CF 流量可达，此头不可伪造；
+# 与守卫同进同退。
 client_ip_header = "{{ server_client_ip_header }}"
 {% endif %}
 
@@ -25,6 +26,15 @@ refresh_signing_key = "{{ jwt_refresh_signing_key }}"
 
 [password_reset]
 secret = "{{ password_reset_secret }}"
+
+{% if bootstrap_admin_email is defined %}
+# bootstrap admin（management::ensure_bootstrap_admin 启动幂等建号）。定义了
+# bootstrap_admin_email 的环境必须同时覆盖密码——开发默认 admin@wakewake.local /
+# wakewake123 不可上生产（密码从 vault 注入）。
+[security]
+bootstrap_admin_email = "{{ bootstrap_admin_email }}"
+bootstrap_admin_password = "{{ bootstrap_admin_password }}"
+{% endif %}
 
 [rate_limit]
 disabled = {{ rate_limit_disabled | default(false) | lower }}
