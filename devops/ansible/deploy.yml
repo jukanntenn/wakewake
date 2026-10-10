@@ -164,9 +164,18 @@
         - b2_key_id is defined
         - "'no-rclone' in backup_tools.stdout"
       block:
-        - name: Download rclone release
+        # abj 出国带宽极差：下载只发生在控制器本机（缓存于 ~/.cache/wakewake/），
+        # 制品经 ssh 连接送到宿主——宿主全程零外网下载。
+        - name: Cache rclone release on the controller
           ansible.builtin.get_url:
             url: "{{ rclone_url }}"
+            dest: "{{ lookup('ansible.builtin.env', 'HOME') }}/.cache/wakewake/rclone-{{ rclone_version }}-linux-amd64.zip"
+            mode: "0600"
+          delegate_to: localhost
+          run_once: true
+        - name: Ship rclone release to the host
+          ansible.builtin.copy:
+            src: "{{ lookup('ansible.builtin.env', 'HOME') }}/.cache/wakewake/rclone-{{ rclone_version }}-linux-amd64.zip"
             dest: "{{ home }}/rclone-{{ rclone_version }}.zip"
             mode: "0600"
         - name: Unpack rclone release
