@@ -3,5 +3,5 @@
 # languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   hdsh pairing record devops/backup.md
-backup.md: 8b6739a2d9e632e229e2fee06b34557987efb6fa
-backup.zh.md: 8de7cca00b0512ac19836578cdc531301f60f030
+backup.md: 6dc42420d5b5b635f6786e831ed96563a39b8b45
+backup.zh.md: 14c32935c6ca9ca9679df858845f398667d11858

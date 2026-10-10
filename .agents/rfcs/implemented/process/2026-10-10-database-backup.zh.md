@@ -16,13 +16,13 @@ Status: implemented
 
 - **转储管道** —— `devops/ansible/files/pg-dump-backup.py` 把 compose postgres 容器里的 `pg_dump --no-owner` 经 `zstd -19` 流入 `rclone rcat`，每日落一个对象：环境桶里的 `dumps/wakewake-YYYYmmddTHHMM.sql.zst`。纯 SQL 转储是格式多样性对冲：任何 Postgres 17 都能恢复（与块级状态无关）、能在物理方案必然失效的基镜像/页级损坏中幸存、紧急时人眼可读。`rclone` 限速（`--bwlimit 2M`），瘦上线上转储永远不会挤占源站流量。
 - **调度** —— linger 下的 systemd 用户单元（`wakewake-backup@.service` 模板 + 三个 timer）：转储 03:30、新鲜度检查 05:30、恢复演练每月 2 号 05:00（1 号的转储已有货可演）。`Persistent=true` 补跑停机期间错过的触发。日志进 journal。
-- **新鲜度检查** —— `backup-check.py` 在最新离线转储超过 26 h（静默备份死亡：漏触发、磁盘满、对象存储密钥被吊销）或本地 postgres 不可达（后续每次转储都会失败）时报错，并把 verdict 推给 uptime-kuma 的 `db backup` push monitor——备份失败像其他故障一样触发告警，而不是藏在日志文件里。
+- **新鲜度检查** —— `backup_check.py` 在最新离线转储超过 26 h（静默备份死亡：漏触发、磁盘满、对象存储密钥被吊销）或本地 postgres 不可达（后续每次转储都会失败）时报错，并把 verdict 推给 uptime-kuma 的 `db backup` push monitor——备份失败像其他故障一样触发告警，而不是藏在日志文件里。
 - **恢复演练** —— `backup-drill.py` 拉取最新转储、恢复进一次性 `postgres:17-alpine` 容器、与线上库比对 `users`/`wakes` 行数（wakes 宽限 2000 ≈ 个人工具规模一天的写入量）、随后清理全部痕迹。断言是行数相等，不只是退出码。
 - **凭据与守卫** —— `backup.env`（0600，由 `templates/backup.env.j2` 渲染）承载 vault 加密的对象存储密钥对；endpoint/region/桶名是非秘密的环境变量，test 与 prod 分桶，晋升链永不混桶。整层守卫在 vault 里是否定义 `b2_key_id`：运维建好桶、写入密钥之前，部署保持绿色且与备份层之前逐字节一致（setup-order 契约，激活手册见 [devops/backup.md](../../../../devops/backup.zh.md)）。删掉变量永远不会触发卸载。
 
 ## 验证
 
-在 test 环境：转储管道在桶里存入一个 zstd 压缩对象且 `rclone lsl` 可列出；`backup-check.py` 报告新鲜度并向 kuma monitor 推送 `up`；`backup-drill.py` 把最新转储恢复进一次性容器并比对线上行数一致。playbook 在该层关闭与打开两种渲染下都不触碰无关任务。
+在 test 环境：转储管道在桶里存入一个 zstd 压缩对象且 `rclone lsl` 可列出；`backup_check.py` 报告新鲜度并向 kuma monitor 推送 `up`；`backup-drill.py` 把最新转储恢复进一次性容器并比对线上行数一致。playbook 在该层关闭与打开两种渲染下都不触碰无关任务。
 
 ## 落选方案
 

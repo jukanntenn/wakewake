@@ -183,7 +183,7 @@
         mode: "0750"
       loop:
         - pg-dump-backup.py
-        - backup-check.py
+        - backup_check.py
         - backup-drill.py
       when: b2_key_id is defined
 

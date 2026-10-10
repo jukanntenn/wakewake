@@ -13,7 +13,7 @@ heartbeat/backup push  ──test: LAN直连 / prod: 127.0.0.1:3002──► upt
 beszel agents          ──test: LAN直连 / prod: 127.0.0.1:8091──► beszel hub @ NAS
 ```
 
-The observability stack (otelcol, stores, Grafana, Beszel hub, uptime-kuma) is operator-owned. Repo-owned pieces: the deploy wiring below, the heartbeat/backup-check producers, the Beszel agent compose, and the Grafana artifacts in `devops/grafana/`. The public edge for these services lives on the prod VPS itself (`*.bytehome.fun` → edge caddy → loopback frp ports → home); wakewake producers on that VPS use the loopback ports directly, bypassing the public edge by design.
+The observability stack (otelcol, stores, Grafana, Beszel hub, uptime-kuma) is operator-owned. Repo-owned pieces: the deploy wiring below, the heartbeat/backup_check producers, the Beszel agent compose, and the Grafana artifacts in `devops/grafana/`. The public edge for these services lives on the prod VPS itself (`*.bytehome.fun` → edge caddy → loopback frp ports → home); wakewake producers on that VPS use the loopback ports directly, bypassing the public edge by design.
 
 ## OTLP wiring (deploy side)
 
@@ -45,7 +45,7 @@ Create by hand in the kuma UI (operator instance). Naming: `wakewake · <env> ·
 | wakewake · prod · homepage (edge) | HTTP(s) | `https://wakewake.online/` | expects 200; cert + domain-expiry notifications on |
 | wakewake · prod · origin health | HTTP(s) JSON query | `https://wakewake.online/api/v1/health` | `$.status == ok` |
 | wakewake · prod · host heartbeat (push) | Push, 120 s | push URL → vault `kuma_heartbeat_url` (prod) | producer: `heartbeat.py` |
-| wakewake · prod · db backup (push) | Push, 86400 s | push URL → vault `kuma_backup_url` (prod) | producer: `backup-check.py` |
+| wakewake · prod · db backup (push) | Push, 86400 s | push URL → vault `kuma_backup_url` (prod) | producer: `backup_check.py` |
 | wakewake · test · homepage | HTTP(s) | `https://192.168.5.200:8449/` | ignore TLS (self-signed) |
 | wakewake · test · origin health | HTTP(s) JSON query | `https://192.168.5.200:8449/api/v1/health` | ignore TLS |
 | wakewake · test · host heartbeat (push) | Push, 120 s | push URL → vault (test) | |

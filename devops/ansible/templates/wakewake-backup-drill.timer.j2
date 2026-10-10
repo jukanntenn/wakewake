@@ -5,6 +5,9 @@
 Description=Monthly wakewake restore drill
 
 [Timer]
+# 指回模板服务实例（%i = 脚本文件名）；缺了这行 timer 会去找同名的
+# wakewake-backup-db.service（不存在）而启动失败。
+Unit=wakewake-backup@backup-drill.py.service
 OnCalendar=*-*-02 05:00:00
 Persistent=true
 

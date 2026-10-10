@@ -45,7 +45,7 @@ ssh <nas> 'cd docker/grafana && docker compose restart grafana'
 | wakewake · prod · homepage (edge) | HTTP(s) | `https://wakewake.online/` | 期望 200；开启证书 + 域名到期通知 |
 | wakewake · prod · origin health | HTTP(s) JSON 查询 | `https://wakewake.online/api/v1/health` | `$.status == ok` |
 | wakewake · prod · host heartbeat (push) | Push，120 s | push URL → vault `kuma_heartbeat_url`（prod） | 生产者：`heartbeat.py` |
-| wakewake · prod · db backup (push) | Push，86400 s | push URL → vault `kuma_backup_url`（prod） | 生产者：`backup-check.py` |
+| wakewake · prod · db backup (push) | Push，86400 s | push URL → vault `kuma_backup_url`（prod） | 生产者：`backup_check.py` |
 | wakewake · test · homepage | HTTP(s) | `https://192.168.5.200:8449/` | 忽略 TLS（自签） |
 | wakewake · test · origin health | HTTP(s) JSON 查询 | `https://192.168.5.200:8449/api/v1/health` | 忽略 TLS |
 | wakewake · test · host heartbeat (push) | Push，120 s | push URL → vault（test） | |

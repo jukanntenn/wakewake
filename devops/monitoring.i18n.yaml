@@ -3,5 +3,5 @@
 # languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   hdsh pairing record devops/monitoring.md
-monitoring.md: afbbea5883b85331d4d37b905b22b7f80d0032ec
-monitoring.zh.md: 157ffcfc5c86fb6f006309b33c6753ecb02a29b7
+monitoring.md: 3cc015119cbcbc142e86b0b35240182a64a87855
+monitoring.zh.md: 976c4a04050ed33f89bc539c181826535b4cdce1

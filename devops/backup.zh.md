@@ -9,7 +9,7 @@
 | 部件 | 位置 | 调度 |
 |---|---|---|
 | `pg-dump-backup.py` | 各宿主 `{{ app_path }}`，systemd 用户单元 `wakewake-backup@pg-dump-backup.py.service` | 每日 03:30 |
-| `backup-check.py` | 同上 | 每日 05:30，verdict 推给 kuma |
+| `backup_check.py` | 同上 | 每日 05:30，verdict 推给 kuma |
 | `backup-drill.py` | 同上 | 每月 2 号 05:00 |
 
 三者都以部署用户运行（linger 已开；零 root）。凭据在 `{{ app_path }}/backup.env`（0600）：endpoint/region/桶来自 `group_vars/<env>/env.yml`，密钥对来自 vault（`b2_key_id` / `b2_secret_access_key`）。`zstd` 用宿主系统包；宿主缺 `rclone` 包时以静态二进制装进 `~/.local/bin`（版本由 `group_vars/all.yml` 的 `rclone_version` pin）。
@@ -42,7 +42,7 @@
    ```
 5. 检查与演练同理：
    ```bash
-   systemctl --user start wakewake-backup@backup-check.py.service
+   systemctl --user start wakewake-backup@backup_check.py.service
    systemctl --user start wakewake-backup@backup-drill.py.service   # prints live vs restored row counts
    ```
 
@@ -72,7 +72,7 @@
 
 | 症状 | 先查什么 |
 |---|---|
-| kuma `db backup` monitor 红 | `journalctl --user -u wakewake-backup@backup-check.py.service`——`msg` 指名失败的探测 |
+| kuma `db backup` monitor 红 | `journalctl --user -u wakewake-backup@backup_check.py.service`——`msg` 指名失败的探测 |
 | 新鲜度探测失败 | 转储 timer 是否触发？`systemctl --user list-timers`；磁盘满？对象存储密钥过期？ |
 | 转储管道退出码 1 | journal 指明哪一段失败（pg_dump / zstd / rclone）；网络还是凭据 |
 | 演练行数对不上 | 看转储年龄——忙日超过一天的写入意味着宽限量太紧；调 `WAKES_SLACK` |

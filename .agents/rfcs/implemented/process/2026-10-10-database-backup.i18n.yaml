@@ -3,5 +3,5 @@
 # languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   hdsh pairing record .agents/rfcs/implemented/process/2026-10-10-database-backup.md
-2026-10-10-database-backup.md: 1220546ee64d83d09e855b56bcf7396cca2ee786
-2026-10-10-database-backup.zh.md: db29ab0a34c00649c4a7c58727d71287889b2919
+2026-10-10-database-backup.md: c2bb997f9b206035f9b3829bad514afeca4e1817
+2026-10-10-database-backup.zh.md: 0666d7b527a6fcb9070b6b7353c3e5b4337f8aeb

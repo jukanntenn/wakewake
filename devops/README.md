@@ -143,7 +143,7 @@ devops/ansible/
     prod/{env.yml,vault.yml}       prod：Docker Hub 钉版本 + 宿主 Caddy 网关前置 + secrets（加密）
   host_vars/                       每主机事实（user / home）
   files/                           宿主侧脚本（0750 部署到 app_path）：heartbeat.py +
-                                   备份三件套（pg-dump-backup / backup-check / backup-drill）
+                                   备份三件套（pg-dump-backup / backup_check / backup-drill）
   templates/
     docker-compose.yml.j2          通用（healthcheck / caddy-data 按 tls_profile 分支；
                                    loopback_publish=true 时端口仅回环发布；otel_* 齐

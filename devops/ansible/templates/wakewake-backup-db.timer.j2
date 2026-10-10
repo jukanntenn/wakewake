@@ -5,6 +5,9 @@
 Description=Daily wakewake pg_dump to object storage
 
 [Timer]
+# 指回模板服务实例（%i = 脚本文件名）；缺了这行 timer 会去找同名的
+# wakewake-backup-db.service（不存在）而启动失败。
+Unit=wakewake-backup@pg-dump-backup.py.service
 OnCalendar=*-*-* 03:30:00
 Persistent=true
 

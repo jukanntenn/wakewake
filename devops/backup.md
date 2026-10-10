@@ -9,7 +9,7 @@ Daily logical dumps to an offsite object-store bucket, a freshness check that pa
 | Piece | Where | Schedule |
 |---|---|---|
 | `pg-dump-backup.py` | `{{ app_path }}` on each host, systemd user unit `wakewake-backup@pg-dump-backup.py.service` | daily 03:30 |
-| `backup-check.py` | same | daily 05:30, pushes verdict to kuma |
+| `backup_check.py` | same | daily 05:30, pushes verdict to kuma |
 | `backup-drill.py` | same | monthly, day 2 at 05:00 |
 
 All three run as the deploy user (linger enabled; no root). Credentials live in `{{ app_path }}/backup.env` (mode 0600): endpoint/region/bucket from `group_vars/<env>/env.yml`, the key pair from vault (`b2_key_id` / `b2_secret_access_key`). `zstd` comes from the host package; `rclone` installs as a static binary under `~/.local/bin` when the host package is absent (version pinned by `rclone_version` in `group_vars/all.yml`).
@@ -42,7 +42,7 @@ The whole tier is guarded on `b2_key_id` being present in the vault — until th
    ```
 5. Same for the check and the drill:
    ```bash
-   systemctl --user start wakewake-backup@backup-check.py.service
+   systemctl --user start wakewake-backup@backup_check.py.service
    systemctl --user start wakewake-backup@backup-drill.py.service   # prints live vs restored row counts
    ```
 
@@ -72,7 +72,7 @@ Point-in-time beyond the last dump is not recoverable — RPO is 24 h by design 
 
 | Symptom | First check |
 |---|---|
-| kuma `db backup` monitor down | `journalctl --user -u wakewake-backup@backup-check.py.service` — the `msg` names the failing probe |
+| kuma `db backup` monitor down | `journalctl --user -u wakewake-backup@backup_check.py.service` — the `msg` names the failing probe |
 | freshness probe fails | did the dump timer fire? `systemctl --user list-timers`; disk full? object-store key expired? |
 | dump pipeline exits 1 | journal shows which stage (pg_dump / zstd / rclone) failed; network vs credentials |
 | drill fails on row counts | check dump age — more than a day of writes on a busy day means the slack is too tight; adjust `WAKES_SLACK` |

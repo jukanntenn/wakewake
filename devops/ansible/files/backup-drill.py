@@ -51,7 +51,8 @@ def compose_psql(project_dir: str, sql: str) -> str:
     return proc.stdout.strip()
 
 
-def drill_psql(sql: str) -> str:
+def drill_psql(sql: str, db: str = "postgres") -> str:
+    # 管理语句（建角色/建库）打 postgres 库；恢复与行数对账打 wakewake 库。
     proc = subprocess.run(
         [
             "docker",
@@ -62,7 +63,7 @@ def drill_psql(sql: str) -> str:
             "-U",
             "postgres",
             "-d",
-            "wakewake",
+            db,
             "-tAc",
             sql,
         ],
@@ -203,8 +204,8 @@ def main() -> int:
                 f"restore pipeline failed {codes} psql={psql.returncode}: {psql.stderr[:300]}"
             )
 
-        drill_users = int(drill_psql(count_sql("users")))
-        drill_wakes = int(drill_psql(count_sql("wakes")))
+        drill_users = int(drill_psql(count_sql("users"), "wakewake"))
+        drill_wakes = int(drill_psql(count_sql("wakes"), "wakewake"))
         print(
             f"users live={live_users} drill={drill_users}; "
             f"wakes live={live_wakes} drill={drill_wakes}"

@@ -12,4 +12,4 @@ After=docker.service
 Type=oneshot
 WorkingDirectory={{ app_path }}
 EnvironmentFile={{ app_path }}/backup.env
-ExecStart={{ app_path }}/%i
+ExecStart={{ app_path }}/%i {{ app_path }}
