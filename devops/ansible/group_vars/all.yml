@@ -26,6 +26,7 @@ postgres_user: wakewake
 beszel_agent_path: "{{ apps_path }}/{{ app_name }}-beszel"
 
 # 静态 rclone（宿主无包管理权限时的备份传输端，装到 ~/.local/bin）。
-# 版本 pin：升级 = 改此变量重跑 playbook。
+# 版本目录只有 zip（tar.gz 仅首页 current 有）——unarchive 走 unzip，
+# 宿主已预装（Debian 基础包）。版本 pin：升级 = 改此变量重跑 playbook。
 rclone_version: "1.75.2"
-rclone_url: "https://downloads.rclone.org/v{{ rclone_version }}/rclone-v{{ rclone_version }}-linux-amd64.tar.gz"
+rclone_url: "https://downloads.rclone.org/v{{ rclone_version }}/rclone-v{{ rclone_version }}-linux-amd64.zip"

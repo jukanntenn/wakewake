@@ -158,11 +158,11 @@
         - name: Download rclone release
           ansible.builtin.get_url:
             url: "{{ rclone_url }}"
-            dest: "{{ home }}/rclone-{{ rclone_version }}.tar.gz"
+            dest: "{{ home }}/rclone-{{ rclone_version }}.zip"
             mode: "0600"
         - name: Unpack rclone release
           ansible.builtin.unarchive:
-            src: "{{ home }}/rclone-{{ rclone_version }}.tar.gz"
+            src: "{{ home }}/rclone-{{ rclone_version }}.zip"
             dest: "{{ home }}/.local/share/"
             remote_src: true
         - name: Place rclone binary on user PATH
@@ -173,7 +173,7 @@
             remote_src: true
         - name: Remove rclone tarball
           ansible.builtin.file:
-            path: "{{ home }}/rclone-{{ rclone_version }}.tar.gz"
+            path: "{{ home }}/rclone-{{ rclone_version }}.zip"
             state: absent
 
     - name: Install backup scripts
