@@ -34,6 +34,12 @@ services:
       # agent/浏览器全部失效。仅 tls internal（dev）需要；HTTP 环境无内部 CA。
       - caddy-data:/root/.local/share/caddy
 {% endif %}
+{% if otel_otlp_endpoint is defined and otel_otlp_token is defined and otel_otlp_endpoint.startswith('http://host.docker.internal') %}
+    # OTLP 端点指向宿主回环（frp 隧道口）时，容器内 127.0.0.1 是容器自身——
+    # 经 host-gateway（docker0 网关 IP）打宿主监听的端口。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+{% endif %}
     environment:
       # 应用配置唯一载体是挂载的 config.toml（DSN/密钥均渲染在内，password 已 urlencode）。
       # 这里只留容器级环境；WAKEWAKE_* env 会覆盖 TOML，勿双写同一值。
