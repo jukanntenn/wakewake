@@ -130,6 +130,181 @@
     - name: Flush gateway reload before verifying health
       ansible.builtin.meta: flush_handlers
 
+    # ── OTLP 遥测接线（观测栈在运维的观测服务器上，见 devops/monitoring.md）──
+    # 端点+token 都在（vault）才渲染 env——守卫在 compose 模板内；未定义时
+    # 容器零改动，本地 JSONL 文件模式兜底不回归。
+
+    # ── 数据备份层（test/prod；b2_key_id 在 vault 即激活，setup-order 契约）──
+    # 部署用户两台宿主均无免密 sudo：zstd 用系统包（已在），rclone 缺失时装
+    # 静态二进制到 ~/.local/bin（无需 root），作业跑 systemd 用户单元+linger
+    # （不走 crontab/supervisor）。操作手册：devops/backup.md。
+    # systemd 用户管理器从 passwd 主目录加载单元——与 host_vars 的 home
+    # （存储根，fn 上是 /vol1/1000）不一定相同（fn 的 passwd home 是
+    # /home/fn），必须动态解析而非复用 {{ home }}。
+    - name: Resolve the passwd home the systemd user manager loads units from
+      ansible.builtin.command: getent passwd {{ user }}
+      register: passwd_entry
+      changed_when: false
+      when: b2_key_id is defined or kuma_heartbeat_url is defined
+
+    - name: Enable lingering so user units survive logout/reboot
+      ansible.builtin.command: loginctl enable-linger {{ user }}
+      changed_when: false
+      when: b2_key_id is defined or kuma_heartbeat_url is defined
+
+    - name: Check for backup stream tools
+      ansible.builtin.command: sh -c 'command -v zstd && (command -v rclone || echo no-rclone)'
+      changed_when: false
+      register: backup_tools
+      failed_when: backup_tools.rc != 0
+      when: b2_key_id is defined
+
+    - name: Install static rclone user-locally when absent
+      when:
+        - b2_key_id is defined
+        - "'no-rclone' in backup_tools.stdout"
+      block:
+        # abj 出国带宽极差：下载只发生在控制器本机（缓存于 ~/.cache/wakewake/），
+        # 制品经 ssh 连接送到宿主——宿主全程零外网下载。
+        - name: Cache rclone release on the controller
+          ansible.builtin.get_url:
+            url: "{{ rclone_url }}"
+            dest: "{{ lookup('ansible.builtin.env', 'HOME') }}/.cache/wakewake/rclone-{{ rclone_version }}-linux-amd64.zip"
+            mode: "0600"
+          delegate_to: localhost
+          run_once: true
+        - name: Ship rclone release to the host
+          ansible.builtin.copy:
+            src: "{{ lookup('ansible.builtin.env', 'HOME') }}/.cache/wakewake/rclone-{{ rclone_version }}-linux-amd64.zip"
+            dest: "{{ home }}/rclone-{{ rclone_version }}.zip"
+            mode: "0600"
+        - name: Unpack rclone release
+          ansible.builtin.unarchive:
+            src: "{{ home }}/rclone-{{ rclone_version }}.zip"
+            dest: "{{ home }}/.local/share/"
+            remote_src: true
+        - name: Place rclone binary on user PATH
+          ansible.builtin.copy:
+            src: "{{ home }}/.local/share/rclone-v{{ rclone_version }}-linux-amd64/rclone"
+            dest: "{{ passwd_entry.stdout.split(':')[5] }}/.local/bin/rclone"
+            mode: "0750"
+            remote_src: true
+        - name: Remove rclone tarball
+          ansible.builtin.file:
+            path: "{{ home }}/rclone-{{ rclone_version }}.zip"
+            state: absent
+
+    - name: Install backup scripts
+      ansible.builtin.copy:
+        src: "files/{{ item }}"
+        dest: "{{ app_path }}/{{ item }}"
+        mode: "0750"
+      loop:
+        - pg-dump-backup.py
+        - backup_check.py
+        - backup-drill.py
+      when: b2_key_id is defined
+
+    - name: Template backup environment file
+      ansible.builtin.template:
+        src: backup.env.j2
+        dest: "{{ app_path }}/backup.env"
+        mode: "0600"
+      when: b2_key_id is defined
+
+    - name: Ensure systemd user unit directory exists
+      ansible.builtin.file:
+        path: "{{ passwd_entry.stdout.split(':')[5] }}/.config/systemd/user"
+        state: directory
+        mode: "0755"
+      when: b2_key_id is defined or kuma_heartbeat_url is defined
+
+    - name: Install backup systemd user units
+      ansible.builtin.template:
+        src: "{{ item }}"
+        dest: "{{ passwd_entry.stdout.split(':')[5] }}/.config/systemd/user/{{ item | regex_replace('\\.j2$') }}"
+        mode: "0644"
+      loop:
+        - wakewake-backup@.service.j2
+        - wakewake-backup-db.timer.j2
+        - wakewake-backup-check.timer.j2
+        - wakewake-backup-drill.timer.j2
+      when: b2_key_id is defined
+      notify: reload user systemd
+
+    - name: Enable backup timers
+      ansible.builtin.systemd:
+        scope: user
+        name: "{{ item }}"
+        enabled: true
+        state: started
+        daemon_reload: true
+      loop:
+        - wakewake-backup-db.timer
+        - wakewake-backup-check.timer
+        - wakewake-backup-drill.timer
+      when: b2_key_id is defined
+
+    # ── 可用性心跳（uptime-kuma push 生产者；kuma_heartbeat_url 在 vault 即激活）──
+    - name: Install heartbeat script
+      ansible.builtin.copy:
+        src: files/heartbeat.py
+        dest: "{{ app_path }}/heartbeat.py"
+        mode: "0750"
+      when: kuma_heartbeat_url is defined
+
+    - name: Install heartbeat systemd user unit
+      ansible.builtin.template:
+        src: wakewake-heartbeat.service.j2
+        dest: "{{ passwd_entry.stdout.split(':')[5] }}/.config/systemd/user/wakewake-heartbeat.service"
+        mode: "0600"
+      when: kuma_heartbeat_url is defined
+      notify:
+        - reload user systemd
+        - restart wakewake heartbeat
+
+    # daemon_reload：首装后（或上次 play 在 flush 前中止）单元未 reload 时
+    # systemd 模块看不见它——这里自足地带上 reload，不依赖 notify 路径。
+    - name: Enable and start heartbeat
+      ansible.builtin.systemd:
+        scope: user
+        name: wakewake-heartbeat
+        enabled: true
+        state: started
+        daemon_reload: true
+      when: kuma_heartbeat_url is defined
+
+    # ── Beszel 主机指标 agent（hub 是运维护有的观测栈一半；三变量齐备才部署）──
+    - name: Ensure beszel agent directory exists
+      ansible.builtin.file:
+        path: "{{ beszel_agent_path }}"
+        state: directory
+        mode: "0755"
+      when:
+        - beszel_hub_url is defined
+        - beszel_agent_key is defined
+        - beszel_agent_token is defined
+
+    - name: Template beszel agent compose
+      ansible.builtin.template:
+        src: beszel-agent-compose.yml.j2
+        dest: "{{ beszel_agent_path }}/docker-compose.yml"
+        mode: "0644"
+      when:
+        - beszel_hub_url is defined
+        - beszel_agent_key is defined
+        - beszel_agent_token is defined
+
+    - name: Pull and start beszel agent
+      community.docker.docker_compose_v2:
+        project_src: "{{ beszel_agent_path }}"
+        pull: always
+        state: present
+      when:
+        - beszel_hub_url is defined
+        - beszel_agent_key is defined
+        - beszel_agent_token is defined
+
     - name: Record expected git sha from local HEAD
       ansible.builtin.command: git rev-parse HEAD
       changed_when: false
@@ -157,3 +332,14 @@
       ansible.builtin.systemd:
         name: caddy
         state: reloaded
+
+    - name: reload user systemd
+      ansible.builtin.systemd:
+        scope: user
+        daemon_reload: true
+
+    - name: restart wakewake heartbeat
+      ansible.builtin.systemd:
+        scope: user
+        name: wakewake-heartbeat
+        state: restarted

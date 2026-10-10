@@ -1,0 +1,17 @@
+# wakewake 面板 provider（部署到观测服务器 Grafana 的
+# provisioning/dashboards/wakewake.yml，JSON 落 json/wakewake/ 目录——
+# 安装步骤见 devops/monitoring.md §Grafana）。本文件与仓库内
+# devops/grafana/ 副本字节一致；观测服务器是运行体，仓库是源。
+apiVersion: 1
+
+providers:
+  - name: wakewake
+    orgId: 1
+    folder: wakewake
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json/wakewake
+      foldersFromFilesStructure: false

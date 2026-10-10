@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+# systemd 用户模板单元：wakewake 备份作业。%i 是脚本文件名
+# （pg-dump-backup.py / backup-check.py / backup-drill.py，同目录部署），
+# 三个 .timer 实例分别拉起对应实例。EnvironmentFile 提供对象存储凭据
+# （0600，vault 注入）。用户单元 + linger：部署用户无免密 sudo，装包与
+# root crontab 不可行；日志走 journalt（journalctl --user -u <unit>）。
+[Unit]
+Description=wakewake backup job (%i)
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory={{ app_path }}
+EnvironmentFile={{ app_path }}/backup.env
+ExecStart={{ app_path }}/%i {{ app_path }}

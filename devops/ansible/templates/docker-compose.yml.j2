@@ -34,10 +34,26 @@ services:
       # agent/浏览器全部失效。仅 tls internal（dev）需要；HTTP 环境无内部 CA。
       - caddy-data:/root/.local/share/caddy
 {% endif %}
+{% if otel_otlp_endpoint is defined and otel_otlp_token is defined and otel_otlp_endpoint.startswith('http://host.docker.internal') %}
+    # OTLP 端点指向宿主回环（frp 隧道口）时，容器内 127.0.0.1 是容器自身——
+    # 经 host-gateway（docker0 网关 IP）打宿主监听的端口。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+{% endif %}
     environment:
       # 应用配置唯一载体是挂载的 config.toml（DSN/密钥均渲染在内，password 已 urlencode）。
       # 这里只留容器级环境；WAKEWAKE_* env 会覆盖 TOML，勿双写同一值。
       - TZ={{ tz | default("UTC") }}
+{% if otel_otlp_endpoint is defined and otel_otlp_token is defined %}
+      # OTLP 遥测（devops/monitoring.md）：端点+token 都在（token 走 vault）才
+      # 渲染——未定义时容器零 env 改动，后端退回本地 JSONL 文件模式兜底。
+      # tonic 导出器从 OTEL_EXPORTER_OTLP_HEADERS 读 bearer 头（值 URL-decode，
+      # 故空格写 %20）；deployment.environment.name 经 SDK 的 EnvResourceDetector
+      # 并入 resource，Grafana 面板/告警按它分环境切片。
+      - OTEL_EXPORTER_OTLP_ENDPOINT={{ otel_otlp_endpoint }}
+      - OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20{{ otel_otlp_token }}
+      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name={{ env }}
+{% endif %}
     depends_on:
       postgres:
         condition: service_healthy

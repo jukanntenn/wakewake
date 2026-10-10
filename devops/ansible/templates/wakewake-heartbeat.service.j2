@@ -1,0 +1,22 @@
+# {{ ansible_managed }}
+# systemd 用户单元：wakewake 可用性心跳（test/prod 对称部署）。
+# 脚本是静态的（devops/ansible/files/heartbeat.py，部署到 app_path）；
+# 非秘密参数走命令行，秘密的 push URL 只经 KUMA_HEARTBEAT_URL 由 vault 注入
+# ——这也是本文件 0600、脚本 0750 的原因。systemd 用户单元 + linger 替代
+# supervisor/cron：部署用户在两台宿主上都没有免密 sudo，装包不可行；
+# Restart=always 覆盖脚本崩溃，linger 覆盖重启后自启。
+[Unit]
+Description=wakewake availability heartbeat (uptime-kuma push)
+After=docker.service
+
+[Service]
+Type=simple
+# --insecure 用内联表达式而非行尾块标签：trim_blocks 会吃掉块标签后的
+# 换行，把下一行拼进 ExecStart。
+ExecStart=/usr/bin/python3 {{ app_path }}/heartbeat.py --health-url {{ heartbeat_health_url }} --project-dir {{ app_path }} --interval 60{{ ' --insecure' if heartbeat_insecure | default(false) | bool else '' }}
+Environment=KUMA_HEARTBEAT_URL={{ kuma_heartbeat_url }}
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

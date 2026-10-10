@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+# 每日备份可观测性：转储新鲜度（>26h 即失败）+ 本地库可达性，verdict 推给
+# uptime-kuma 的 db backup push monitor。
+[Unit]
+Description=Daily wakewake backup freshness check
+
+[Timer]
+# 指回模板服务实例（%i = 脚本文件名）；缺了这行 timer 会去找同名的
+# wakewake-backup-db.service（不存在）而启动失败。
+Unit=wakewake-backup@backup_check.py.service
+OnCalendar=*-*-* 05:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

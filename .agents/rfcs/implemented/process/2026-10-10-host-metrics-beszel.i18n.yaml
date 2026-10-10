@@ -2,6 +2,6 @@
 # hash of each side as of the last confirmed-consistent state. Both
 # languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
-#   hdsh pairing record devops/README.md
-README.md: 311b9c5a26792d229f10b9dcc4eedbe232cebc93
-README.zh.md: c36e0f2d32e0421798eca9aa0ecada9986b46fc3
+#   hdsh pairing record .agents/rfcs/implemented/process/2026-10-10-host-metrics-beszel.md
+2026-10-10-host-metrics-beszel.md: 876cdd45bccd4cdd5d6cf4baeb02ec347d85113b
+2026-10-10-host-metrics-beszel.zh.md: cf859288ef12594a6292f3253112d62b95b0baab

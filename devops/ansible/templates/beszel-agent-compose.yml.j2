@@ -1,0 +1,33 @@
+# {{ ansible_managed }}
+# Beszel agent —— 宿主机与容器指标采集。hub 跑在运维护持的观测服务器上
+# （test 走内网直连，prod 走宿主回环的 frp 隧道口），本 compose 是仓库持有
+# 的一半（见 devops/monitoring.md）。deploy.yml 仅在 beszel_hub_url 与
+# beszel_agent_token 都定义时渲染+拉起（凭据对原子守卫），否则部署保持绿色。
+services:
+  beszel-agent:
+    image: {{ beszel_agent_image }}
+    container_name: {{ app_name }}-beszel-agent
+    restart: unless-stopped
+    # host 网络：agent 直读宿主机计数器。唯一对外流量是到 HUB_URL 的
+    # 出站 WebSocket——无任何入站。
+    network_mode: host
+    volumes:
+      # 只读挂载：限制的是写，不是可见性——容器指标只读。
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      PORT: "45876"
+      # hub 的公钥——非秘密（group_vars/<env>/env.yml）。WebSocket 模式下
+      # agent 用它校验 hub 的签名挑战。
+      KEY: "{{ beszel_agent_key }}"
+      # WebSocket 模式：agent 出站拨向 hub（hub 从不回拨 agent）。TOKEN 是
+      # hub 的通用注册 token（hub 设置页 Tokens & Fingerprints / GET
+      # /api/beszel/universal-token?enable=1&permanent=1），vault 加密为
+      # beszel_agent_token——0.20 起不再有 per-system token：agent 首次连接
+      # 即按指纹自动注册成系统，之后在 hub 里改名 wakewake-<env>。
+      HUB_URL: "{{ beszel_hub_url }}"
+      TOKEN: "{{ beszel_agent_token }}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

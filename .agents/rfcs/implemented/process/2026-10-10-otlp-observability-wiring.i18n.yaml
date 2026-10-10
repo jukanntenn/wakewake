@@ -1,0 +1,7 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob
+# hash of each side as of the last confirmed-consistent state. Both
+# languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   hdsh pairing record .agents/rfcs/implemented/process/2026-10-10-otlp-observability-wiring.md
+2026-10-10-otlp-observability-wiring.md: bdd1e67c9a87cdb8c5a97f21d1f2e8813e5df238
+2026-10-10-otlp-observability-wiring.zh.md: b019ae44497024da8fb480ef717db749e3f25be8

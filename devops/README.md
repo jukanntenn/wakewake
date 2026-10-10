@@ -142,16 +142,26 @@ devops/ansible/
     staging/{env.yml,vault.yml}    staging：Docker Hub 钉版本 + 隧道前置（占位）
     prod/{env.yml,vault.yml}       prod：Docker Hub 钉版本 + 宿主 Caddy 网关前置 + secrets（加密）
   host_vars/                       每主机事实（user / home）
+  files/                           宿主侧脚本（0750 部署到 app_path）：heartbeat.py +
+                                   备份三件套（pg-dump-backup / backup_check / backup-drill）
   templates/
     docker-compose.yml.j2          通用（healthcheck / caddy-data 按 tls_profile 分支；
-                                   loopback_publish=true 时端口仅回环发布）
+                                   loopback_publish=true 时端口仅回环发布；otel_* 齐
+                                   备时渲染 OTLP 遥测 env）
     config.toml.j2                 通用（DSN password urlencode；定义 bootstrap_admin_email
                                    时渲染 [security]，密码走 vault）
+    backup.env.j2                  备份脚本凭据（0600；vault 密钥对，b2_key_id 守卫）
+    wakewake-heartbeat.service.j2  心跳 systemd 用户单元（0600；KUMA_HEARTBEAT_URL 走 vault）
+    wakewake-backup@.service.j2    备份作业 systemd 用户模板单元（%i 选脚本）
+    wakewake-backup-*.timer.j2     三个调度 timer（03:30 / 05:30 / 每月 2 号）
+    beszel-agent-compose.yml.j2    Beszel agent（hub 在运维观测栈；三变量齐备才部署）
     Caddyfile.test                 test：tls internal + fallback_sni
     wakewake.caddy.j2              宿主 Caddy 网关 site 块（prod）：CF Origin Cert + CF CIDR
                                    放行（remote_ip 守卫）→ 127.0.0.1:host_port
                                    （staging/prod 容器零挂载：直接用镜像内置 /app/Caddyfile）
 ```
+
+监控/备份的运行手册（拓扑、setup order、清单、DR）：[monitoring.md](monitoring.md)、[backup.md](backup.md)。
 
 ### Vault (avpm single-variable encryption)
 
