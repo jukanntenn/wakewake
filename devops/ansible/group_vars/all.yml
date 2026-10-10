@@ -27,5 +27,5 @@ beszel_agent_path: "{{ apps_path }}/{{ app_name }}-beszel"
 
 # 静态 rclone（宿主无包管理权限时的备份传输端，装到 ~/.local/bin）。
 # 版本 pin：升级 = 改此变量重跑 playbook。
-rclone_version: "1.67.0"
+rclone_version: "1.75.2"
 rclone_url: "https://downloads.rclone.org/v{{ rclone_version }}/rclone-v{{ rclone_version }}-linux-amd64.tar.gz"
