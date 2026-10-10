@@ -39,9 +39,11 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.IMAGE }}
+          # latest 交给默认 flavor（latest=auto）：正式版滚动 latest、预发布不产。
+          # 原来的显式 raw latest 行用了 {{!is_prerelease}}——Handlebars 把 {{!...}}
+          # 当注释解析成空串，enable 拿到空值即报错（首次 tag 触发时踩中）。
           tags: |
             type=semver,pattern={{version}}
-            type=raw,value=latest,enable={{!is_prerelease}}
 
   build:
     name: Build & push (${{ matrix.arch }})
