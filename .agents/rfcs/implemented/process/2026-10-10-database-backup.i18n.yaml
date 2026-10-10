@@ -2,6 +2,6 @@
 # hash of each side as of the last confirmed-consistent state. Both
 # languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
-#   hdsh pairing record specs/backend/configuration.md
-configuration.md: d78012be81167e42d1078a5b9cb024bce34431dd
-configuration.zh.md: b977041d6c983632ebc6c332c25866c9d4a65b8e
+#   hdsh pairing record .agents/rfcs/implemented/process/2026-10-10-database-backup.md
+2026-10-10-database-backup.md: 1220546ee64d83d09e855b56bcf7396cca2ee786
+2026-10-10-database-backup.zh.md: db29ab0a34c00649c4a7c58727d71287889b2919

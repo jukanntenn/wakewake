@@ -139,6 +139,8 @@ Keys have no default; generate with `openssl rand -base64 32`.
 |---|---|---|
 | `RUST_LOG` | tracing EnvFilter | Highest priority for service log level (see `[log].level`) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | observability | Set → OTLP collector; unset → local file exporter |
+| `OTEL_EXPORTER_OTLP_HEADERS` | observability (tonic exporter) | Bearer auth for the collector; values are URL-decoded, so spaces travel as `%20`. Deploy-side only — rendered by `docker-compose.yml.j2` when the vaulted token exists |
+| `OTEL_RESOURCE_ATTRIBUTES` | observability (SDK env detector) | Merged into the resource; `deployment.environment.name=<env>` is the label all dashboards and alerts slice on |
 | `TZ` | s6 `cont-init.d/01-setup.sh` | Container timezone |
 
 ### CLI (`wakewake-server`)

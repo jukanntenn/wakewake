@@ -139,6 +139,8 @@ DSN 单一来源规则（密码只写一处）：
 |---|---|---|
 | `RUST_LOG` | tracing EnvFilter | 服务日志级别最高优先级（见 `[log].level`） |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | observability | 设了走 OTLP collector，不设走本地文件 exporter |
+| `OTEL_EXPORTER_OTLP_HEADERS` | observability（tonic 导出器） | collector 的 bearer 鉴权；值会被 URL 解码，空格以 `%20` 传递。仅部署侧使用——vault token 存在时由 `docker-compose.yml.j2` 渲染 |
+| `OTEL_RESOURCE_ATTRIBUTES` | observability（SDK env 检测器） | 并入 resource；`deployment.environment.name=<env>` 是所有面板与告警的切片标签 |
 | `TZ` | s6 `cont-init.d/01-setup.sh` | 容器时区 |
 
 ### CLI（`wakewake-server`）

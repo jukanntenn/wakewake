@@ -19,3 +19,13 @@ caddy_port: 8443
 # 连接——永不对外发布。
 postgres_db: wakewake
 postgres_user: wakewake
+
+# ── 监控/备份层共享路径与版本（deploy.yml 的受守卫任务使用）────────────────
+# Beszel agent 与应用并列的 compose 项目目录（hub 在运维的观测服务器上，
+# 见 devops/monitoring.md；agent compose 由 beszel-* 变量守卫）。
+beszel_agent_path: "{{ apps_path }}/{{ app_name }}-beszel"
+
+# 静态 rclone（宿主无包管理权限时的备份传输端，装到 ~/.local/bin）。
+# 版本 pin：升级 = 改此变量重跑 playbook。
+rclone_version: "1.67.0"
+rclone_url: "https://downloads.rclone.org/v{{ rclone_version }}/rclone-v{{ rclone_version }}-linux-amd64.tar.gz"

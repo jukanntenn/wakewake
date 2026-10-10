@@ -1,0 +1,284 @@
+{
+  "annotations": { "list": [] },
+  "description": "wakewake runtime panels (VictoriaMetrics / OTLP metrics). Sources: backend OTel instruments (observability/metrics.rs) via the observability-server otelcol; resource attrs land as deployment.environment.name, sliced by $env. Provisioned by devops/grafana/wakewake.yml; queries verified against live names (histograms as *_bucket/_sum/_count).",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "HTTP",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "line", "lineInterpolation": "linear", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 1 },
+      "id": 1,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+          "expr": "sum by (deployment.environment.name, status) (rate(http_request_duration_seconds_count{deployment.environment.name=~\"$env\"}[5m]))",
+          "legendFormat": "{{deployment.environment.name}} · {{status}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Request rate by status",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "max": 100,
+          "min": 0,
+          "custom": { "drawStyle": "line", "lineInterpolation": "linear", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 5 } ] }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 1 },
+      "id": 2,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+          "expr": "100 * sum by (deployment.environment.name) (rate(http_request_duration_seconds_count{deployment.environment.name=~\"$env\", status=~\"5..\"}[5m])) / sum by (deployment.environment.name) (rate(http_request_duration_seconds_count{deployment.environment.name=~\"$env\"}[5m]))",
+          "legendFormat": "{{deployment.environment.name}} 5xx",
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP 5xx ratio",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "lineInterpolation": "linear", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 },
+      "id": 3,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+          "expr": "histogram_quantile(0.95, sum by (le, deployment.environment.name) (rate(http_request_duration_seconds_bucket{deployment.environment.name=~\"$env\"}[5m])))",
+          "legendFormat": "p95 {{deployment.environment.name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP latency p95",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "id": 101,
+      "title": "Agents & commands",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 10 },
+      "id": 4,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+          "expr": "sse_connections_active{deployment.environment.name=~\"$env\"}",
+          "legendFormat": "{{deployment.environment.name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Agent SSE connections (active)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": { "drawStyle": "line", "lineInterpolation": "linear", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 10 },
+      "id": 5,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+          "expr": "sum by (deployment.environment.name) (rate(commands_dispatched_total{deployment.environment.name=~\"$env\"}[5m]))",
+          "legendFormat": "{{deployment.environment.name}} dispatched",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+          "expr": "sum by (deployment.environment.name, status) (rate(commands_completed_total{deployment.environment.name=~\"$env\"}[5m]))",
+          "legendFormat": "{{deployment.environment.name}} · {{status}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Commands dispatched / completed",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": { "drawStyle": "bars", "lineWidth": 1, "fillOpacity": 50, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 10 },
+      "id": 6,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+          "expr": "sum by (deployment.environment.name, status) (increase(wake_total{deployment.environment.name=~\"$env\"}[$__range]))",
+          "legendFormat": "{{deployment.environment.name}} · {{status}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Wake records by status (range total)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "id": 102,
+      "title": "Mail & abuse controls",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": { "drawStyle": "line", "lineInterpolation": "linear", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 19 },
+      "id": 7,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+          "expr": "sum by (deployment.environment.name) (increase(emails_total{deployment.environment.name=~\"$env\"}[$__range]))",
+          "legendFormat": "{{deployment.environment.name}} admitted",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+          "expr": "sum by (deployment.environment.name, reason) (increase(emails_blocked_total{deployment.environment.name=~\"$env\"}[$__range]))",
+          "legendFormat": "{{deployment.environment.name}} blocked · {{reason}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Outbound emails admitted vs blocked",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": { "drawStyle": "line", "lineInterpolation": "linear", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 19 },
+      "id": 8,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+          "expr": "sum by (deployment.environment.name) (rate(http_rate_limited_total{deployment.environment.name=~\"$env\"}[5m]))",
+          "legendFormat": "{{deployment.environment.name}} 429/s",
+          "refId": "A"
+        }
+      ],
+      "title": "Rate-limited requests (429)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "bars", "lineWidth": 1, "fillOpacity": 50, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 19 },
+      "id": 9,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+          "expr": "sum by (deployment.environment.name) (increase(unverified_purged_total{deployment.environment.name=~\"$env\"}[$__range]))",
+          "legendFormat": "{{deployment.environment.name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Unverified accounts purged (range total)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["wakewake"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "datasource": { "type": "prometheus", "uid": "victoria-metrics" },
+        "definition": "label_values(http_request_duration_seconds_count, deployment.environment.name)",
+        "includeAll": true,
+        "multi": true,
+        "name": "env",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(http_request_duration_seconds_count, deployment.environment.name)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "wakewake / Runtime",
+  "uid": "wakewake-runtime",
+  "version": 1,
+  "weekStart": ""
+}

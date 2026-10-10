@@ -1,0 +1,178 @@
+# wakewake Grafana 托管告警规则（VictoriaMetrics 查询，部署到观测服务器
+# Grafana 的 provisioning/alerting/rules-wakewake.yaml——安装见
+# devops/monitoring.md §Grafana）。分环境切片用 deployment.environment.name
+# 标签；只对 prod 告警（test 是快速迭代环境，红了属常态）。可用性归
+# uptime-kuma push 监控（含 host 心跳），这里只管服务质量信号。
+apiVersion: 1
+groups:
+- orgId: 1
+  name: wakewake-app
+  folder: wakewake
+  interval: 1m
+  rules:
+  - uid: wakewake-5xx-warn
+    title: wakewake HTTP 5xx ratio above 5%
+    condition: C
+    for: 5m
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 300
+        to: 0
+      datasourceUid: victoria-metrics
+      model:
+        expr: 100 * sum by ("deployment.environment.name") (rate({__name__="http_request_duration_seconds_count", status=~"5..", "deployment.environment.name"="prod"}[5m]))
+          / sum by ("deployment.environment.name") (rate({__name__="http_request_duration_seconds_count", "deployment.environment.name"="prod"}[5m]))
+        intervalMs: 1000
+        maxDataPoints: 43200
+        datasource:
+          type: prometheus
+          uid: victoria-metrics
+        instant: true
+        range: false
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 5
+        intervalMs: 1000
+        maxDataPoints: 43200
+        datasource:
+          type: __expr__
+          uid: __expr__
+    noDataState: KeepLast
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: 'prod: HTTP 5xx ratio above 5% for 5m.'
+    isPaused: false
+  - uid: wakewake-5xx-crit
+    title: wakewake HTTP 5xx ratio above 20%
+    condition: C
+    for: 2m
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 120
+        to: 0
+      datasourceUid: victoria-metrics
+      model:
+        expr: 100 * sum by ("deployment.environment.name") (rate({__name__="http_request_duration_seconds_count", status=~"5..", "deployment.environment.name"="prod"}[2m]))
+          / sum by ("deployment.environment.name") (rate({__name__="http_request_duration_seconds_count", "deployment.environment.name"="prod"}[2m]))
+        intervalMs: 1000
+        maxDataPoints: 43200
+        datasource:
+          type: prometheus
+          uid: victoria-metrics
+        instant: true
+        range: false
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 20
+        intervalMs: 1000
+        maxDataPoints: 43200
+        datasource:
+          type: __expr__
+          uid: __expr__
+    noDataState: KeepLast
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: 'prod: HTTP 5xx ratio above 20% for 2m.'
+    isPaused: false
+  - uid: wakewake-p95-latency
+    title: wakewake HTTP p95 latency above 1s
+    condition: C
+    for: 10m
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: victoria-metrics
+      model:
+        expr: histogram_quantile(0.95, sum by (le) (rate({__name__="http_request_duration_seconds_bucket", "deployment.environment.name"="prod"}[5m])))
+        intervalMs: 1000
+        maxDataPoints: 43200
+        datasource:
+          type: prometheus
+          uid: victoria-metrics
+        instant: true
+        range: false
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 1
+        intervalMs: 1000
+        maxDataPoints: 43200
+        datasource:
+          type: __expr__
+          uid: __expr__
+    noDataState: KeepLast
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: 'prod: HTTP p95 latency above 1s for 10m.'
+    isPaused: false
+  - uid: wakewake-mail-blocked
+    title: wakewake outbound mail blocked for 15m
+    condition: C
+    for: 15m
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: victoria-metrics
+      model:
+        expr: sum(rate({__name__="emails_blocked_total", "deployment.environment.name"="prod"}[15m]))
+        intervalMs: 1000
+        maxDataPoints: 43200
+        datasource:
+          type: prometheus
+          uid: victoria-metrics
+        instant: true
+        range: false
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+        intervalMs: 1000
+        maxDataPoints: 43200
+        datasource:
+          type: __expr__
+          uid: __expr__
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: 'prod: outbound mail rejected (kill switch or daily budget) continuously for 15m — registration/reset emails are not going out.'
+    isPaused: false

@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+# 每月恢复演练：最新离线转储备份实际可恢复（行数对账），事后清理全部痕迹。
+# 定在每月 2 号 05:00——1 号凌晨刚产生过新转储，2 号有货可演。
+[Unit]
+Description=Monthly wakewake restore drill
+
+[Timer]
+OnCalendar=*-*-02 05:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
