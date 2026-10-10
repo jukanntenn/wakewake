@@ -138,6 +138,15 @@
     # 部署用户两台宿主均无免密 sudo：zstd 用系统包（已在），rclone 缺失时装
     # 静态二进制到 ~/.local/bin（无需 root），作业跑 systemd 用户单元+linger
     # （不走 crontab/supervisor）。操作手册：devops/backup.md。
+    # systemd 用户管理器从 passwd 主目录加载单元——与 host_vars 的 home
+    # （存储根，fn 上是 /vol1/1000）不一定相同（fn 的 passwd home 是
+    # /home/fn），必须动态解析而非复用 {{ home }}。
+    - name: Resolve the passwd home the systemd user manager loads units from
+      ansible.builtin.command: getent passwd {{ user }}
+      register: passwd_entry
+      changed_when: false
+      when: b2_key_id is defined or kuma_heartbeat_url is defined
+
     - name: Enable lingering so user units survive logout/reboot
       ansible.builtin.command: loginctl enable-linger {{ user }}
       changed_when: false
@@ -193,15 +202,6 @@
         dest: "{{ app_path }}/backup.env"
         mode: "0600"
       when: b2_key_id is defined
-
-    # systemd 用户管理器从 passwd 主目录加载单元——与 host_vars 的 home
-    # （存储根，fn 上是 /vol1/1000）不一定相同（fn 的 passwd home 是
-    # /home/fn），必须动态解析而非复用 {{ home }}。
-    - name: Resolve the passwd home the systemd user manager loads units from
-      ansible.builtin.command: getent passwd {{ user }}
-      register: passwd_entry
-      changed_when: false
-      when: b2_key_id is defined or kuma_heartbeat_url is defined
 
     - name: Ensure systemd user unit directory exists
       ansible.builtin.file:
